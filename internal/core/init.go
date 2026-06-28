@@ -15,6 +15,7 @@ import (
 	"github.com/jandro-es/axon/internal/claudeassets"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
+	"github.com/jandro-es/axon/internal/identity"
 	"github.com/jandro-es/axon/internal/scaffold"
 	"github.com/jandro-es/axon/internal/vault"
 )
@@ -143,6 +144,15 @@ func Init(ctx context.Context, opts InitOptions) (InitReport, error) {
 	}
 	rep.Reindex = idx
 	add(StepResult{"index", StepDone, fmt.Sprintf("%d notes, %d links (%d unresolved wikilinks)", idx.Notes, idx.Links, idx.BrokenWikilink)})
+
+	// Personal identity layer (Component 12): created by `axon onboard`, not init,
+	// so the layer reflects a real interview rather than placeholders. Surface the
+	// hint when it's absent; never block (S8 — the system is useful without it).
+	if !identity.Present(vfs) {
+		add(StepResult{"profile", StepWarn, "no personal profile yet — run `axon onboard` to teach AXON who you are"})
+	} else {
+		add(StepResult{"profile", StepAlready, "personal identity layer present (" + identity.Dir + "/)"})
+	}
 
 	// Step 10 — Summary.
 	rep.Changed = anyChanged(rep.Steps)

@@ -17,6 +17,7 @@ import (
 	"github.com/jandro-es/axon/internal/automations"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
+	"github.com/jandro-es/axon/internal/identity"
 	"github.com/jandro-es/axon/internal/ingestion"
 	"github.com/jandro-es/axon/internal/search"
 	"github.com/jandro-es/axon/internal/tokens"
@@ -230,6 +231,34 @@ func (t *Tools) DailyAppend(ctx context.Context, in DailyAppendIn, today string)
 		return DailyAppendOut{}, err
 	}
 	return DailyAppendOut{OK: true, Path: path}, nil
+}
+
+// --- memory.remember --------------------------------------------------------
+
+type RememberIn struct {
+	Text   string `json:"text" jsonschema:"the durable fact, decision or learned preference to remember (one line)"`
+	Kind   string `json:"kind,omitempty" jsonschema:"optional category: decision | lesson | preference"`
+	Source string `json:"source,omitempty" jsonschema:"optional provenance, e.g. 'session' or an ADR id"`
+}
+
+type RememberOut struct {
+	OK    bool   `json:"ok"`
+	Entry string `json:"entry"`
+	Path  string `json:"path"`
+}
+
+// Remember appends a dated entry to the personal MEMORY note's axon:memory
+// managed block, wikilink-safe and never touching human prose (cardinal rule 2).
+// This is how durable memory grows during interactive work (FR-73). today is the
+// UTC date the server stamps the entry with.
+func (t *Tools) Remember(ctx context.Context, in RememberIn, today string) (RememberOut, error) {
+	line, err := identity.Remember(ctx, t.deps.Vault, identity.Entry{
+		Text: in.Text, Kind: in.Kind, Source: in.Source, Date: today,
+	})
+	if err != nil {
+		return RememberOut{}, err
+	}
+	return RememberOut{OK: true, Entry: line, Path: identity.MemoryPath}, nil
 }
 
 // --- knowledge.ingest -------------------------------------------------------

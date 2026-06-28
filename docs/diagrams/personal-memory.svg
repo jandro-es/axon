@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="450" viewBox="0 0 880 450" font-family="ui-sans-serif, -apple-system, Segoe UI, Roboto, sans-serif">
+<rect width="880" height="450" fill="#ffffff"/>
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1e1e1e"/></marker></defs>
+<text x="24" y="34" font-size="20" font-weight="700" fill="#1e1e1e">AXON — personal memory &amp; identity (Phase 8)</text>
+
+<!-- onboard -->
+<rect x="24" y="156" width="250" height="64" rx="10" fill="#e9ecef" stroke="#1e1e1e" stroke-width="2"/>
+<text x="149" y="182" font-size="15" font-weight="600" fill="#1e1e1e" text-anchor="middle">axon onboard</text>
+<text x="149" y="202" font-size="13" fill="#1e1e1e" text-anchor="middle">interview · idempotent · no model</text>
+
+<!-- identity layer container -->
+<rect x="320" y="72" width="280" height="232" rx="12" fill="#f8f9fa" stroke="#1e1e1e" stroke-width="2" stroke-dasharray="6 5"/>
+<text x="460" y="92" font-size="14" font-weight="600" fill="#1e1e1e" text-anchor="middle">Identity layer · 02-Areas/Profile/</text>
+<rect x="338" y="104" width="244" height="46" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="460" y="132" font-size="15" fill="#1e1e1e" text-anchor="middle">USER.md — who you are</text>
+<rect x="338" y="160" width="244" height="46" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="460" y="188" font-size="15" fill="#1e1e1e" text-anchor="middle">SOUL.md — assistant persona</text>
+<rect x="338" y="216" width="244" height="72" rx="10" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<text x="460" y="246" font-size="15" font-weight="600" fill="#1e1e1e" text-anchor="middle">MEMORY.md</text>
+<text x="460" y="266" font-size="13" fill="#1e1e1e" text-anchor="middle">axon:memory · durable entries</text>
+
+<!-- SessionStart + session -->
+<rect x="636" y="104" width="216" height="64" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="744" y="130" font-size="15" font-weight="600" fill="#1e1e1e" text-anchor="middle">SessionStart hook</text>
+<text x="744" y="150" font-size="12" fill="#1e1e1e" text-anchor="middle">bounded · redacted · no model</text>
+<rect x="636" y="200" width="216" height="60" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="744" y="226" font-size="15" font-weight="600" fill="#1e1e1e" text-anchor="middle">Claude Code session</text>
+<text x="744" y="246" font-size="13" fill="#1e1e1e" text-anchor="middle">&#8220;knows you&#8221;</text>
+
+<!-- memory growth -->
+<rect x="322" y="372" width="130" height="58" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="387" y="396" font-size="13" font-weight="600" fill="#1e1e1e" text-anchor="middle">memory_remember</text>
+<text x="387" y="414" font-size="12" fill="#1e1e1e" text-anchor="middle">MCP tool</text>
+<rect x="458" y="372" width="130" height="58" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="523" y="396" font-size="13" font-weight="600" fill="#1e1e1e" text-anchor="middle">memory-distill</text>
+<text x="523" y="414" font-size="12" fill="#1e1e1e" text-anchor="middle">&#8594; token manager</text>
+
+<!-- NFR-14 note -->
+<rect x="636" y="300" width="216" height="100" rx="10" fill="#ffc9c9" stroke="#1e1e1e" stroke-width="2"/>
+<text x="650" y="326" font-size="13" font-weight="600" fill="#1e1e1e">Privacy (NFR-14)</text>
+<text x="650" y="348" font-size="12" fill="#1e1e1e">never in logs, events,</text>
+<text x="650" y="366" font-size="12" fill="#1e1e1e">ledger or exports;</text>
+<text x="650" y="384" font-size="12" fill="#1e1e1e">redaction before egress.</text>
+
+<!-- arrows -->
+<line x1="274" y1="188" x2="316" y2="188" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<text x="295" y="180" font-size="11" fill="#1e1e1e" text-anchor="middle">writes</text>
+<line x1="600" y1="136" x2="632" y2="136" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<text x="616" y="128" font-size="11" fill="#1e1e1e" text-anchor="middle">inject</text>
+<line x1="744" y1="168" x2="744" y2="200" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<line x1="387" y1="372" x2="387" y2="290" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<line x1="523" y1="372" x2="523" y2="290" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<text x="455" y="352" font-size="11" fill="#1e1e1e" text-anchor="middle">append (wikilink-safe)</text>
+</svg>

@@ -5,7 +5,7 @@
 [![CI](https://github.com/jandro-es/axon/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
 [![Single binary](https://img.shields.io/badge/build-single%20static%20binary-success.svg)](#build--run)
 
-> **Status:** Implemented (Phases 0–7). A single Go binary + an embedded React/Recharts dashboard.
+> **Status:** Implemented (Phases 0–8). A single Go binary + an embedded React/Recharts dashboard.
 > **Module:** `github.com/jandro-es/axon` · **Go 1.26+** · pure-Go SQLite (no cgo).
 
 AXON turns an Obsidian vault into a **second brain that maintains itself**. It is a local-first runtime that wires **Claude** and **Claude Code** into your vault, runs configurable automations (heartbeats, daily logs, compaction, exports, re-indexing), ingests external knowledge (articles, URLs, PDFs), accounts for every token it spends, and surfaces everything on a real-time local dashboard.
@@ -126,8 +126,8 @@ one path to Claude:
 | 08 | [Agent bridge & MCP](docs/08-component-agent-bridge-mcp.md) | MCP tools, hooks, skills, subagents, wikilink safety. |
 | 09 | [Dashboard & observability](docs/09-component-dashboard-observability.md) | Real-time graphs, metrics, the knowledge graph. |
 | 10 | [Installer & bootstrap](docs/10-component-installer-bootstrap.md) | `axon init`, prereq checks, idempotency, profiles. |
-| 11 | [Build roadmap](docs/11-build-roadmap.md) | Phased plan with milestones and acceptance gates (Phases 0–7 built; 8–9 planned). |
-| 12 | [Personal memory & onboarding](docs/12-component-personal-memory-and-onboarding.md) | *(planned)* `USER.md`/`SOUL.md`/`MEMORY.md` + the `axon onboard` wizard. |
+| 11 | [Build roadmap](docs/11-build-roadmap.md) | Phased plan with milestones and acceptance gates (Phases 0–8 built; 9 planned). |
+| 12 | [Personal memory & onboarding](docs/12-component-personal-memory-and-onboarding.md) | *(built)* `USER.md`/`SOUL.md`/`MEMORY.md`, the `axon onboard` wizard, SessionStart injection + memory tools. |
 | 13 | [Multi-client (Claude Desktop)](docs/13-component-multi-client-claude-desktop.md) | *(planned)* use AXON from Claude Desktop, not just Claude Code. |
 
 Also in this pack: [`CLAUDE.md`](CLAUDE.md) (build-agent instructions), [`axon.config.example.yaml`](axon.config.example.yaml), [`.env.example`](.env.example).
@@ -146,23 +146,42 @@ Everything else is specified in the documents above.
 
 ---
 
+## Personal memory & identity (Phase 8)
+
+AXON keeps a first-class **identity layer** in the vault so the assistant *knows
+you* in every session — see the [Personal memory & onboarding](docs/12-component-personal-memory-and-onboarding.md) spec.
+
+![AXON personal memory & identity layer](docs/diagrams/personal-memory.svg)
+
+*(Editable — [personal-memory.excalidraw](docs/diagrams/personal-memory.excalidraw), open at [excalidraw.com](https://excalidraw.com).)*
+
+- **`02-Areas/Profile/`** holds `USER.md` (who you are), `SOUL.md` (the
+  assistant's persona/boundaries) and `MEMORY.md` (durable decisions/lessons in
+  an `axon:memory` managed block).
+- **`axon onboard`** is an interactive, idempotent wizard (no model call) that
+  interviews you, writes the layer wikilink-safely (never clobbering edits) and
+  ensures the Claude Code wiring. `axon init` nudges you to run it.
+- The **`SessionStart`** hook injects a token-bounded snapshot of USER + SOUL +
+  recent `MEMORY` into each Claude Code session — **no model call**, redaction
+  applied, and disablable per profile (`memory.inject: false`).
+- **`memory_remember`** (MCP tool) appends durable entries during interactive
+  work; **`memory-distill`** (scheduled automation, via the token manager)
+  distils recent daily notes into memory and compacts an over-long block.
+
+The personal layer never reaches logs, events, the token ledger or exports
+(NFR-14): `memory_remember` makes no model call, `memory-distill` ledgers only
+token counts (never the text), and `axon export` writes counts, not note bodies.
+
 ## Roadmap
 
-Phases 0–7 are built (see the [CHANGELOG](CHANGELOG.md)). Two planned phases
-extend AXON from a knowledge OS toward a fuller "second brain that knows me, in
-any Claude client":
+Phases 0–8 are built (see the [CHANGELOG](CHANGELOG.md)). One planned phase
+remains:
 
-- **Phase 8 — Personal memory, identity & onboarding** ([spec](docs/12-component-personal-memory-and-onboarding.md)):
-  a first-class identity layer (`02-Areas/Profile/USER.md`, `SOUL.md`, `MEMORY.md`),
-  an interactive **`axon onboard`** wizard that sets the initial values, a
-  `SessionStart` injection so the agent *knows you* (no model call), and a
-  `memory.remember` tool + `memory-distill` automation to grow durable memory.
 - **Phase 9 — Multi-client (Claude Desktop)** ([spec](docs/13-component-multi-client-claude-desktop.md)):
   `axon mcp install --client desktop` wires AXON's MCP tools into Claude Desktop
   (tools-only — hooks/skills stay Claude Code; AXON's own tools remain
-  wikilink-safe regardless of client).
-
-The `axon onboard` wizard (Phase 8) is the single setup path for both.
+  wikilink-safe regardless of client). The `axon onboard` wizard already offers
+  this as its client-setup step.
 
 ## Contributing
 

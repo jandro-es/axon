@@ -81,14 +81,19 @@ Requirements are the build contract. Each is testable. Priority: **M** (must, v1
 | FR-63 | M | Dashboard reads only from the daemon API; it never holds secrets and binds to localhost by default. |
 | FR-64 | C | Export any chart's underlying data as CSV/JSON. |
 
-### Personal memory, identity & multi-client *(planned — Phases 8–9)*
+### Personal memory, identity & multi-client *(Phase 8 built; Phase 9 planned)*
+
+FR-70…FR-73 and NFR-14 are **implemented** (Phase 8 — `internal/identity`, the
+`axon onboard` wizard, the `SessionStart` injection, the `memory_remember` MCP
+tool and the `memory-distill` automation). FR-74…FR-76 (Claude Desktop wiring)
+remain **planned** (Phase 9).
 
 | ID | Pri | Requirement |
 |----|-----|-------------|
 | FR-70 | M | **Personal identity & memory layer.** AXON maintains a first-class set of vault notes under `02-Areas/Profile/`: **`USER.md`** (who the user is — role, timezone, goals, communication preferences, key people/projects/tools), **`SOUL.md`** (the agent's persona — name, voice/tone, values, boundaries), and **`MEMORY.md`** (durable decisions, lessons and learned preferences). They are plain Markdown (the vault is the source of truth) and remain human-editable. (Spec in Component 12.) |
 | FR-71 | M | **Onboarding wizard.** `axon onboard` is an interactive, idempotent wizard that interviews the user, populates `USER.md`/`SOUL.md`, seeds `MEMORY.md`, and offers to wire additional Claude clients (FR-74). It converges (never clobbers existing content; asks before overwrite). `axon init` detects a missing identity layer and prompts the user to run it. |
 | FR-72 | S | **Session profile injection.** The `SessionStart` hook injects a compact, **token-bounded** rendering of the identity layer (USER profile + SOUL persona + most-recent `MEMORY` entries) into every Claude Code session, with **no model call**, so the agent "knows the user" without retrieval. The injection respects a configurable token ceiling. |
-| FR-73 | S | **Memory maintenance.** An MCP tool `memory.remember` lets the agent append a durable decision/lesson/preference into `MEMORY.md` (wikilink-safe, into an `axon:memory` managed block); an optional `memory-distill` automation periodically distils session/daily activity into `MEMORY.md` (a model call **through the token manager**). Captured memory is treated as data, not instructions (NFR-05). |
+| FR-73 | S | **Memory maintenance.** An MCP tool `memory_remember` lets the agent append a durable decision/lesson/preference into `MEMORY.md` (wikilink-safe, into an `axon:memory` managed block); an optional `memory-distill` automation periodically distils recent daily-note activity into `MEMORY.md` and compacts an over-long block (a model call **through the token manager**). Captured memory is treated as data, not instructions (NFR-05). |
 | FR-74 | M | **Multi-client MCP wiring.** `axon mcp install --client <code\|desktop>` (and `--print`) generates/installs a client's MCP registration. For **Claude Desktop** it writes a profile-scoped `mcpServers` entry into `claude_desktop_config.json` **non-destructively**, so Desktop can use AXON's vault + knowledge + token tools. (Spec in Component 13.) |
 | FR-75 | S | **Client-capability honesty.** AXON documents and `axon doctor`-reports that Claude Desktop receives the MCP **tools** but not hooks/skills/subagents/headless automations. AXON's own tools remain wikilink-safe and path-sandboxed in the server, so vault safety for AXON operations does **not** depend on the client's `PreToolUse` hook. |
 | FR-76 | C | **Concurrent clients.** Multiple Claude clients (Code + Desktop) may target the same profile/vault; the daemon remains the single owner of scheduled writes, and the single-writer SQLite caveat is documented. |
@@ -110,7 +115,7 @@ Requirements are the build contract. Each is testable. Priority: **M** (must, v1
 | NFR-11 | S | **Testability:** providers (agent, embeddings, fetcher) are interfaces with fakes; automations runnable in dry-run; a `--profile test` uses a temp vault + in-memory/temp DB. |
 | NFR-12 | M | **Config-driven extensibility:** new automations and ingestion sources are added by dropping a module + config, not by editing core wiring. |
 | NFR-13 | C | **Backups:** `axon export` snapshots are portable, plain-format and self-describing (manifest + Markdown + JSON). |
-| NFR-14 | M | **Personal-data privacy** *(planned)*: the identity/memory layer (`USER.md`/`SOUL.md`/`MEMORY.md`) is local vault Markdown; it is surfaced to the model only as bounded, user-controllable session context; redaction (NFR-05) applies before any egress; it is never written to logs, events, the ledger, or exports. |
+| NFR-14 | M | **Personal-data privacy** *(Phase 8 — built)*: the identity/memory layer (`USER.md`/`SOUL.md`/`MEMORY.md`) is local vault Markdown; it is surfaced to the model only as bounded, user-controllable session context; redaction (NFR-05) applies before any egress; it is never written to logs, events, the ledger, or exports (`memory_remember` makes no model call so it is never ledgered; `memory-distill` ledgers only token usage, never the memory text; `axon export` writes counts, not note bodies). |
 
 ## Traceability
 

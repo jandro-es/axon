@@ -9,6 +9,7 @@ The scaffold AXON creates. `NN-` prefixes keep ordering stable. System folders a
   00-Inbox/                 # frictionless capture; triaged into PARA by automation
   01-Projects/              # active, outcome-with-a-deadline work
   02-Areas/                 # ongoing responsibilities (no end date)
+    Profile/                # personal identity layer (Component 12): USER.md, SOUL.md, MEMORY.md
   03-Resources/
     Knowledge/              # ingested sources (one note per source)
     …                       # topical reference
@@ -207,7 +208,12 @@ profiles:
       knowledge-reindex:{ enabled: true, schedule: "0 2 * * *",       model: none,      budget_tokens: 0 }
       knowledge-digest: { enabled: true, schedule: "0 8 * * 1",       model: synthesis, budget_tokens: 200_000 }
       link-suggester:   { enabled: true, schedule: "0 1 * * *",       model: classify,  budget_tokens: 60_000 }
+      memory-distill:   { enabled: true, schedule: "0 5 * * *",       model: synthesis, budget_tokens: 120_000 }
       budget-guard:     { enabled: true, schedule: "*/15 * * * *",    model: none,      budget_tokens: 0 }
+    memory:                     # personal identity/memory layer (Component 12); optional — these are the defaults
+      inject: true              # inject USER/SOUL/recent MEMORY at SessionStart (no model call)
+      session_tokens: 1500      # token ceiling for the injected block
+      recent_entries: 10        # how many newest MEMORY entries to inject
 
   work:                       # WORK install (separate machine) — Claude Enterprise SSO, no API
     vault_path: "~/Notes/Work"
@@ -233,6 +239,7 @@ profiles:
       knowledge-digest: { enabled: false }
       link-suggester:   { enabled: false }
       context-export:   { enabled: true, schedule: "0 18 * * 5" }
+    memory: { inject: false }   # stricter env: keep the identity layer but never auto-inject it
 ```
 
 ### 3.1 Resolution & precedence

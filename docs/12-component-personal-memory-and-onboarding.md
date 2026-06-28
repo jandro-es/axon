@@ -1,13 +1,23 @@
-# 12 — Component: Personal Memory, Identity & Onboarding *(planned — Phase 8)*
+# 12 — Component: Personal Memory, Identity & Onboarding *(Phase 8 — built)*
 
 **Owns:** FR-70…FR-73, NFR-14, ADR-011.
 **Goal:** Make AXON a second brain that *knows the user* — a persistent identity
 and memory the agent carries into every session — without breaking the two
 cardinal rules or the "vault is the source of truth" principle.
 
-> Status: **planned.** This spec defines the design; it is not yet built. It
-> extends the Phase 5 agent bridge (hooks + MCP + `claudeassets` generation) and
-> the Phase 3 token manager.
+> Status: **built (Phase 8).** Implemented in `internal/identity` (layer
+> generation, bounded render, wikilink-safe `Remember`), the `axon onboard`
+> wizard (`cmd/axon/onboard_cmd.go`), the extended `SessionStart` hook
+> (`internal/hooks`), the `memory_remember` MCP tool (`internal/mcp`) and the
+> `memory-distill` automation (`internal/automations`). It reuses the Phase 5
+> agent bridge (hooks + MCP + `claudeassets`) and the Phase 3 token manager.
+>
+> Implementation note: the MCP tool is named `memory_remember` (underscore, per
+> the `mcp__axon__*` convention); `memory.remember` below is the conceptual name.
+> SessionStart injection is governed by `profiles.<p>.memory` (`inject`,
+> `session_tokens`, `recent_entries`).
+
+![Personal memory & identity layer](diagrams/personal-memory.svg)
 
 ## 1. The identity layer
 

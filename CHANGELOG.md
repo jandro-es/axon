@@ -8,15 +8,40 @@ All notable changes to this project are documented here. The format is based on
 
 ### Planned
 
-- **Phase 8 — Personal memory, identity & onboarding** (FR-70…FR-73, NFR-14,
-  ADR-011, Component 12): a first-class identity layer
-  (`02-Areas/Profile/USER.md`, `SOUL.md`, `MEMORY.md`), the interactive
-  `axon onboard` wizard that sets their initial values, a `SessionStart`
-  injection so the agent knows the user (no model call), and a `memory.remember`
-  MCP tool + `memory-distill` automation to maintain durable memory.
 - **Phase 9 — Multi-client (Claude Desktop)** (FR-74…FR-76, ADR-012,
   Component 13): `axon mcp install --client code|desktop` wires the AXON MCP
   server into Claude Desktop (tools-only); `doctor` reports per-client guarantees.
+
+## [0.8.0] — 2026-06-28
+
+Phase 8 — the personal memory & identity layer (FR-70…FR-73, NFR-14, ADR-011,
+Component 12).
+
+### Added
+
+- **Identity layer** (`internal/identity`) — a first-class set of vault notes
+  under `02-Areas/Profile/`: `USER.md` (profile), `SOUL.md` (assistant persona &
+  boundaries) and `MEMORY.md` (durable entries in an `axon:memory` managed
+  block). Generated wikilink-safely and never clobbering human edits.
+- **`axon onboard`** — an interactive, idempotent wizard (no model call) that
+  interviews the user, writes the identity layer, and (re)ensures the Claude Code
+  wiring. Supports `--non-interactive`, `--from <file>` (YAML/JSON answers) and
+  `--json` (secret-free report). `axon init` now nudges to run it.
+- **SessionStart identity injection** — the hook injects a token-bounded snapshot
+  of USER + SOUL + recent `MEMORY` into each Claude Code session with **no model
+  call**; governed by `profiles.<p>.memory` (`inject`, `session_tokens`,
+  `recent_entries`) and disablable per profile.
+- **`memory_remember`** MCP tool — appends a dated durable entry to the
+  `axon:memory` block, wikilink-safe, never touching human prose.
+- **`memory-distill`** automation — distils recent daily-note activity into new
+  memory entries and compacts an over-long block, through the token manager,
+  change-gated and dry-run aware.
+
+### Security
+
+- **Personal-data privacy (NFR-14)** — the identity layer never reaches logs,
+  events, the token ledger or exports; redaction (`policy.redaction_rules`) is
+  applied to the injected block before any egress.
 
 ## [0.7.0] — 2026-06-28
 
@@ -63,4 +88,5 @@ The initial feature-complete build, implemented in phases against
   model synthesis, richer `/health`, DNS-rebinding IP pinning on ingest, and
   `config get/set`.
 
+[0.8.0]: https://github.com/jandro-es/axon/releases/tag/v0.8.0
 [0.7.0]: https://github.com/jandro-es/axon/releases/tag/v0.7.0

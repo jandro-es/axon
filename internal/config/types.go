@@ -36,6 +36,46 @@ type Profile struct {
 	Retrieval   RetrievalConfig       `yaml:"retrieval" validate:"required"`
 	Policy      PolicyConfig          `yaml:"policy" validate:"required"`
 	Automations map[string]Automation `yaml:"automations" validate:"dive"`
+	// Memory governs the personal identity/memory layer (Component 12). Optional:
+	// an absent block resolves to sensible defaults so existing configs keep
+	// working unchanged.
+	Memory MemoryConfig `yaml:"memory"`
+}
+
+// MemoryConfig governs the personal identity & memory layer injected at
+// SessionStart (FR-70…FR-73, NFR-14). All fields are optional; the accessors
+// below apply defaults so a profile may omit the `memory:` block entirely.
+type MemoryConfig struct {
+	// Inject toggles the deterministic SessionStart identity injection. A pointer
+	// so an absent key defaults to ON (personal profile) while an explicit
+	// `inject: false` (stricter work environment) is honoured (NFR-14).
+	Inject *bool `yaml:"inject"`
+	// SessionTokens bounds the injected block (default 1500). The injection never
+	// makes a model call; this only caps how much of the layer is rendered.
+	SessionTokens int `yaml:"session_tokens"`
+	// RecentEntries is how many newest MEMORY.md entries to inject (default 10).
+	RecentEntries int `yaml:"recent_entries"`
+}
+
+// InjectEnabled reports whether SessionStart identity injection is on (default
+// true when the key is absent).
+func (m MemoryConfig) InjectEnabled() bool { return m.Inject == nil || *m.Inject }
+
+// SessionTokenBudget returns the injection token ceiling, defaulting to 1500.
+func (m MemoryConfig) SessionTokenBudget() int {
+	if m.SessionTokens > 0 {
+		return m.SessionTokens
+	}
+	return 1500
+}
+
+// RecentMemoryEntries returns how many newest MEMORY entries to inject,
+// defaulting to 10.
+func (m MemoryConfig) RecentMemoryEntries() int {
+	if m.RecentEntries > 0 {
+		return m.RecentEntries
+	}
+	return 10
 }
 
 // ClaudeConfig selects how AXON reaches Claude. The default modes go through

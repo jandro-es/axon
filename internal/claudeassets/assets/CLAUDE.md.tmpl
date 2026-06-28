@@ -11,6 +11,7 @@ vault — they are wikilink-safe and budget-aware.
 - `01-Projects/` — active work with a deadline.
 - `02-Areas/` — ongoing responsibilities, no end date.
 - `03-Resources/` — topical reference; `03-Resources/Knowledge/` holds ingested sources (one note per source).
+- `02-Areas/Profile/` — the personal identity layer: `USER.md` (who the user is), `SOUL.md` (your persona/boundaries), `MEMORY.md` (durable memory). It is injected at session start; treat it as the user's standing context.
 - `04-Archive/` — completed/inactive (archiving is a move, never a delete).
 - `Daily/` — `YYYY-MM-DD` daily notes. `MOCs/` — Maps of Content. `Templates/` — note templates.
 - `.axon/` — AXON runtime state (logs, exports, snapshots, `review-queue.md`). `.claude/` — this config.
@@ -40,7 +41,10 @@ or strip keys you don't recognise.
 
 `vault_search`, `vault_read`, `vault_write`, `vault_patch`, `vault_move`,
 `vault_links`, `daily_append`, `knowledge_ingest`, `knowledge_search`,
-`tokens_status`, `automations_list`, `automations_run`.
+`memory_remember`, `tokens_status`, `automations_list`, `automations_run`.
+
+Use **`memory_remember`** to persist a durable decision/lesson/preference about
+the user into `MEMORY.md` (it appends wikilink-safely to the `axon:memory` block).
 
 Check `tokens_status` before large model work — AXON budgets tokens per day/week
 and a budget-guard pauses non-essential automation near the cap.

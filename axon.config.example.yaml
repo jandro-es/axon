@@ -98,7 +98,15 @@ profiles:
       knowledge-reindex: { enabled: true,  schedule: "0 2 * * *",       model: none,      budget_tokens: 0 }
       knowledge-digest:  { enabled: true,  schedule: "0 8 * * 1",       model: synthesis, budget_tokens: 200_000 }
       link-suggester:    { enabled: true,  schedule: "0 1 * * *",       model: classify,  budget_tokens: 60_000 }
+      memory-distill:    { enabled: true,  schedule: "0 5 * * *",       model: synthesis, budget_tokens: 120_000 }
       budget-guard:      { enabled: true,  schedule: "*/15 * * * *",    model: none,      budget_tokens: 0 }
+
+    # Personal identity & memory layer (Component 12). Injected at SessionStart so
+    # the assistant knows you. Optional block — these are the defaults.
+    memory:
+      inject: true            # inject USER/SOUL/recent MEMORY at session start (no model call)
+      session_tokens: 1500    # token ceiling for the injected profile block
+      recent_entries: 10      # how many newest MEMORY entries to inject
 
   # ===========================================================================
   # WORK installation (SEPARATE machine) — Claude Enterprise SSO, no API.
@@ -145,6 +153,10 @@ profiles:
       knowledge-digest: { enabled: false }
       link-suggester:   { enabled: false }
       context-export:   { enabled: true, schedule: "0 18 * * 5" }   # weekly, Friday evening
+
+    # Stricter environment: do NOT inject the personal profile into sessions.
+    # The identity layer still lives in the vault but is never auto-injected.
+    memory: { inject: false }
 
 # =============================================================================
 # Optional price table — `auth_mode: api_key` ONLY (subscription/enterprise are

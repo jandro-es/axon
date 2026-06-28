@@ -11,6 +11,7 @@ import (
 	"github.com/jandro-es/axon/internal/agent"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
+	"github.com/jandro-es/axon/internal/identity"
 	"github.com/jandro-es/axon/internal/search"
 	"github.com/jandro-es/axon/internal/tokens"
 	"github.com/jandro-es/axon/internal/vault"
@@ -116,6 +117,66 @@ func TestPostToolUseAndStopAreAdvisory(t *testing.T) {
 		if res.ExitCode != 0 {
 			t.Errorf("%s exit = %d, want 0 (advisory, never blocks)", ev, res.ExitCode)
 		}
+	}
+}
+
+// sessionContext runs SessionStart and returns the injected additionalContext.
+func sessionContext(t *testing.T, deps Deps) string {
+	t.Helper()
+	res, err := Handle(context.Background(), SessionStart, []byte(`{"hook_event_name":"SessionStart"}`), deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		HookSpecificOutput struct {
+			AdditionalContext string `json:"additionalContext"`
+		} `json:"hookSpecificOutput"`
+	}
+	if err := json.Unmarshal(res.Stdout, &out); err != nil {
+		t.Fatalf("output not valid JSON: %v", err)
+	}
+	return out.HookSpecificOutput.AdditionalContext
+}
+
+func TestSessionStartInjectsIdentityNoModel(t *testing.T) {
+	deps, fake := testDeps(t)
+	if _, err := identity.Generate(deps.Vault, identity.Values{Name: "Jandro", AgentName: "Axon", Date: "2026-06-28"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Remember(context.Background(), deps.Vault, identity.Entry{Text: "Prefers Go", Date: "2026-06-28"}); err != nil {
+		t.Fatal(err)
+	}
+	ctx := sessionContext(t, deps)
+	for _, want := range []string{"AXON profile", "Jandro", "Prefers Go"} {
+		if !strings.Contains(ctx, want) {
+			t.Errorf("injection missing %q:\n%s", want, ctx)
+		}
+	}
+	if fake.CallCount() != 0 {
+		t.Error("identity injection must make no model call")
+	}
+}
+
+func TestSessionStartRespectsInjectOff(t *testing.T) {
+	deps, _ := testDeps(t)
+	if _, err := identity.Generate(deps.Vault, identity.Values{Name: "Jandro", Date: "2026-06-28"}); err != nil {
+		t.Fatal(err)
+	}
+	off := false
+	deps.Memory.Inject = &off
+	if ctx := sessionContext(t, deps); strings.Contains(ctx, "AXON profile") {
+		t.Errorf("inject:false should suppress identity injection:\n%s", ctx)
+	}
+}
+
+func TestSessionStartRedactsInjectedProfile(t *testing.T) {
+	deps, _ := testDeps(t)
+	deps.Redaction = []string{"Jandro"}
+	if _, err := identity.Generate(deps.Vault, identity.Values{Name: "Jandro", Date: "2026-06-28"}); err != nil {
+		t.Fatal(err)
+	}
+	if ctx := sessionContext(t, deps); strings.Contains(ctx, "Jandro") {
+		t.Errorf("redaction not applied to injected profile:\n%s", ctx)
 	}
 }
 

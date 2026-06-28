@@ -20,6 +20,7 @@ func Registry(profile config.Profile) map[string]Automation {
 		InboxTriage{}.Name():      InboxTriage{},
 		Compaction{}.Name():       Compaction{},
 		KnowledgeDigest{}.Name():  KnowledgeDigest{},
+		MemoryDistill{}.Name():    MemoryDistill{},
 	}
 	return reg
 }

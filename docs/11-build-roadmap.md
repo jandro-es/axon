@@ -42,10 +42,10 @@ Phased so each milestone is independently runnable and demonstrable. A phase isn
 **Gate:** S7 (two isolated profiles, no shared data/secrets/account); work profile demonstrably more constrained (a denied automation never schedules; a denied domain never fetches; redaction scrubs pre-send); S8 (all-automations-off still useful).
 **Satisfies:** FR-03, FR-06, FR-07, NFR-01…NFR-06, NFR-10.
 
-## Phase 8 — Personal memory, identity & onboarding
+## Phase 8 — Personal memory, identity & onboarding ✅ *(built)*
 **Build:** the identity-layer generator (`02-Areas/Profile/USER.md`, `SOUL.md`, `MEMORY.md`) via the existing scaffold/`claudeassets` pattern; the **`axon onboard`** interactive wizard (interview → populate `USER`/`SOUL`, seed `MEMORY`; idempotent, non-clobbering; offers client wiring → Phase 9); a `SessionStart` hook extension that injects a **token-bounded** profile (USER + SOUL + recent `MEMORY`) with **no model call**; the **`memory.remember`** MCP tool (wikilink-safe append into an `axon:memory` managed block) + an optional **`memory-distill`** automation (a model call **through the token manager**). `axon init` detects a missing identity layer and prompts to run onboarding.
-**Gate:** `axon onboard` populates the identity layer idempotently and never clobbers human edits; a Claude Code `SessionStart` injects the user profile + persona + recent memory with **no model call**, within the token ceiling; `memory.remember` appends wikilink-safely; the layer is excluded from logs/events/ledger/exports (NFR-14).
-**Satisfies:** FR-70…FR-73, NFR-14, ADR-011. (Component 12.)
+**Gate:** `axon onboard` populates the identity layer idempotently and never clobbers human edits; a Claude Code `SessionStart` injects the user profile + persona + recent memory with **no model call**, within the token ceiling; `memory_remember` appends wikilink-safely; the layer is excluded from logs/events/ledger/exports (NFR-14). **All gates met** — `internal/identity` + tests, `cmd/axon/onboard_cmd.go`, the extended `hooks.sessionStart`, the `memory_remember` MCP tool and the `memory-distill` automation, all green under `go test ./...`.
+**Satisfies:** FR-70…FR-73, NFR-14, ADR-011. (Component 12.) **Status: built.**
 
 ## Phase 9 — Multi-client integration (Claude Desktop)
 **Build:** **`axon mcp install --client code|desktop`** (and `--print`); profile-scoped `claude_desktop_config.json` generation with a **non-destructive merge** (preserve existing `mcpServers`); `axon doctor` reports detected clients and Claude Desktop's reduced guarantees; documentation of the Desktop flow and its limits; (stretch) the FR-54 community-Obsidian-MCP interop note.

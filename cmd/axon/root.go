@@ -30,7 +30,7 @@ func newRootCmd() *cobra.Command {
 	pf.StringVar(&gf.envPath, "env", ".env", "path to the .env secrets file")
 
 	root.AddCommand(newConfigCmd(gf), newDoctorCmd(gf), newVersionCmd())
-	root.AddCommand(newInitCmd(gf), newReindexCmd(gf))
+	root.AddCommand(newInitCmd(gf), newReindexCmd(gf), newOnboardCmd(gf))
 	root.AddCommand(newIngestCmd(gf), newSearchCmd(gf), newStatusCmd(gf))
 	root.AddCommand(newRunCmd(gf), newStartCmd(gf))
 	root.AddCommand(newMCPCmd(gf), newHookCmd(gf))

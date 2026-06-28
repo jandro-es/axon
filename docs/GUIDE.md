@@ -535,30 +535,62 @@ These are enforced in code and verified by tests — not left to good intentions
 - **The vault is recoverable** — the SQLite database is derived and disposable;
   `axon reindex` rebuilds it entirely from Markdown.
 
-## 18. Roadmap (planned — not yet built)
+## 18. Personal memory & identity (Phase 8)
 
-Two planned phases extend AXON from a knowledge OS toward a fuller "second brain
-that knows me, in any Claude client." They are **specified but not yet
-implemented** — the commands below do not exist yet:
+AXON keeps a first-class **identity layer** in the vault so the assistant knows
+who you are in every Claude Code session ([Component 12](12-component-personal-memory-and-onboarding.md)).
 
-- **Personal memory & identity** ([Component 12](12-component-personal-memory-and-onboarding.md)) —
-  a first-class identity layer in the vault: `02-Areas/Profile/USER.md` (who you
-  are), `SOUL.md` (the agent's persona/voice/boundaries) and `MEMORY.md` (durable
-  decisions/lessons). An interactive **`axon onboard`** wizard interviews you and
-  sets the initial values; the `SessionStart` hook then injects a compact profile
-  into every Claude Code session (no model call), and a `memory.remember` tool +
-  `memory-distill` automation grow durable memory over time.
+Set it up once:
+
+```bash
+axon onboard            # interactive interview — no model call, idempotent
+axon onboard --from me.yaml --non-interactive   # unattended (CI / scripted)
+```
+
+This writes three editable notes under `02-Areas/Profile/`:
+
+- **`USER.md`** — who you are (name, role, timezone, communication style, current
+  goals, key people/projects/tools).
+- **`SOUL.md`** — the assistant's persona: name, tone and the boundaries it must
+  respect.
+- **`MEMORY.md`** — durable decisions/lessons/preferences, newest-first inside an
+  `axon:memory` managed block.
+
+Onboarding never clobbers files you have edited — re-run it any time; existing
+notes are kept. Edit the notes directly in Obsidian whenever you like.
+
+**How it reaches the assistant.** The `SessionStart` hook injects a compact,
+token-bounded snapshot of USER + SOUL + your most recent memory into every Claude
+Code session — with **no model call**. Tune or disable it per profile:
+
+```yaml
+memory:
+  inject: true          # set false (e.g. work profile) to suppress injection
+  session_tokens: 1500  # ceiling for the injected block
+  recent_entries: 10    # how many newest MEMORY entries to include
+```
+
+**Growing memory.** During interactive work the assistant can call the
+`memory_remember` MCP tool to append a durable entry (wikilink-safe, into the
+managed block). The optional `memory-distill` automation periodically distils
+recent daily notes into new entries and compacts an over-long block — through the
+token manager, like every other model call.
+
+**Privacy (NFR-14).** The identity layer is local Markdown; it reaches the model
+only as the bounded session block (with `policy.redaction_rules` applied) and is
+never written to logs, events, the token ledger or `axon export` bundles.
+
+## 19. Roadmap (planned — not yet built)
+
 - **Claude Desktop support** ([Component 13](13-component-multi-client-claude-desktop.md)) —
-  `axon mcp install --client desktop` registers AXON's MCP tools with Claude
-  Desktop. Desktop gets the vault/knowledge/token **tools** (and AXON's own tools
-  stay wikilink-safe), but not the hooks/skills/subagents/headless automations,
-  which remain Claude Code only.
-
-`axon onboard` will be the single setup path for both. See the
-[build roadmap](11-build-roadmap.md) (Phases 8–9) for the full plan and gates.
+  `axon mcp install --client desktop` will register AXON's MCP tools with Claude
+  Desktop. Desktop would get the vault/knowledge/token **tools** (and AXON's own
+  tools stay wikilink-safe), but not the hooks/skills/subagents/headless
+  automations, which remain Claude Code only. See the
+  [build roadmap](11-build-roadmap.md) (Phase 9) for the plan and gates.
 
 ---
 
 *For design rationale and component specs, see the rest of [`docs/`](.) — the PRD
 (01), architecture + ADRs (02), requirements (03), data model & config (04), the
-built component specs (05–10), and the planned ones (12–13).*
+built component specs (05–10, 12), and the planned one (13).*

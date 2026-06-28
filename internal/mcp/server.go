@@ -70,6 +70,12 @@ func NewServer(deps Deps) *mcp.Server {
 			return nil, out, err
 		})
 
+	mcp.AddTool(s, &mcp.Tool{Name: "memory_remember", Description: "Append a durable memory entry (decision/lesson/preference) to the personal MEMORY note, wikilink-safe. Use for facts worth recalling across sessions."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in RememberIn) (*mcp.CallToolResult, RememberOut, error) {
+			out, err := t.Remember(ctx, in, time.Now().UTC().Format("2006-01-02"))
+			return nil, out, err
+		})
+
 	mcp.AddTool(s, &mcp.Tool{Name: "knowledge_ingest", Description: "Ingest a URL or local file into the knowledge base (policy-gated, idempotent)."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in IngestIn) (*mcp.CallToolResult, IngestOut, error) {
 			out, err := t.Ingest(ctx, in)

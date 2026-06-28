@@ -35,6 +35,7 @@ func newHookCmd(gf *globalFlags) *cobra.Command {
 			mgr := tokens.New(deps.db, nil, nil, nil, managerConfig(deps.name, deps.profile, deps.cfg))
 			res, err := hooks.Handle(cmd.Context(), event, stdin, hooks.Deps{
 				Profile: deps.name, DB: deps.db, Vault: deps.vault, Manager: mgr,
+				Memory: deps.profile.Memory, Redaction: deps.profile.Policy.RedactionRules,
 			})
 			if err != nil {
 				return nil // never break the session on a hook error

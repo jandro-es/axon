@@ -19,6 +19,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/jandro-es/axon/internal/config"
+	"github.com/jandro-es/axon/internal/identity"
+	"github.com/jandro-es/axon/internal/ingestion"
 	"github.com/jandro-es/axon/internal/tokens"
 	"github.com/jandro-es/axon/internal/vault"
 )
@@ -48,6 +51,11 @@ type Deps struct {
 	DB      *sql.DB
 	Vault   *vault.FS
 	Manager tokens.Manager
+	// Memory governs the SessionStart identity injection (Component 12, FR-72).
+	Memory config.MemoryConfig
+	// Redaction are the profile's redaction rules, applied to the injected
+	// identity block before it can leave the machine (NFR-14).
+	Redaction []string
 }
 
 // Result is what a hook returns: bytes to write to stdout and an exit code.
@@ -103,6 +111,18 @@ func sessionStart(ctx context.Context, deps Deps) (Result, error) {
 	}
 	b.WriteString("- Conventions: never rename/move notes with raw file ops — use vault_move (wikilink-safe). Edit AXON output only inside axon:* managed blocks. See .claude/CLAUDE.md.\n")
 
+	// Identity injection (FR-72): append a token-bounded snapshot of the personal
+	// profile + persona + recent memory so the assistant knows the user. NO model
+	// call — this reuses the hook AXON already owns and is deterministic and free.
+	// Honours profile.memory.inject (a stricter work profile can disable it) and
+	// applies redaction before the block can leave the machine (NFR-14).
+	if deps.Vault != nil && deps.Memory.InjectEnabled() {
+		if block := renderIdentity(ctx, deps); block != "" {
+			b.WriteString("\n")
+			b.WriteString(block)
+		}
+	}
+
 	out := map[string]any{
 		"hookSpecificOutput": map[string]any{
 			"hookEventName":     SessionStart,
@@ -111,6 +131,27 @@ func sessionStart(ctx context.Context, deps Deps) (Result, error) {
 	}
 	data, _ := json.Marshal(out)
 	return Result{Stdout: data, ExitCode: 0}, nil
+}
+
+// renderIdentity builds the bounded identity-layer injection, applying the
+// profile's redaction rules. Any error (missing layer, bad rule) degrades to an
+// empty string — a hook must never break the session.
+func renderIdentity(ctx context.Context, deps Deps) string {
+	var redact func(string) string
+	if len(deps.Redaction) > 0 {
+		if r, err := ingestion.NewRedactor(deps.Redaction); err == nil {
+			redact = func(s string) string { out, _ := r.Redact(s); return out }
+		}
+	}
+	block, err := identity.Render(ctx, deps.Vault, identity.RenderOptions{
+		MaxTokens:    deps.Memory.SessionTokenBudget(),
+		RecentMemory: deps.Memory.RecentMemoryEntries(),
+		Redact:       redact,
+	})
+	if err != nil {
+		return ""
+	}
+	return block
 }
 
 // Shell-command guardrails. IMPORTANT: this is best-effort defense-in-depth to

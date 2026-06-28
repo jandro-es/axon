@@ -71,6 +71,27 @@ func TestDailyAppendTool(t *testing.T) {
 	}
 }
 
+func TestMemoryRememberTool(t *testing.T) {
+	ctx := context.Background()
+	tools, v, _ := newTestTools(t, nil)
+	out, err := tools.Remember(ctx, RememberIn{Text: "Prefers Go for daemons", Kind: "preference", Source: "session"}, "2026-06-28")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !out.OK || !contains(out.Entry, "Prefers Go for daemons") || !contains(out.Entry, "[preference]") {
+		t.Errorf("remember out = %+v", out)
+	}
+	// The entry must land inside the axon:memory managed block, leaving the file
+	// otherwise human-owned.
+	n, err := v.Read(ctx, out.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !contains(n.Body, "axon:memory:start") || !contains(n.Body, "Prefers Go for daemons") {
+		t.Errorf("memory entry not written to managed block:\n%s", n.Body)
+	}
+}
+
 func TestAutomationsListAndRunTools(t *testing.T) {
 	ctx := context.Background()
 	tools, _, _ := newTestTools(t, map[string]string{"01-Projects/p.md": "a note\n"})
@@ -79,8 +100,8 @@ func TestAutomationsListAndRunTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(list.Automations) != 9 {
-		t.Errorf("expected 9 automations, got %d", len(list.Automations))
+	if len(list.Automations) != 10 {
+		t.Errorf("expected 10 automations, got %d", len(list.Automations))
 	}
 
 	// Run a no-model automation through the engine path.
