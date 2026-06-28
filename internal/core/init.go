@@ -127,9 +127,11 @@ func Init(ctx context.Context, opts InitOptions) (InitReport, error) {
 	}
 
 	// Step 7 — Claude Code wiring (.claude/: CLAUDE.md, .mcp.json, settings.json,
-	// plugin skills + subagents). Profile-scoped; non-destructive. (Step 8,
-	// in-vault Dataview dashboards, arrives in Phase 6.)
+	// plugin skills + subagents). Profile-scoped; non-destructive.
 	add(claudeWiringStep(opts, paths))
+
+	// Step 8 — In-vault Dataview dashboards (.axon/dashboards/).
+	add(dashboardsStep(vfs))
 
 	// Step 9 — First index (build link graph from the vault; no Claude cost).
 	idx, err := Reindex(ctx, vfs, sqlDB)
@@ -205,6 +207,18 @@ func databaseStep(paths config.ResolvedPaths) (StepResult, *sql.DB) {
 		detail = fmt.Sprintf("%s (schema v%d)", paths.DBPath, version)
 	}
 	return StepResult{"database", status, detail}, sqlDB
+}
+
+// dashboardsStep generates the in-vault Dataview dashboards (init step 8).
+func dashboardsStep(vfs *vault.FS) StepResult {
+	res, err := scaffold.Dashboards(vfs)
+	if err != nil {
+		return StepResult{"dashboards", StepFailed, err.Error()}
+	}
+	if len(res.CreatedFiles) > 0 {
+		return StepResult{"dashboards", StepDone, fmt.Sprintf("wrote %d Dataview dashboard(s)", len(res.CreatedFiles))}
+	}
+	return StepResult{"dashboards", StepAlready, "in-vault dashboards present"}
 }
 
 // claudeWiringStep generates the .claude/ integration (init step 7).
@@ -288,7 +302,7 @@ func probeEmbeddingModel(ctx context.Context, e config.EmbeddingsConfig) StepRes
 func anyChanged(steps []StepResult) bool {
 	for _, s := range steps {
 		switch s.Name {
-		case "data-dir", "database", "scaffold", "claude-wiring":
+		case "data-dir", "database", "scaffold", "claude-wiring", "dashboards":
 			if s.Status == StepDone {
 				return true
 			}
@@ -307,7 +321,7 @@ func finish(out io.Writer, rep InitReport) {
 	default:
 		fmt.Fprintln(out, "init: no changes — already converged")
 	}
-	fmt.Fprintln(out, "next: `axon start` (Phase 4) · Claude Code wiring + dashboards land in Phases 5–6")
+	fmt.Fprintln(out, "next: `axon start` to run the scheduler + dashboard; open Claude Code in the vault for interactive use")
 }
 
 func glyphFor(s StepStatus) string {

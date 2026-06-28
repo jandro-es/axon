@@ -75,6 +75,37 @@ func (r Result) Changed() bool {
 	return len(r.CreatedDirs) > 0 || len(r.CreatedFiles) > 0
 }
 
+// dashboardFiles are the in-vault Dataview dashboards (init step 8), written to
+// .axon/dashboards/.
+var dashboardFiles = []fileSpec{
+	{".axon/dashboards/Inbox & Triage.md", "assets/dashboards/inbox-triage.md"},
+	{".axon/dashboards/Active Projects.md", "assets/dashboards/active-projects.md"},
+	{".axon/dashboards/Recent Knowledge.md", "assets/dashboards/recent-knowledge.md"},
+	{".axon/dashboards/Link Suggestions.md", "assets/dashboards/link-suggestions.md"},
+}
+
+// Dashboards writes the generated in-vault Dataview dashboard notes (init step
+// 8), idempotently and without clobbering user edits.
+func Dashboards(v *vault.FS) (Result, error) {
+	var res Result
+	for _, f := range dashboardFiles {
+		content, err := assets.ReadFile(f.asset)
+		if err != nil {
+			return res, fmt.Errorf("read dashboard asset %q: %w", f.asset, err)
+		}
+		created, err := v.Create(f.dest, string(content))
+		if err != nil {
+			return res, fmt.Errorf("write dashboard %q: %w", f.dest, err)
+		}
+		if created {
+			res.CreatedFiles = append(res.CreatedFiles, f.dest)
+		} else {
+			res.SkippedFiles++
+		}
+	}
+	return res, nil
+}
+
 // Apply ensures the vault layout exists. It is safe to run repeatedly: existing
 // directories and files are left exactly as they are. Returns a Result
 // describing what changed.

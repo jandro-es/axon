@@ -11,18 +11,20 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/jandro-es/axon/internal/automations"
+	"github.com/jandro-es/axon/internal/dashboard"
 	"github.com/jandro-es/axon/internal/events"
 	"github.com/jandro-es/axon/internal/scheduler"
+	"github.com/jandro-es/axon/web"
 )
 
 func newStartCmd(gf *globalFlags) *cobra.Command {
-	var once bool
+	var once, noDashboard bool
 	cmd := &cobra.Command{
 		Use:   "start",
-		Short: "Start the automation daemon (scheduler)",
-		Long: "Run the in-daemon scheduler: register every enabled, policy-permitted\n" +
-			"automation on its cron schedule and run them through the engine. Runs until\n" +
-			"interrupted. (The dashboard server arrives in Phase 6.)",
+		Short: "Start the daemon: scheduler + live dashboard",
+		Long: "Run the in-daemon scheduler (every enabled, policy-permitted automation on\n" +
+			"its cron schedule, through the engine) and serve the live dashboard at\n" +
+			"dashboard.host:port. Runs until interrupted.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			deps, err := loadProfileDeps(gf, true)
@@ -34,17 +36,23 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 			bus := events.NewBus()
 			defer bus.Close()
 			logger := events.NewLogger(cmd.OutOrStdout(), events.FormatText, "info")
-			engine := deps.buildEngine(bus)
-
-			sched := scheduler.New(scheduler.Options{Log: logger, Jitter: 5 * time.Second})
-			schedulables := automations.Schedulables(deps.profile)
+			svc := deps.buildServices(bus)
 			out := cmd.OutOrStdout()
-			for _, s := range schedulables {
+
+			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+
+			// Persist every event to the events table for the activity-feed history.
+			go dashboard.PersistEvents(ctx, bus, deps.db)
+
+			// Schedule automations.
+			sched := scheduler.New(scheduler.Options{Log: logger, Jitter: 5 * time.Second})
+			for _, s := range automations.Schedulables(deps.profile) {
 				a := s.Automation
 				job := scheduler.Job{
 					Name: a.Name(), Schedule: s.Schedule, CatchUp: s.CatchUp,
 					Run: func(ctx context.Context) error {
-						_, runErr := engine.Run(ctx, a, false)
+						_, runErr := svc.engine.Run(ctx, a, false)
 						return runErr
 					},
 				}
@@ -54,21 +62,33 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 				}
 				fmt.Fprintf(out, "scheduled %-18s %s\n", a.Name(), s.Schedule)
 			}
-			if len(sched.Jobs()) == 0 {
-				fmt.Fprintln(out, "no automations enabled/permitted; nothing to schedule")
-				if once {
-					return nil
-				}
+
+			// Serve the dashboard.
+			var dash *dashboard.Server
+			if !noDashboard {
+				dash = dashboard.New(dashboard.Config{
+					Profile: deps.name,
+					Host:    deps.profile.Dashboard.Host,
+					Port:    deps.profile.Dashboard.Port,
+					DB:      deps.db,
+					Manager: svc.manager,
+					Bus:     bus,
+					Static:  web.Assets(),
+				})
+				go func() {
+					if err := dash.ListenAndServe(ctx); err != nil {
+						fmt.Fprintf(out, "⚠ dashboard: %v\n", err)
+					}
+				}()
+				fmt.Fprintf(out, "dashboard: http://%s\n", dash.Addr())
 			}
 
-			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
-			defer stop()
 			sched.Start(ctx)
 			sched.CatchUp(ctx)
 			fmt.Fprintln(out, "daemon running — press Ctrl-C to stop")
 
 			if once {
-				// Test/inspection mode: don't block.
+				// Test/inspection mode: don't block on signals.
 				<-sched.Stop().Done()
 				return nil
 			}
@@ -79,5 +99,6 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&once, "once", false, "register schedules, run catch-up, then exit (no blocking)")
+	cmd.Flags().BoolVar(&noDashboard, "no-dashboard", false, "run the scheduler without serving the dashboard")
 	return cmd
 }

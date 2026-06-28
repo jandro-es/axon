@@ -18,9 +18,13 @@ profiles/
 *.out
 coverage.*
 
-# Dashboard SPA (web/) — Node toolchain at build time only
+# Dashboard SPA (web/) — Node toolchain at build time only.
+# Ignore the Vite build output, but keep a committed placeholder so the Go
+# `embed all:dist` compiles on a fresh clone (the dashboard serves a fallback
+# page until `npm run build` produces the real SPA; install.sh does this).
 web/node_modules/
-web/dist/
+web/dist/*
+!web/dist/.gitkeep
 web/.vite/
 npm-debug.log*
 pnpm-debug.log*

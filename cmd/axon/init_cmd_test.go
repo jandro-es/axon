@@ -54,6 +54,10 @@ func TestInitCommandConvergesAndIsIdempotent(t *testing.T) {
 			t.Errorf("init did not generate %q: %v", p, err)
 		}
 	}
+	// Step 8: in-vault Dataview dashboards.
+	if _, err := os.Stat(filepath.Join(dir, "vault", ".axon", "dashboards", "Active Projects.md")); err != nil {
+		t.Errorf("init did not generate in-vault dashboards: %v", err)
+	}
 
 	out, err = run(t, "init", "--config", cfgPath, "--env", filepath.Join(dir, "nonexistent.env"))
 	if err != nil {
