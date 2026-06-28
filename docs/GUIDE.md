@@ -580,17 +580,40 @@ token manager, like every other model call.
 only as the bounded session block (with `policy.redaction_rules` applied) and is
 never written to logs, events, the token ledger or `axon export` bundles.
 
-## 19. Roadmap (planned — not yet built)
+## 19. Use AXON from Claude Desktop (Phase 9)
 
-- **Claude Desktop support** ([Component 13](13-component-multi-client-claude-desktop.md)) —
-  `axon mcp install --client desktop` will register AXON's MCP tools with Claude
-  Desktop. Desktop would get the vault/knowledge/token **tools** (and AXON's own
-  tools stay wikilink-safe), but not the hooks/skills/subagents/headless
-  automations, which remain Claude Code only. See the
-  [build roadmap](11-build-roadmap.md) (Phase 9) for the plan and gates.
+AXON ships one MCP server (`axon mcp`); any MCP client can launch it. Register it
+with Claude Desktop ([Component 13](13-component-multi-client-claude-desktop.md)):
+
+```bash
+axon mcp install --client desktop          # merge into claude_desktop_config.json
+axon mcp install --client desktop --print  # preview the JSON, write nothing
+axon mcp install --client code             # (re)generate the project .claude/ wiring
+```
+
+- The merge is **non-destructive** — other MCP servers and unknown keys are
+  preserved; AXON only adds/updates its own `axon` entry. An unparseable existing
+  config is refused (use `--print` and merge by hand) rather than overwritten.
+- The entry is **profile-scoped**: it carries `--profile`, the absolute config
+  path and the profile's `CLAUDE_CONFIG_DIR`/`AXON_HOME`. Restart Claude Desktop
+  to load the tools.
+- **Be aware of the reduced guarantees.** Claude Desktop gets AXON's **tools**
+  (vault, knowledge, tokens, automations, memory) but **not** the `SessionStart`
+  profile injection, the `PreToolUse` guard over Desktop's built-in file editing,
+  the skills/subagents, or the headless `claude -p` automations — those are Claude
+  Code only. Because every AXON tool is wikilink-safe **in the server**, vault
+  safety for AXON operations still holds; the guidance is simply: **do all vault
+  edits through the AXON tools.**
+
+`axon doctor` reports each client: whether AXON is registered (and for which
+profile), and Desktop's tools-only note.
+
+The config path is resolved per OS (macOS `~/Library/Application Support/Claude/`,
+Windows `%APPDATA%/Claude/`, Linux `~/.config/Claude/`); set `AXON_DESKTOP_CONFIG`
+to override it (e.g. for testing).
 
 ---
 
 *For design rationale and component specs, see the rest of [`docs/`](.) — the PRD
-(01), architecture + ADRs (02), requirements (03), data model & config (04), the
-built component specs (05–10, 12), and the planned one (13).*
+(01), architecture + ADRs (02), requirements (03), data model & config (04), and
+the built component specs (05–10, 12, 13).*

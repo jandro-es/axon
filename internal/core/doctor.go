@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/jandro-es/axon/internal/clients"
 	"github.com/jandro-es/axon/internal/config"
 )
 
@@ -93,10 +94,66 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 			checks = append(checks, vaultWritableCheck(paths.VaultPath))
 			checks = append(checks, portFreeCheck(p.Dashboard.Host, p.Dashboard.Port))
 			checks = append(checks, residencyCheck(p))
+			// 8–9. Multi-client wiring (FR-75): is the AXON MCP server registered
+			// with each Claude client, and is each client's guarantee honest.
+			checks = append(checks, claudeCodeWiringCheck(paths.VaultPath))
+			checks = append(checks, claudeDesktopCheck(activeProfile))
 		}
 	}
 
 	return DoctorReport{Checks: checks}
+}
+
+// claudeCodeWiringCheck reports whether the project's Claude Code wiring exists
+// (the .mcp.json that registers the AXON server). Claude Code is the
+// full-featured client (hooks + skills + subagents + headless automations).
+func claudeCodeWiringCheck(vaultPath string) Check {
+	const name = "client:claude-code"
+	if vaultPath == "" {
+		return Check{name, StatusWarn, "no vault_path configured"}
+	}
+	if _, err := os.Stat(filepath.Join(vaultPath, ".claude", ".mcp.json")); err != nil {
+		return Check{name, StatusWarn, "not wired — run `axon init` or `axon mcp install --client code`"}
+	}
+	return Check{name, StatusOK, "registered (full-featured: tools + hooks + skills + automations)"}
+}
+
+// desktopConfigPath is indirected so tests can point the Desktop check at a temp
+// file. It honours AXON_DESKTOP_CONFIG, then the OS default.
+var desktopConfigPath = func() (string, error) {
+	if v := os.Getenv("AXON_DESKTOP_CONFIG"); v != "" {
+		return v, nil
+	}
+	return clients.DesktopConfigPath()
+}
+
+// claudeDesktopCheck reports the AXON registration state in Claude Desktop and is
+// honest about Desktop's reduced guarantees (FR-75): tools only, no hooks/skills/
+// profile injection. Any resolution/read error degrades to an informational OK —
+// a missing Desktop is normal, not a failure.
+func claudeDesktopCheck(activeProfile string) Check {
+	const name = "client:claude-desktop"
+	path, err := desktopConfigPath()
+	if err != nil {
+		return Check{name, StatusOK, "Claude Desktop not detected (optional)"}
+	}
+	st, err := clients.DetectDesktop(path)
+	if err != nil {
+		return Check{name, StatusOK, "Claude Desktop not detected (optional)"}
+	}
+	switch {
+	case st.Registered:
+		note := "registered (tools only — no hooks/skills/profile injection; keep vault edits in AXON tools)"
+		if st.Profile != "" && st.Profile != activeProfile {
+			note = fmt.Sprintf("registered for profile %q, not active %q — re-run `axon mcp install --client desktop`", st.Profile, activeProfile)
+			return Check{name, StatusWarn, note}
+		}
+		return Check{name, StatusOK, note}
+	case st.Present:
+		return Check{name, StatusWarn, "Claude Desktop present but AXON not registered — run `axon mcp install --client desktop`"}
+	default:
+		return Check{name, StatusOK, "Claude Desktop not configured (optional; `axon mcp install --client desktop`)"}
+	}
 }
 
 // vaultWritableCheck confirms the vault path is writable (or createable).

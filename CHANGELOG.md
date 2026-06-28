@@ -4,13 +4,31 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/) (pre-1.0: minor versions may break).
 
-## [Unreleased]
+## [0.9.0] — 2026-06-28
 
-### Planned
+Phase 9 — multi-client integration (Claude Desktop) (FR-74…FR-76, ADR-012,
+Component 13). With this, the full spec pack (`docs/00`–`13`) is implemented.
 
-- **Phase 9 — Multi-client (Claude Desktop)** (FR-74…FR-76, ADR-012,
-  Component 13): `axon mcp install --client code|desktop` wires the AXON MCP
-  server into Claude Desktop (tools-only); `doctor` reports per-client guarantees.
+### Added
+
+- **`axon mcp install --client code|desktop`** — registers the AXON MCP server
+  with a Claude client. `desktop` merges a profile-scoped entry into
+  `claude_desktop_config.json` **non-destructively** (other servers preserved;
+  an unparseable existing file is refused, not clobbered); `code` (re)generates
+  the project `.claude/` wiring. `--print` previews the registration JSON.
+- **`internal/clients`** — OS-specific Claude Desktop config-path resolution,
+  the non-destructive merge, and registration detection.
+- **Per-client `doctor` checks** — `client:claude-code` and
+  `client:claude-desktop` report whether AXON is registered (and for which
+  profile) and state Claude Desktop's reduced guarantees honestly: tools only,
+  no hooks/skills/profile injection.
+
+### Notes
+
+- Claude Desktop receives AXON's **tools** but not hooks, skills, subagents or
+  headless automations (those remain Claude Code). AXON's own tools stay
+  wikilink-safe and path-sandboxed **in the server**, so vault safety does not
+  depend on the client.
 
 ## [0.8.0] — 2026-06-28
 
@@ -88,5 +106,6 @@ The initial feature-complete build, implemented in phases against
   model synthesis, richer `/health`, DNS-rebinding IP pinning on ingest, and
   `config get/set`.
 
+[0.9.0]: https://github.com/jandro-es/axon/releases/tag/v0.9.0
 [0.8.0]: https://github.com/jandro-es/axon/releases/tag/v0.8.0
 [0.7.0]: https://github.com/jandro-es/axon/releases/tag/v0.7.0

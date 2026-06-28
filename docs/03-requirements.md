@@ -81,12 +81,13 @@ Requirements are the build contract. Each is testable. Priority: **M** (must, v1
 | FR-63 | M | Dashboard reads only from the daemon API; it never holds secrets and binds to localhost by default. |
 | FR-64 | C | Export any chart's underlying data as CSV/JSON. |
 
-### Personal memory, identity & multi-client *(Phase 8 built; Phase 9 planned)*
+### Personal memory, identity & multi-client *(Phases 8–9 — built)*
 
 FR-70…FR-73 and NFR-14 are **implemented** (Phase 8 — `internal/identity`, the
 `axon onboard` wizard, the `SessionStart` injection, the `memory_remember` MCP
-tool and the `memory-distill` automation). FR-74…FR-76 (Claude Desktop wiring)
-remain **planned** (Phase 9).
+tool and the `memory-distill` automation). FR-74…FR-76 are **implemented**
+(Phase 9 — `internal/clients`, the `axon mcp install --client code|desktop`
+command, and the per-client `axon doctor` checks).
 
 | ID | Pri | Requirement |
 |----|-----|-------------|

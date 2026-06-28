@@ -5,7 +5,7 @@
 [![CI](https://github.com/jandro-es/axon/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
 [![Single binary](https://img.shields.io/badge/build-single%20static%20binary-success.svg)](#build--run)
 
-> **Status:** Implemented (Phases 0–8). A single Go binary + an embedded React/Recharts dashboard.
+> **Status:** Implemented (Phases 0–9). A single Go binary + an embedded React/Recharts dashboard.
 > **Module:** `github.com/jandro-es/axon` · **Go 1.26+** · pure-Go SQLite (no cgo).
 
 AXON turns an Obsidian vault into a **second brain that maintains itself**. It is a local-first runtime that wires **Claude** and **Claude Code** into your vault, runs configurable automations (heartbeats, daily logs, compaction, exports, re-indexing), ingests external knowledge (articles, URLs, PDFs), accounts for every token it spends, and surfaces everything on a real-time local dashboard.
@@ -126,9 +126,9 @@ one path to Claude:
 | 08 | [Agent bridge & MCP](docs/08-component-agent-bridge-mcp.md) | MCP tools, hooks, skills, subagents, wikilink safety. |
 | 09 | [Dashboard & observability](docs/09-component-dashboard-observability.md) | Real-time graphs, metrics, the knowledge graph. |
 | 10 | [Installer & bootstrap](docs/10-component-installer-bootstrap.md) | `axon init`, prereq checks, idempotency, profiles. |
-| 11 | [Build roadmap](docs/11-build-roadmap.md) | Phased plan with milestones and acceptance gates (Phases 0–8 built; 9 planned). |
+| 11 | [Build roadmap](docs/11-build-roadmap.md) | Phased plan with milestones and acceptance gates (Phases 0–9 — all built). |
 | 12 | [Personal memory & onboarding](docs/12-component-personal-memory-and-onboarding.md) | *(built)* `USER.md`/`SOUL.md`/`MEMORY.md`, the `axon onboard` wizard, SessionStart injection + memory tools. |
-| 13 | [Multi-client (Claude Desktop)](docs/13-component-multi-client-claude-desktop.md) | *(planned)* use AXON from Claude Desktop, not just Claude Code. |
+| 13 | [Multi-client (Claude Desktop)](docs/13-component-multi-client-claude-desktop.md) | *(built)* `axon mcp install --client desktop` + per-client `doctor` reporting. |
 
 Also in this pack: [`CLAUDE.md`](CLAUDE.md) (build-agent instructions), [`axon.config.example.yaml`](axon.config.example.yaml), [`.env.example`](.env.example).
 
@@ -172,16 +172,33 @@ The personal layer never reaches logs, events, the token ledger or exports
 (NFR-14): `memory_remember` makes no model call, `memory-distill` ledgers only
 token counts (never the text), and `axon export` writes counts, not note bodies.
 
+## Use it from Claude Desktop too (Phase 9)
+
+One MCP server, many clients — see the [Multi-client](docs/13-component-multi-client-claude-desktop.md) spec.
+
+![AXON multi-client wiring](docs/diagrams/multi-client.svg)
+
+*(Editable — [multi-client.excalidraw](docs/diagrams/multi-client.excalidraw).)*
+
+```bash
+axon mcp install --client desktop     # merge a profile-scoped entry into claude_desktop_config.json
+axon mcp install --client desktop --print   # preview the JSON instead of writing
+axon mcp install --client code        # (re)generate the project .claude/ wiring
+```
+
+The merge is **non-destructive** (other MCP servers are preserved) and
+profile-scoped. **Claude Desktop gets AXON's tools only** — no hooks, skills,
+subagents or headless automations (those are Claude Code). Crucially, every AXON
+tool is wikilink-safe and path-sandboxed **in the server**, so vault safety holds
+regardless of client. `axon doctor` reports each client's registration and
+Desktop's reduced guarantees.
+
 ## Roadmap
 
-Phases 0–8 are built (see the [CHANGELOG](CHANGELOG.md)). One planned phase
-remains:
-
-- **Phase 9 — Multi-client (Claude Desktop)** ([spec](docs/13-component-multi-client-claude-desktop.md)):
-  `axon mcp install --client desktop` wires AXON's MCP tools into Claude Desktop
-  (tools-only — hooks/skills stay Claude Code; AXON's own tools remain
-  wikilink-safe regardless of client). The `axon onboard` wizard already offers
-  this as its client-setup step.
+Phases 0–9 are built (see the [CHANGELOG](CHANGELOG.md)) — the full
+spec pack (`docs/00`–`13`) is implemented. Future work is tracked in the
+[CHANGELOG](CHANGELOG.md) "not yet implemented" notes (e.g. PDF ingestion, the
+optional `api_key` adapter, the FR-54 community-Obsidian-MCP interop seam).
 
 ## Contributing
 

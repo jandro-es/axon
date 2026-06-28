@@ -1,12 +1,15 @@
-# 13 — Component: Multi-client Integration (Claude Desktop) *(planned — Phase 9)*
+# 13 — Component: Multi-client Integration (Claude Desktop) *(Phase 9 — built)*
 
 **Owns:** FR-74, FR-75, FR-76, ADR-012.
 **Goal:** Let AXON's second brain be used from **Claude Desktop** as well as Claude
 Code, through the same MCP server, while being honest about which guarantees
 travel to each client.
 
-> Status: **planned.** This spec defines the design; it is not yet built. It
-> reuses the Phase 5 MCP server and the `claudeassets` generation pattern.
+> Status: **built (Phase 9).** Implemented in `internal/clients` (OS path
+> resolution + non-destructive merge + detection), the `axon mcp install
+> --client code|desktop [--print]` command, and the `client:claude-code` /
+> `client:claude-desktop` checks in `axon doctor`. It reuses the Phase 5 MCP
+> server and the `claudeassets` generation pattern.
 
 ## 1. One server, many clients
 
@@ -19,9 +22,11 @@ clients — only the file location and the surrounding feature set differ.
   Claude Code  ──────┤  vault_search/read/write/patch/move/links,        │
   Claude Desktop ────┤  daily_append, knowledge_ingest/search,           │
                      │  tokens_status, automations_list/run,             │
-                     │  memory.remember (Component 12)                    │
+                     │  memory_remember (Component 12)                    │
                      └───────────────────────────────────────────────────┘
 ```
+
+![Multi-client wiring](diagrams/multi-client.svg)
 
 ## 2. Wiring Claude Desktop
 
