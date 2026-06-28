@@ -42,6 +42,18 @@ Phased so each milestone is independently runnable and demonstrable. A phase isn
 **Gate:** S7 (two isolated profiles, no shared data/secrets/account); work profile demonstrably more constrained (a denied automation never schedules; a denied domain never fetches; redaction scrubs pre-send); S8 (all-automations-off still useful).
 **Satisfies:** FR-03, FR-06, FR-07, NFR-01…NFR-06, NFR-10.
 
+## Phase 8 — Personal memory, identity & onboarding
+**Build:** the identity-layer generator (`02-Areas/Profile/USER.md`, `SOUL.md`, `MEMORY.md`) via the existing scaffold/`claudeassets` pattern; the **`axon onboard`** interactive wizard (interview → populate `USER`/`SOUL`, seed `MEMORY`; idempotent, non-clobbering; offers client wiring → Phase 9); a `SessionStart` hook extension that injects a **token-bounded** profile (USER + SOUL + recent `MEMORY`) with **no model call**; the **`memory.remember`** MCP tool (wikilink-safe append into an `axon:memory` managed block) + an optional **`memory-distill`** automation (a model call **through the token manager**). `axon init` detects a missing identity layer and prompts to run onboarding.
+**Gate:** `axon onboard` populates the identity layer idempotently and never clobbers human edits; a Claude Code `SessionStart` injects the user profile + persona + recent memory with **no model call**, within the token ceiling; `memory.remember` appends wikilink-safely; the layer is excluded from logs/events/ledger/exports (NFR-14).
+**Satisfies:** FR-70…FR-73, NFR-14, ADR-011. (Component 12.)
+
+## Phase 9 — Multi-client integration (Claude Desktop)
+**Build:** **`axon mcp install --client code|desktop`** (and `--print`); profile-scoped `claude_desktop_config.json` generation with a **non-destructive merge** (preserve existing `mcpServers`); `axon doctor` reports detected clients and Claude Desktop's reduced guarantees; documentation of the Desktop flow and its limits; (stretch) the FR-54 community-Obsidian-MCP interop note.
+**Gate:** the AXON MCP server is usable from **Claude Desktop** via the generated config (`vault_search`/`read`/`write`/`move`/`knowledge_ingest`/`tokens_status` work); Desktop's reduced-guarantee behaviour (no hooks/skills/subagents) is documented and `doctor`-surfaced; the registration is profile-scoped and merges non-destructively; AXON's own tools stay wikilink-safe regardless of client.
+**Satisfies:** FR-74, FR-75, FR-76, ADR-012. (Component 13.)
+
+> **Sequencing note.** Phases 8–9 extend the *built* system (Phases 0–7) toward a fuller "second brain that knows me, in any Claude client." They depend on the Phase 5 agent bridge (hooks + MCP + `claudeassets` generation) and the Phase 3 token manager (for `memory-distill`), and otherwise add no new infrastructure. The onboarding wizard (Phase 8) is the single entry point that sets the initial values for both the identity layer (#1) and client wiring (#2).
+
 ## Cross-cutting (every phase)
 - Tests against provider fakes; `--profile test` uses a temp vault + temp DB.
 - No Claude call added without going through the token manager (enforce in review).

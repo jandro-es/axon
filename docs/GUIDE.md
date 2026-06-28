@@ -535,8 +535,30 @@ These are enforced in code and verified by tests — not left to good intentions
 - **The vault is recoverable** — the SQLite database is derived and disposable;
   `axon reindex` rebuilds it entirely from Markdown.
 
+## 18. Roadmap (planned — not yet built)
+
+Two planned phases extend AXON from a knowledge OS toward a fuller "second brain
+that knows me, in any Claude client." They are **specified but not yet
+implemented** — the commands below do not exist yet:
+
+- **Personal memory & identity** ([Component 12](12-component-personal-memory-and-onboarding.md)) —
+  a first-class identity layer in the vault: `02-Areas/Profile/USER.md` (who you
+  are), `SOUL.md` (the agent's persona/voice/boundaries) and `MEMORY.md` (durable
+  decisions/lessons). An interactive **`axon onboard`** wizard interviews you and
+  sets the initial values; the `SessionStart` hook then injects a compact profile
+  into every Claude Code session (no model call), and a `memory.remember` tool +
+  `memory-distill` automation grow durable memory over time.
+- **Claude Desktop support** ([Component 13](13-component-multi-client-claude-desktop.md)) —
+  `axon mcp install --client desktop` registers AXON's MCP tools with Claude
+  Desktop. Desktop gets the vault/knowledge/token **tools** (and AXON's own tools
+  stay wikilink-safe), but not the hooks/skills/subagents/headless automations,
+  which remain Claude Code only.
+
+`axon onboard` will be the single setup path for both. See the
+[build roadmap](11-build-roadmap.md) (Phases 8–9) for the full plan and gates.
+
 ---
 
 *For design rationale and component specs, see the rest of [`docs/`](.) — the PRD
-(01), architecture + ADRs (02), requirements (03), data model & config (04), and
-the component specs (05–10).*
+(01), architecture + ADRs (02), requirements (03), data model & config (04), the
+built component specs (05–10), and the planned ones (12–13).*

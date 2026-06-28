@@ -126,7 +126,9 @@ one path to Claude:
 | 08 | [Agent bridge & MCP](docs/08-component-agent-bridge-mcp.md) | MCP tools, hooks, skills, subagents, wikilink safety. |
 | 09 | [Dashboard & observability](docs/09-component-dashboard-observability.md) | Real-time graphs, metrics, the knowledge graph. |
 | 10 | [Installer & bootstrap](docs/10-component-installer-bootstrap.md) | `axon init`, prereq checks, idempotency, profiles. |
-| 11 | [Build roadmap](docs/11-build-roadmap.md) | Phased plan with milestones and acceptance gates. |
+| 11 | [Build roadmap](docs/11-build-roadmap.md) | Phased plan with milestones and acceptance gates (Phases 0–7 built; 8–9 planned). |
+| 12 | [Personal memory & onboarding](docs/12-component-personal-memory-and-onboarding.md) | *(planned)* `USER.md`/`SOUL.md`/`MEMORY.md` + the `axon onboard` wizard. |
+| 13 | [Multi-client (Claude Desktop)](docs/13-component-multi-client-claude-desktop.md) | *(planned)* use AXON from Claude Desktop, not just Claude Code. |
 
 Also in this pack: [`CLAUDE.md`](CLAUDE.md) (build-agent instructions), [`axon.config.example.yaml`](axon.config.example.yaml), [`.env.example`](.env.example).
 
@@ -143,6 +145,24 @@ Also in this pack: [`CLAUDE.md`](CLAUDE.md) (build-agent instructions), [`axon.c
 Everything else is specified in the documents above.
 
 ---
+
+## Roadmap
+
+Phases 0–7 are built (see the [CHANGELOG](CHANGELOG.md)). Two planned phases
+extend AXON from a knowledge OS toward a fuller "second brain that knows me, in
+any Claude client":
+
+- **Phase 8 — Personal memory, identity & onboarding** ([spec](docs/12-component-personal-memory-and-onboarding.md)):
+  a first-class identity layer (`02-Areas/Profile/USER.md`, `SOUL.md`, `MEMORY.md`),
+  an interactive **`axon onboard`** wizard that sets the initial values, a
+  `SessionStart` injection so the agent *knows you* (no model call), and a
+  `memory.remember` tool + `memory-distill` automation to grow durable memory.
+- **Phase 9 — Multi-client (Claude Desktop)** ([spec](docs/13-component-multi-client-claude-desktop.md)):
+  `axon mcp install --client desktop` wires AXON's MCP tools into Claude Desktop
+  (tools-only — hooks/skills stay Claude Code; AXON's own tools remain
+  wikilink-safe regardless of client).
+
+The `axon onboard` wizard (Phase 8) is the single setup path for both.
 
 ## Contributing
 

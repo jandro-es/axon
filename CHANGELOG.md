@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/) (pre-1.0: minor versions may break).
 
+## [Unreleased]
+
+### Planned
+
+- **Phase 8 — Personal memory, identity & onboarding** (FR-70…FR-73, NFR-14,
+  ADR-011, Component 12): a first-class identity layer
+  (`02-Areas/Profile/USER.md`, `SOUL.md`, `MEMORY.md`), the interactive
+  `axon onboard` wizard that sets their initial values, a `SessionStart`
+  injection so the agent knows the user (no model call), and a `memory.remember`
+  MCP tool + `memory-distill` automation to maintain durable memory.
+- **Phase 9 — Multi-client (Claude Desktop)** (FR-74…FR-76, ADR-012,
+  Component 13): `axon mcp install --client code|desktop` wires the AXON MCP
+  server into Claude Desktop (tools-only); `doctor` reports per-client guarantees.
+
 ## [0.7.0] — 2026-06-28
 
 The initial feature-complete build, implemented in phases against
