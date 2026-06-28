@@ -19,7 +19,7 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "axon",
 		Short:         "AXON — a local-first AI operating system for an Obsidian vault",
-		Long:          "AXON turns an Obsidian vault into a self-maintaining second brain.\nPhase 0 skeleton: `config validate` and `doctor` are implemented.",
+		Long:          "AXON turns an Obsidian vault into a self-maintaining second brain.\nImplemented: `config validate`, `doctor`, `init`, `reindex`.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -30,6 +30,7 @@ func newRootCmd() *cobra.Command {
 	pf.StringVar(&gf.envPath, "env", ".env", "path to the .env secrets file")
 
 	root.AddCommand(newConfigCmd(gf), newDoctorCmd(gf), newVersionCmd())
+	root.AddCommand(newInitCmd(gf), newReindexCmd(gf))
 	root.AddCommand(newStubCmds(gf)...)
 	return root
 }

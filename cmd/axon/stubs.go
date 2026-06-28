@@ -27,8 +27,6 @@ func newStubCmds(_ *globalFlags) []*cobra.Command {
 	stubs := []struct {
 		use, short, phase string
 	}{
-		{"init", "Provision a vault + data dir from config", "Phase 1"},
-		{"reindex", "Rebuild SQLite from the vault", "Phase 1"},
 		{"ingest", "Ingest a URL/PDF into the knowledge base", "Phase 2"},
 		{"search", "Hybrid search across the vault + knowledge", "Phase 2"},
 		{"status", "Show budget, runs and health", "Phase 3"},

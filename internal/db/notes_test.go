@@ -1,0 +1,73 @@
+package db
+
+import (
+	"context"
+	"database/sql"
+	"testing"
+)
+
+func newMigratedDB(t *testing.T) *sql.DB {
+	t.Helper()
+	d, err := Open(MemoryDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	if _, err := Migrate(d); err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
+func TestInsertAndCountNotesLinks(t *testing.T) {
+	ctx := context.Background()
+	d := newMigratedDB(t)
+
+	idA, err := InsertNote(ctx, d, NoteRow{Path: "a.md", Title: "A", Type: "note", Tags: []string{"x"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	idB, err := InsertNote(ctx, d, NoteRow{Path: "b.md", Title: "B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// One resolved wikilink, one dangling, one tag.
+	if err := InsertLink(ctx, d, LinkRow{SrcNoteID: idA, DstPath: "b", DstNoteID: &idB, Kind: "wikilink"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := InsertLink(ctx, d, LinkRow{SrcNoteID: idA, DstPath: "ghost", Kind: "wikilink"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := InsertLink(ctx, d, LinkRow{SrcNoteID: idA, DstPath: "topic", Kind: "tag"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if n, _ := CountNotes(ctx, d); n != 2 {
+		t.Errorf("CountNotes = %d, want 2", n)
+	}
+	if n, _ := CountLinks(ctx, d); n != 3 {
+		t.Errorf("CountLinks = %d, want 3", n)
+	}
+	if n, _ := CountBrokenWikilinks(ctx, d); n != 1 {
+		t.Errorf("CountBrokenWikilinks = %d, want 1 (the ghost link)", n)
+	}
+}
+
+func TestResetDerivedClearsNotesAndLinks(t *testing.T) {
+	ctx := context.Background()
+	d := newMigratedDB(t)
+
+	id, _ := InsertNote(ctx, d, NoteRow{Path: "a.md"})
+	_ = InsertLink(ctx, d, LinkRow{SrcNoteID: id, DstPath: "x", Kind: "tag"})
+
+	if err := ResetDerived(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := CountNotes(ctx, d); n != 0 {
+		t.Errorf("notes after reset = %d, want 0", n)
+	}
+	if n, _ := CountLinks(ctx, d); n != 0 {
+		t.Errorf("links after reset = %d, want 0", n)
+	}
+}

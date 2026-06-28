@@ -9,18 +9,7 @@ package vault
 
 import (
 	"context"
-	"time"
 )
-
-// Note is a parsed vault note: frontmatter plus raw body, with its vault-
-// relative path. Frontmatter is kept as a generic map so unknown keys survive
-// round-trips untouched (the agent must never reorder or strip them).
-type Note struct {
-	Path        string         // vault-relative, e.g. "01-Projects/foo.md"
-	Frontmatter map[string]any // YAML frontmatter, order-preserving concerns aside
-	Body        string         // markdown body (without frontmatter)
-	Updated     time.Time
-}
 
 // Vault is the wikilink-safe interface to Markdown notes. Implementations must
 // be safe for concurrent use.
