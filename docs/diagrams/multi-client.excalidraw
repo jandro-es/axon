@@ -4,42 +4,7 @@
   "source": "https://excalidraw.com",
   "elements": [
     {
-      "id": "el0001",
-      "type": "text",
-      "x": 24,
-      "y": 14,
-      "width": 572.0,
-      "height": 25.0,
-      "angle": 0,
-      "strokeColor": "#1e1e1e",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 2,
-      "strokeStyle": "solid",
-      "roughness": 1,
-      "opacity": 100,
-      "groupIds": [],
-      "frameId": null,
-      "roundness": null,
-      "seed": 1,
-      "versionNonce": 1,
-      "version": 1,
-      "isDeleted": false,
-      "boundElements": [],
-      "updated": 1,
-      "link": null,
-      "locked": false,
-      "text": "AXON \u2014 one MCP server, many Claude clients (Phase 9)",
-      "fontSize": 20,
-      "fontFamily": 5,
-      "textAlign": "left",
-      "verticalAlign": "top",
-      "containerId": null,
-      "originalText": "AXON \u2014 one MCP server, many Claude clients (Phase 9)",
-      "lineHeight": 1.25
-    },
-    {
-      "id": "el0002",
+      "id": "el0020",
       "type": "rectangle",
       "x": 24,
       "y": 84,
@@ -64,7 +29,7 @@
       "isDeleted": false,
       "boundElements": [
         {
-          "id": "el0003",
+          "id": "el0021",
           "type": "text"
         }
       ],
@@ -73,17 +38,17 @@
       "locked": false
     },
     {
-      "id": "el0003",
+      "id": "el0021",
       "type": "text",
-      "x": 32,
-      "y": 95.28,
-      "width": 234,
-      "height": 70.0,
+      "x": 24,
+      "y": 84,
+      "width": 250,
+      "height": 92,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
       "fillStyle": "solid",
-      "strokeWidth": 2,
+      "strokeWidth": 1,
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
@@ -98,17 +63,17 @@
       "updated": 1,
       "link": null,
       "locked": false,
-      "text": "Claude Code\ntools + hooks + skills +\nsubagents + headless automations\nfull-featured",
-      "fontSize": 14,
+      "fontSize": 13,
       "fontFamily": 5,
+      "text": "Claude Code\ntools + hooks + skills +\nsubagents + headless automations\nfull-featured",
+      "originalText": "Claude Code\ntools + hooks + skills +\nsubagents + headless automations\nfull-featured",
       "textAlign": "center",
       "verticalAlign": "middle",
-      "containerId": "el0002",
-      "originalText": "Claude Code\ntools + hooks + skills +\nsubagents + headless automations\nfull-featured",
+      "containerId": "el0020",
       "lineHeight": 1.25
     },
     {
-      "id": "el0004",
+      "id": "el0022",
       "type": "rectangle",
       "x": 24,
       "y": 244,
@@ -133,7 +98,7 @@
       "isDeleted": false,
       "boundElements": [
         {
-          "id": "el0005",
+          "id": "el0023",
           "type": "text"
         }
       ],
@@ -142,17 +107,17 @@
       "locked": false
     },
     {
-      "id": "el0005",
+      "id": "el0023",
       "type": "text",
-      "x": 32,
-      "y": 255.28,
-      "width": 234,
-      "height": 70.0,
+      "x": 24,
+      "y": 244,
+      "width": 250,
+      "height": 92,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
       "fillStyle": "solid",
-      "strokeWidth": 2,
+      "strokeWidth": 1,
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
@@ -167,17 +132,17 @@
       "updated": 1,
       "link": null,
       "locked": false,
-      "text": "Claude Desktop\nAXON tools only\nno hooks / skills / injection\ntools-only client",
-      "fontSize": 14,
+      "fontSize": 13,
       "fontFamily": 5,
+      "text": "Claude Desktop\nAXON tools only\nno hooks / skills / injection\ntools-only client",
+      "originalText": "Claude Desktop\nAXON tools only\nno hooks / skills / injection\ntools-only client",
       "textAlign": "center",
       "verticalAlign": "middle",
-      "containerId": "el0004",
-      "originalText": "Claude Desktop\nAXON tools only\nno hooks / skills / injection\ntools-only client",
+      "containerId": "el0022",
       "lineHeight": 1.25
     },
     {
-      "id": "el0006",
+      "id": "el0024",
       "type": "rectangle",
       "x": 392,
       "y": 120,
@@ -202,7 +167,7 @@
       "isDeleted": false,
       "boundElements": [
         {
-          "id": "el0007",
+          "id": "el0025",
           "type": "text"
         }
       ],
@@ -211,17 +176,17 @@
       "locked": false
     },
     {
-      "id": "el0007",
+      "id": "el0025",
       "type": "text",
-      "x": 400,
-      "y": 143.04000000000002,
-      "width": 216,
-      "height": 135.0,
+      "x": 392,
+      "y": 120,
+      "width": 232,
+      "height": 180,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
       "fillStyle": "solid",
-      "strokeWidth": 2,
+      "strokeWidth": 1,
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
@@ -236,17 +201,17 @@
       "updated": 1,
       "link": null,
       "locked": false,
-      "text": "axon mcp (stdio)\nvault_search / read / write\nvault_patch / move / links\ndaily_append \u00b7 knowledge_*\ntokens_status \u00b7 automations_*\nmemory_remember\n\nevery tool wikilink-safe &\npath-sandboxed in the server",
       "fontSize": 12,
       "fontFamily": 5,
+      "text": "axon mcp (stdio)\nvault_search / read / write\nvault_patch / move / links\ndaily_append · knowledge_*\ntokens_status · automations_*\nmemory_remember\n \nevery tool wikilink-safe &\npath-sandboxed in the server",
+      "originalText": "axon mcp (stdio)\nvault_search / read / write\nvault_patch / move / links\ndaily_append · knowledge_*\ntokens_status · automations_*\nmemory_remember\n \nevery tool wikilink-safe &\npath-sandboxed in the server",
       "textAlign": "center",
       "verticalAlign": "middle",
-      "containerId": "el0006",
-      "originalText": "axon mcp (stdio)\nvault_search / read / write\nvault_patch / move / links\ndaily_append \u00b7 knowledge_*\ntokens_status \u00b7 automations_*\nmemory_remember\n\nevery tool wikilink-safe &\npath-sandboxed in the server",
+      "containerId": "el0024",
       "lineHeight": 1.25
     },
     {
-      "id": "el0008",
+      "id": "el0026",
       "type": "rectangle",
       "x": 712,
       "y": 160,
@@ -271,7 +236,7 @@
       "isDeleted": false,
       "boundElements": [
         {
-          "id": "el0009",
+          "id": "el0027",
           "type": "text"
         }
       ],
@@ -280,17 +245,17 @@
       "locked": false
     },
     {
-      "id": "el0009",
+      "id": "el0027",
       "type": "text",
-      "x": 720,
-      "y": 192.64,
-      "width": 132,
-      "height": 35.0,
+      "x": 712,
+      "y": 160,
+      "width": 148,
+      "height": 100,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
       "fillStyle": "solid",
-      "strokeWidth": 2,
+      "strokeWidth": 1,
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
@@ -305,17 +270,17 @@
       "updated": 1,
       "link": null,
       "locked": false,
-      "text": "Vault\n(source of truth)",
-      "fontSize": 14,
+      "fontSize": 15,
       "fontFamily": 5,
+      "text": "Vault\n(source of truth)",
+      "originalText": "Vault\n(source of truth)",
       "textAlign": "center",
       "verticalAlign": "middle",
-      "containerId": "el0008",
-      "originalText": "Vault\n(source of truth)",
+      "containerId": "el0026",
       "lineHeight": 1.25
     },
     {
-      "id": "el0010",
+      "id": "el0028",
       "type": "rectangle",
       "x": 392,
       "y": 328,
@@ -323,7 +288,7 @@
       "height": 74,
       "angle": 0,
       "strokeColor": "#1e1e1e",
-      "backgroundColor": "#d3f9d8",
+      "backgroundColor": "#b2f2bb",
       "fillStyle": "solid",
       "strokeWidth": 2,
       "strokeStyle": "solid",
@@ -340,7 +305,7 @@
       "isDeleted": false,
       "boundElements": [
         {
-          "id": "el0011",
+          "id": "el0029",
           "type": "text"
         }
       ],
@@ -349,17 +314,17 @@
       "locked": false
     },
     {
-      "id": "el0011",
+      "id": "el0029",
       "type": "text",
-      "x": 400,
-      "y": 342.68,
-      "width": 216,
-      "height": 45.0,
+      "x": 392,
+      "y": 328,
+      "width": 232,
+      "height": 74,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
       "fillStyle": "solid",
-      "strokeWidth": 2,
+      "strokeWidth": 1,
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
@@ -374,21 +339,21 @@
       "updated": 1,
       "link": null,
       "locked": false,
-      "text": "Vault safety holds for both:\nenforced in the server,\nnot the client's hooks.",
       "fontSize": 12,
       "fontFamily": 5,
+      "text": "Vault safety holds for both:\nenforced in the server,\nnot the client's hooks.",
+      "originalText": "Vault safety holds for both:\nenforced in the server,\nnot the client's hooks.",
       "textAlign": "center",
       "verticalAlign": "middle",
-      "containerId": "el0010",
-      "originalText": "Vault safety holds for both:\nenforced in the server,\nnot the client's hooks.",
+      "containerId": "el0028",
       "lineHeight": 1.25
     },
     {
-      "id": "el0012",
+      "id": "el002a",
       "type": "arrow",
       "x": 274,
       "y": 130,
-      "width": 114,
+      "width": 118,
       "height": 30,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -417,7 +382,7 @@
           0
         ],
         [
-          114,
+          118,
           30
         ]
       ],
@@ -428,12 +393,12 @@
       "endArrowhead": "arrow"
     },
     {
-      "id": "el0013",
+      "id": "el002b",
       "type": "arrow",
       "x": 274,
       "y": 290,
-      "width": 114,
-      "height": 32,
+      "width": 118,
+      "height": -32,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -461,7 +426,7 @@
           0
         ],
         [
-          114,
+          118,
           -32
         ]
       ],
@@ -472,11 +437,11 @@
       "endArrowhead": "arrow"
     },
     {
-      "id": "el0014",
+      "id": "el002c",
       "type": "arrow",
       "x": 624,
       "y": 210,
-      "width": 84,
+      "width": 88,
       "height": 0,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -495,7 +460,12 @@
       "versionNonce": 1,
       "version": 1,
       "isDeleted": false,
-      "boundElements": [],
+      "boundElements": [
+        {
+          "id": "el002d",
+          "type": "text"
+        }
+      ],
       "updated": 1,
       "link": null,
       "locked": false,
@@ -505,7 +475,7 @@
           0
         ],
         [
-          84,
+          88,
           0
         ]
       ],
@@ -513,20 +483,25 @@
       "startBinding": null,
       "endBinding": null,
       "startArrowhead": null,
-      "endArrowhead": "arrow"
+      "endArrowhead": "arrow",
+      "_label": {
+        "mx": 668,
+        "my": 210,
+        "text": "safe ops"
+      }
     },
     {
-      "id": "el0015",
+      "id": "el002d",
       "type": "text",
-      "x": 640,
-      "y": 196,
-      "width": 48.400000000000006,
-      "height": 13.75,
+      "x": 668,
+      "y": 210,
+      "width": 64,
+      "height": 18,
       "angle": 0,
       "strokeColor": "#1e1e1e",
-      "backgroundColor": "transparent",
+      "backgroundColor": "#ffffff",
       "fillStyle": "solid",
-      "strokeWidth": 2,
+      "strokeWidth": 1,
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
@@ -541,13 +516,13 @@
       "updated": 1,
       "link": null,
       "locked": false,
-      "text": "safe ops",
-      "fontSize": 11,
+      "fontSize": 13,
       "fontFamily": 5,
-      "textAlign": "left",
-      "verticalAlign": "top",
-      "containerId": null,
+      "text": "safe ops",
       "originalText": "safe ops",
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "el002c",
       "lineHeight": 1.25
     }
   ],

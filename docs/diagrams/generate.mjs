@@ -42,8 +42,8 @@ function base(type, x, y, w, h, extra = {}) {
 }
 
 // A shape (rectangle/diamond/ellipse) with a centered text label.
-function box(els, { x, y, w, h, fill = C.blue, type = 'rectangle', text = '', size = 16 }) {
-  const shape = base(type, x, y, w, h, { backgroundColor: fill })
+function box(els, { x, y, w, h, fill = C.blue, type = 'rectangle', text = '', size = 16, dashed = false }) {
+  const shape = base(type, x, y, w, h, { backgroundColor: fill, strokeStyle: dashed ? 'dashed' : 'solid' })
   els.push(shape)
   if (text) {
     const t = base('text', x, y, w, h, {
@@ -135,7 +135,8 @@ function renderSVG(els, title) {
   for (const e of els) {
     const x = e.x + ox, y = e.y + oy, w = e.width, h = e.height
     if (e.type === 'rectangle') {
-      out.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" fill="${e.backgroundColor}" stroke="${e.strokeColor}" stroke-width="2"/>`)
+      const dash = e.strokeStyle === 'dashed' ? ' stroke-dasharray="6 5"' : ''
+      out.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" fill="${e.backgroundColor}" stroke="${e.strokeColor}" stroke-width="2"${dash}/>`)
     } else if (e.type === 'ellipse') {
       out.push(`<ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}" fill="${e.backgroundColor}" stroke="${e.strokeColor}" stroke-width="2"/>`)
     } else if (e.type === 'diamond') {
@@ -315,6 +316,59 @@ function chokepoint() {
   emit('token-chokepoint', 'AXON — token chokepoint & automation lifecycle', e)
 }
 
+// ===========================================================================
+// Diagram 4 — Personal memory & identity (Phase 8)
+// ===========================================================================
+function personalMemory() {
+  const e = []
+  const onboard = box(e, { x: 24, y: 156, w: 250, h: 64, fill: C.gray, size: 14, text: 'axon onboard\ninterview · idempotent · no model' })
+
+  // Identity-layer container (dashed) with a top label.
+  box(e, { x: 320, y: 72, w: 280, h: 232, fill: '#f8f9fa', dashed: true })
+  freetext(e, { x: 338, y: 78, text: 'Identity layer · 02-Areas/Profile/', size: 13 })
+  box(e, { x: 338, y: 108, w: 244, h: 46, fill: C.blue, size: 15, text: 'USER.md — who you are' })
+  box(e, { x: 338, y: 160, w: 244, h: 46, fill: C.blue, size: 15, text: 'SOUL.md — assistant persona' })
+  const memory = box(e, { x: 338, y: 216, w: 244, h: 72, fill: C.yellow, size: 14, text: 'MEMORY.md\naxon:memory · durable entries' })
+
+  const sstart = box(e, { x: 636, y: 104, w: 216, h: 64, fill: C.green, size: 14, text: 'SessionStart hook\nbounded · redacted · no model' })
+  const session = box(e, { x: 636, y: 200, w: 216, h: 60, fill: C.green, size: 14, text: 'Claude Code session\n“knows you”' })
+
+  const remember = box(e, { x: 322, y: 372, w: 130, h: 58, fill: C.blue, size: 13, text: 'memory_remember\nMCP tool' })
+  const distill = box(e, { x: 458, y: 372, w: 130, h: 58, fill: C.blue, size: 13, text: 'memory-distill\n→ token manager' })
+
+  box(e, { x: 636, y: 300, w: 216, h: 100, fill: C.red, size: 12, text: 'Privacy (NFR-14)\nnever in logs, events,\nledger or exports;\nredaction before egress.' })
+
+  arrow(e, onboard.right, [320, 188], { label: 'writes' })
+  arrow(e, [600, 136], sstart.left, { label: 'inject' })
+  arrow(e, sstart.bottom, session.top)
+  arrow(e, remember.top, [remember.cx, 290])
+  arrow(e, distill.top, [distill.cx, 290])
+  freetext(e, { x: 392, y: 338, text: 'append (wikilink-safe)', size: 12 })
+  void memory
+
+  emit('personal-memory', 'AXON — personal memory & identity (Phase 8)', e)
+}
+
+// ===========================================================================
+// Diagram 5 — One MCP server, many Claude clients (Phase 9)
+// ===========================================================================
+function multiClient() {
+  const e = []
+  const code = box(e, { x: 24, y: 84, w: 250, h: 92, fill: C.green, size: 13, text: 'Claude Code\ntools + hooks + skills +\nsubagents + headless automations\nfull-featured' })
+  const desktop = box(e, { x: 24, y: 244, w: 250, h: 92, fill: C.blue, size: 13, text: 'Claude Desktop\nAXON tools only\nno hooks / skills / injection\ntools-only client' })
+  const server = box(e, { x: 392, y: 120, w: 232, h: 180, fill: C.yellow, size: 12, text: 'axon mcp (stdio)\nvault_search / read / write\nvault_patch / move / links\ndaily_append · knowledge_*\ntokens_status · automations_*\nmemory_remember\n \nevery tool wikilink-safe &\npath-sandboxed in the server' })
+  const vault = box(e, { x: 712, y: 160, w: 148, h: 100, fill: C.gray, size: 15, text: 'Vault\n(source of truth)' })
+  box(e, { x: 392, y: 328, w: 232, h: 74, fill: C.green, size: 12, text: "Vault safety holds for both:\nenforced in the server,\nnot the client's hooks." })
+
+  arrow(e, code.right, [392, 160])
+  arrow(e, desktop.right, [392, 258])
+  arrow(e, server.right, vault.left, { label: 'safe ops' })
+
+  emit('multi-client', 'AXON — one MCP server, many Claude clients (Phase 9)', e)
+}
+
 architecture()
 ingestion()
 chokepoint()
+personalMemory()
+multiClient()

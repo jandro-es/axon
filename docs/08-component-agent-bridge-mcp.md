@@ -24,6 +24,9 @@ A stdio MCP server (`github.com/modelcontextprotocol/go-sdk` — the official Go
 | `metrics.query` | `metric, range` | series data | for ad-hoc analysis |
 | `automations.list` | `—` | `[{name, schedule, enabled, lastRun}]` | |
 | `automations.run` | `name, dry_run?` | run result | same path as scheduler |
+| `memory.remember` | `text, kind?, source?` | `{ok, entry, path}` | appends a durable entry to `MEMORY.md`'s `axon:memory` block (Component 12) |
+
+Tool IDs use underscores at the wire (`vault_search`, `memory_remember`, …) so they map cleanly onto Claude Code's `mcp__axon__<tool>`; the dotted names above are the conceptual contract.
 
 **Safety in tools:** `vault.write`/`vault.patch` refuse to touch human prose outside managed markers unless `force` is set; `vault.move` is the only rename path and always fixes links; there is **no** `vault.delete` tool (deletes are out-of-band, confirmed, never agent-driven).
 
