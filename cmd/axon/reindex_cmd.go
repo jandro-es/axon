@@ -32,9 +32,6 @@ func newReindexCmd(gf *globalFlags) *cobra.Command {
 			paths := profile.Paths()
 
 			out := cmd.OutOrStdout()
-			if embeddings {
-				fmt.Fprintln(out, "note: --embeddings re-embed is not available until Phase 2; rebuilding link graph only")
-			}
 
 			sqlDB, err := db.Open(paths.DBPath)
 			if err != nil {
@@ -52,6 +49,15 @@ func newReindexCmd(gf *globalFlags) *cobra.Command {
 			}
 			fmt.Fprintf(out, "reindex (profile %q): %d notes, %d links, %d unresolved wikilinks\n",
 				name, res.Notes, res.Links, res.BrokenWikilink)
+
+			if embeddings {
+				embedder := embeddingsProvider(profile)
+				re, err := core.ReembedPending(cmd.Context(), sqlDB, embedder, true)
+				if err != nil {
+					return fmt.Errorf("re-embed: %w (is Ollama running?)", err)
+				}
+				fmt.Fprintf(out, "re-embedded %d/%d chunks via %s\n", re.Embedded, re.Total, profile.Embeddings.Model)
+			}
 			return nil
 		},
 	}

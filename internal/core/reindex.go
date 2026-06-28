@@ -18,14 +18,15 @@ type ReindexResult struct {
 	BrokenWikilink int // wikilink/embed edges that don't resolve to a known note
 }
 
-// Reindex rebuilds the derived notes mirror and link graph entirely from the
-// Markdown vault (ADR-006): the database is disposable and reconstructable, so
-// this clears the derived tables and repopulates them. It runs in a single
-// transaction so a failure leaves the previous index intact.
+// Reindex reconstructs the derived notes mirror and link graph from the Markdown
+// vault (ADR-006). It *converges* the notes table by path rather than wiping it:
+// notes that persist keep their row id, so the chunks and vectors anchored to
+// them (written by ingestion) survive a routine reindex. Notes whose files are
+// gone are deleted (cascading their chunks); links are fully rebuilt. Runs in a
+// single transaction so a failure leaves the previous index intact.
 //
-// Embedding existing notes (vectors/FTS) is intentionally out of scope here —
-// that arrives with the Ollama provider in Phase 2. This builds the operational
-// state that Phase 1 owns.
+// Re-embedding is separate (see ReembedPending): a plain reindex never requires
+// Ollama and never discards existing vectors for unchanged notes.
 func Reindex(ctx context.Context, v *vault.FS, sqlDB *sql.DB) (ReindexResult, error) {
 	var res ReindexResult
 
@@ -41,11 +42,13 @@ func Reindex(ctx context.Context, v *vault.FS, sqlDB *sql.DB) (ReindexResult, er
 		links []vault.Link
 	}
 	notes := make([]*parsed, 0, len(paths))
+	present := make(map[string]bool, len(paths))
 	for _, p := range paths {
 		n, err := v.Read(ctx, p)
 		if err != nil {
 			return res, err
 		}
+		present[p] = true
 		notes = append(notes, &parsed{
 			row:   noteRow(p, n),
 			links: vault.ParseLinks(n.Body),
@@ -58,16 +61,30 @@ func Reindex(ctx context.Context, v *vault.FS, sqlDB *sql.DB) (ReindexResult, er
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if err := db.ResetDerived(ctx, tx); err != nil {
+	// Drop notes whose files no longer exist (cascades their chunks/vectors).
+	existingIDs, err := db.NotePathIDs(ctx, tx)
+	if err != nil {
+		return res, err
+	}
+	for path, id := range existingIDs {
+		if !present[path] {
+			if err := db.DeleteNote(ctx, tx, id); err != nil {
+				return res, err
+			}
+		}
+	}
+
+	// Links are rebuilt from scratch each time; they anchor nothing.
+	if err := db.ClearLinks(ctx, tx); err != nil {
 		return res, err
 	}
 
-	// First pass: insert notes, building resolution maps as we go.
+	// First pass: upsert notes by path (stable ids), building resolution maps.
 	byRel := make(map[string]int64, len(notes)) // RelNoExt -> id
 	byBase := make(map[string]int64, len(notes))
 	ids := make([]int64, len(notes))
 	for i, n := range notes {
-		id, err := db.InsertNote(ctx, tx, n.row)
+		id, err := db.UpsertNote(ctx, tx, n.row)
 		if err != nil {
 			return res, err
 		}

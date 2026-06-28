@@ -3,6 +3,7 @@ package embeddings
 import (
 	"context"
 	"hash/fnv"
+	"sync"
 )
 
 // Fake is a deterministic, dependency-free Provider for tests and the Phase 0
@@ -11,6 +12,10 @@ import (
 type Fake struct {
 	ModelName string
 	Dimension int
+	HealthErr error // if set, Healthcheck returns it
+
+	mu         sync.Mutex
+	embedCalls int // number of Embed invocations, for assertions
 }
 
 // NewFake returns a Fake matching the personal-profile default (nomic-embed-text,
@@ -24,6 +29,9 @@ func (f *Fake) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	f.mu.Lock()
+	f.embedCalls++
+	f.mu.Unlock()
 	out := make([][]float32, len(texts))
 	for i, t := range texts {
 		out[i] = f.vector(t)
@@ -52,6 +60,21 @@ func (f *Fake) Model() string {
 		return "fake-embed"
 	}
 	return f.ModelName
+}
+
+// EmbedCalls returns how many times Embed was invoked.
+func (f *Fake) EmbedCalls() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.embedCalls
+}
+
+// Healthcheck always succeeds for the fake (optionally honour a configured err).
+func (f *Fake) Healthcheck(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return f.HealthErr
 }
 
 // Dim reports the configured dimension (defaulting to 768).

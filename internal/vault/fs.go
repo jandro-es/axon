@@ -218,6 +218,20 @@ func (v *FS) Create(rel, content string) (created bool, err error) {
 	return true, nil
 }
 
+// Append appends content to a vault-relative file (creating it if absent),
+// writing the new whole-file content atomically. Used for AXON-managed system
+// files like .axon/review-queue.md; not for human notes.
+func (v *FS) Append(rel, content string) error {
+	existing := ""
+	if data, err := os.ReadFile(v.abs(rel)); err == nil {
+		existing = string(data)
+	}
+	if existing != "" && !strings.HasSuffix(existing, "\n") {
+		existing += "\n"
+	}
+	return v.writeRaw(rel, existing+content)
+}
+
 // writeRaw atomically writes content to a vault-relative path: it writes a temp
 // file in the destination directory then renames it into place, so a reader
 // never observes a half-written note (NFR-06).

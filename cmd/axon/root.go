@@ -31,6 +31,7 @@ func newRootCmd() *cobra.Command {
 
 	root.AddCommand(newConfigCmd(gf), newDoctorCmd(gf), newVersionCmd())
 	root.AddCommand(newInitCmd(gf), newReindexCmd(gf))
+	root.AddCommand(newIngestCmd(gf), newSearchCmd(gf))
 	root.AddCommand(newStubCmds(gf)...)
 	return root
 }

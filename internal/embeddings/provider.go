@@ -10,10 +10,12 @@ import "context"
 // vector and must match the configured embeddings.dim; a mismatch forces a
 // re-index. Implementations must be safe for concurrent use.
 type Provider interface {
-	// Embed returns one vector per input text, in order.
+	// Embed returns one vector per input text, in order, batched internally.
 	Embed(ctx context.Context, texts []string) ([][]float32, error)
 	// Model reports the embedding model identifier.
 	Model() string
 	// Dim reports the output vector dimension.
 	Dim() int
+	// Healthcheck verifies the provider is reachable and the model is usable.
+	Healthcheck(ctx context.Context) error
 }
