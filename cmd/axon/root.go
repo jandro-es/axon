@@ -33,6 +33,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newInitCmd(gf), newReindexCmd(gf))
 	root.AddCommand(newIngestCmd(gf), newSearchCmd(gf), newStatusCmd(gf))
 	root.AddCommand(newRunCmd(gf), newStartCmd(gf))
+	root.AddCommand(newMCPCmd(gf), newHookCmd(gf))
 	root.AddCommand(newStubCmds(gf)...)
 	return root
 }

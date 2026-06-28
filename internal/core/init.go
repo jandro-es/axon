@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jandro-es/axon/internal/claudeassets"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/scaffold"
@@ -50,6 +51,11 @@ type InitOptions struct {
 	ProfileName string
 	Profile     config.Profile
 	Out         io.Writer
+	// ConfigPath / BinaryPath are absolute paths baked into the generated
+	// Claude Code wiring (.mcp.json / settings.json). If BinaryPath is empty the
+	// running executable's path is used.
+	ConfigPath string
+	BinaryPath string
 	// CheckEmbeddingModel optionally overrides the Ollama reachability probe so
 	// tests can run hermetically. If nil, a real short-timeout probe is used.
 	CheckEmbeddingModel func(ctx context.Context, e config.EmbeddingsConfig) StepResult
@@ -119,6 +125,11 @@ func Init(ctx context.Context, opts InitOptions) (InitReport, error) {
 		finish(out, rep)
 		return rep, fmt.Errorf("init: vault scaffold failed")
 	}
+
+	// Step 7 — Claude Code wiring (.claude/: CLAUDE.md, .mcp.json, settings.json,
+	// plugin skills + subagents). Profile-scoped; non-destructive. (Step 8,
+	// in-vault Dataview dashboards, arrives in Phase 6.)
+	add(claudeWiringStep(opts, paths))
 
 	// Step 9 — First index (build link graph from the vault; no Claude cost).
 	idx, err := Reindex(ctx, vfs, sqlDB)
@@ -196,6 +207,32 @@ func databaseStep(paths config.ResolvedPaths) (StepResult, *sql.DB) {
 	return StepResult{"database", status, detail}, sqlDB
 }
 
+// claudeWiringStep generates the .claude/ integration (init step 7).
+func claudeWiringStep(opts InitOptions, paths config.ResolvedPaths) StepResult {
+	binary := opts.BinaryPath
+	if binary == "" {
+		if exe, err := os.Executable(); err == nil {
+			binary = exe
+		} else {
+			binary = "axon"
+		}
+	}
+	res, err := claudeassets.Generate(vault.NewFS(paths.VaultPath), claudeassets.Params{
+		Profile:    opts.ProfileName,
+		Binary:     binary,
+		ConfigPath: opts.ConfigPath,
+		ConfigDir:  paths.ConfigDir,
+		AxonHome:   config.AxonHome(),
+	})
+	if err != nil {
+		return StepResult{"claude-wiring", StepFailed, err.Error()}
+	}
+	if res.Changed() {
+		return StepResult{"claude-wiring", StepDone, fmt.Sprintf("wrote %d .claude file(s)", len(res.Created))}
+	}
+	return StepResult{"claude-wiring", StepAlready, ".claude integration present"}
+}
+
 func vaultScaffoldStep(paths config.ResolvedPaths) (StepResult, *vault.FS) {
 	vfs := vault.NewFS(paths.VaultPath)
 	res, err := scaffold.Apply(vfs)
@@ -251,7 +288,7 @@ func probeEmbeddingModel(ctx context.Context, e config.EmbeddingsConfig) StepRes
 func anyChanged(steps []StepResult) bool {
 	for _, s := range steps {
 		switch s.Name {
-		case "data-dir", "database", "scaffold":
+		case "data-dir", "database", "scaffold", "claude-wiring":
 			if s.Status == StepDone {
 				return true
 			}

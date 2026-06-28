@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -32,11 +34,18 @@ func newInitCmd(gf *globalFlags) *cobra.Command {
 			}
 
 			out := cmd.OutOrStdout()
+			absCfg, err := filepath.Abs(gf.configPath)
+			if err != nil {
+				absCfg = gf.configPath
+			}
+			binary, _ := os.Executable()
 			opts := core.InitOptions{
 				Config:      cfg,
 				ProfileName: name,
 				Profile:     profile,
 				Out:         out,
+				ConfigPath:  absCfg,
+				BinaryPath:  binary,
 			}
 			if asJSON {
 				opts.Out = nil // suppress streaming text; emit JSON only

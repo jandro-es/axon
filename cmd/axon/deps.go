@@ -10,6 +10,7 @@ import (
 	"github.com/jandro-es/axon/internal/embeddings"
 	"github.com/jandro-es/axon/internal/events"
 	"github.com/jandro-es/axon/internal/ingestion"
+	"github.com/jandro-es/axon/internal/mcp"
 	"github.com/jandro-es/axon/internal/search"
 	"github.com/jandro-es/axon/internal/tokens"
 	"github.com/jandro-es/axon/internal/vault"
@@ -81,10 +82,18 @@ func (d *profileDeps) agentAdapter() agent.Agent {
 	})
 }
 
-// buildEngine assembles the automation engine with the token-manager chokepoint,
-// the real claude -p adapter, search and a (deterministic-enricher) pipeline.
+// services bundles the composed runtime services for a profile.
+type services struct {
+	manager  tokens.Manager
+	searcher *search.Searcher
+	pipeline *ingestion.Pipeline
+	engine   *automations.Engine
+}
+
+// buildServices assembles the token-manager chokepoint (with the real claude -p
+// adapter), search, a deterministic-enricher pipeline and the automation engine.
 // Requires the database to be open.
-func (d *profileDeps) buildEngine(bus *events.Bus) *automations.Engine {
+func (d *profileDeps) buildServices(bus *events.Bus) services {
 	searcher := search.New(d.db, d.embedder)
 	mgr := tokens.New(d.db, d.agentAdapter(), searcher, bus, managerConfig(d.name, d.profile, d.cfg))
 	pipeline := &ingestion.Pipeline{
@@ -92,10 +101,25 @@ func (d *profileDeps) buildEngine(bus *events.Bus) *automations.Engine {
 		Enricher: ingestion.Heuristic{}, Fetcher: ingestion.NewHTTPFetcher(),
 		Policy: d.profile.Policy, Profile: d.name, Bus: bus,
 	}
-	return automations.NewEngine(automations.EngineDeps{
+	engine := automations.NewEngine(automations.EngineDeps{
 		Profile: d.name, Config: d.profile, DB: d.db, Vault: d.vault,
 		Manager: mgr, Searcher: searcher, Embedder: d.embedder, Pipeline: pipeline, Bus: bus,
 	})
+	return services{manager: mgr, searcher: searcher, pipeline: pipeline, engine: engine}
+}
+
+// buildEngine returns just the automation engine (used by run/start).
+func (d *profileDeps) buildEngine(bus *events.Bus) *automations.Engine {
+	return d.buildServices(bus).engine
+}
+
+// mcpDeps assembles the dependency set for the MCP server.
+func (d *profileDeps) mcpDeps(bus *events.Bus) mcp.Deps {
+	svc := d.buildServices(bus)
+	return mcp.Deps{
+		Profile: d.name, Config: d.profile, DB: d.db, Vault: d.vault,
+		Searcher: svc.searcher, Manager: svc.manager, Pipeline: svc.pipeline, Engine: svc.engine,
+	}
 }
 
 // close releases the database if open.

@@ -48,6 +48,12 @@ func TestInitCommandConvergesAndIsIdempotent(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "vault", "Templates", "Daily Note.md")); err != nil {
 		t.Errorf("scaffold not created: %v", err)
 	}
+	// Step 7: Claude Code wiring is generated.
+	for _, p := range []string{".claude/.mcp.json", ".claude/settings.json", ".claude/CLAUDE.md", ".claude/agents/librarian.md"} {
+		if _, err := os.Stat(filepath.Join(dir, "vault", filepath.FromSlash(p))); err != nil {
+			t.Errorf("init did not generate %q: %v", p, err)
+		}
+	}
 
 	out, err = run(t, "init", "--config", cfgPath, "--env", filepath.Join(dir, "nonexistent.env"))
 	if err != nil {

@@ -140,6 +140,47 @@ func CountSourcesSince(ctx context.Context, q Queryer, sinceTS string) (int, err
 		`SELECT COUNT(*) FROM sources WHERE fetched_at >= ?;`, sinceTS))
 }
 
+// OutboundLinks returns the link targets (dst_path) of wikilink/embed edges from
+// a note, in stable order.
+func OutboundLinks(ctx context.Context, q Queryer2, noteID int64) ([]string, error) {
+	rows, err := q.QueryContext(ctx,
+		`SELECT dst_path FROM links WHERE src_note_id = ? AND kind IN ('wikilink','embed') ORDER BY dst_path;`, noteID)
+	if err != nil {
+		return nil, fmt.Errorf("outbound links %d: %w", noteID, err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// Backlinks returns the paths of notes whose wikilink/embed edges resolve to the
+// given note id.
+func Backlinks(ctx context.Context, q Queryer2, noteID int64) ([]string, error) {
+	rows, err := q.QueryContext(ctx,
+		`SELECT n.path FROM links l JOIN notes n ON n.id = l.src_note_id
+		  WHERE l.dst_note_id = ? AND l.kind IN ('wikilink','embed') ORDER BY n.path;`, noteID)
+	if err != nil {
+		return nil, fmt.Errorf("backlinks %d: %w", noteID, err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // GetNotePathByID returns the vault-relative path for a note id, or "".
 func GetNotePathByID(ctx context.Context, q Queryer, id int64) (string, error) {
 	var path string
