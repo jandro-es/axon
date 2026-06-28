@@ -27,8 +27,7 @@ func newStubCmds(_ *globalFlags) []*cobra.Command {
 	stubs := []struct {
 		use, short, phase string
 	}{
-		{"stop", "Stop the daemon", "Phase 4"},
-		{"export", "Export a portable context snapshot", "Phase 4"},
+		{"stop", "Stop the daemon (use Ctrl-C, or `axon service` for OS supervision)", "Phase 7"},
 	}
 	cmds := make([]*cobra.Command, 0, len(stubs))
 	for _, s := range stubs {

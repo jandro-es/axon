@@ -1,12 +1,61 @@
 # AXON — A Local-First AI Operating System for Obsidian
 
-> **Codename:** `AXON` (placeholder — rename freely; the CLI binary, package scope and config keys all derive from one constant).
-> **Status:** Specification pack, ready to hand to Claude Code for implementation.
-> **Audience:** Claude Code (the build agent) and the maintainer.
+> **Status:** Implemented (Phases 0–7). A single Go binary + an embedded React/Recharts dashboard.
+> **Module:** `github.com/jandro-es/axon` · **Go 1.22+** · pure-Go SQLite (no cgo).
 
 AXON turns an Obsidian vault into a **second brain that maintains itself**. It is a local-first runtime that wires **Claude** and **Claude Code** into your vault, runs configurable automations (heartbeats, daily logs, compaction, exports, re-indexing), ingests external knowledge (articles, URLs, PDFs), accounts for every token it spends, and surfaces everything on a real-time local dashboard.
 
 It is designed to be **cloned, configured with a handful of values, and stood up with one command** — twice over, in fact: a `personal` profile and a `work` profile, on different machines, under different Claude accounts and different restriction policies.
+
+## Two cardinal rules (enforced in code)
+
+1. **No Claude call bypasses the token manager.** Every path to Claude goes through the Component-07 chokepoint: pre-flight estimate → budget check → run → ledger. The only Claude adapter is `claude -p` (subscription/enterprise) reached via `tokens.Manager.Run`.
+2. **No vault mutation that isn't wikilink-safe.** Renames go through `vault.move` (rewrites inbound links); content edits land in `axon:*` managed blocks via `vault.patch`; new notes via `vault.write`. There is **no** `vault.delete`. The vault FS is sandboxed against path traversal.
+
+---
+
+## Build & run
+
+```bash
+git clone https://github.com/jandro-es/axon.git && cd axon
+cp axon.config.example.yaml axon.config.yaml   # set vault_path, profile, budgets (≤ 6 values)
+cp .env.example .env                           # CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`
+
+(cd web && npm install && npm run build)       # build the dashboard SPA (Node, build-time only)
+go build -o axon ./cmd/axon                     # single self-contained binary (SPA embedded)
+
+./axon config validate                          # check the config
+./axon init                                     # scaffold vault + DB + .claude wiring + dashboards (idempotent)
+./axon doctor                                   # prerequisites health check
+./axon start                                    # scheduler + dashboard at http://127.0.0.1:7777
+```
+
+Prerequisites: the `claude` CLI (logged in for your `auth_mode`), and **Ollama** for local embeddings. `go build` works without the SPA build (it serves a fallback page until `web/dist` exists).
+
+`AXON_PROFILE=work axon init` provisions the **work** profile (Claude Enterprise SSO) on the work machine. Personal and work are separate installations, fully isolated — inspect with `axon profiles`.
+
+---
+
+## Commands
+
+| Command | What it does |
+|---------|--------------|
+| `axon init` | Idempotently provision the profile: data dir, DB, embedding check, vault scaffold, `.claude/` (CLAUDE.md, `.mcp.json`, hooks, plugin), Dataview dashboards, first index. |
+| `axon doctor` | Prerequisite checks: config, stray `ANTHROPIC_API_KEY`, `claude`/`ollama`, vault writable, port free, residency. |
+| `axon config validate` | Validate `axon.config.yaml`. |
+| `axon reindex [--embeddings]` | Rebuild the notes mirror + link graph from the vault (ADR-006); `--embeddings` re-embeds. |
+| `axon ingest <url\|path> [--dry-run]` | Policy-gated fetch → clean → redact → summarise → write → chunk → embed → index. |
+| `axon search <query> [--top-k]` | Hybrid lexical (FTS5) + semantic (vector) search. |
+| `axon status [--json]` | Remaining day/week token budget + guard state. |
+| `axon run <automation> [--dry-run]` | Run one automation through the engine (same path as the scheduler). |
+| `axon start [--no-dashboard]` | The daemon: scheduler + live SSE dashboard. |
+| `axon mcp` | The AXON MCP server over stdio (launched by Claude Code). |
+| `axon hook <event>` | Deterministic in-session hook handler (internal). |
+| `axon service <install\|uninstall\|print>` | Emit/install an OS service unit (launchd/systemd/Task Scheduler). |
+| `axon export [--out dir]` | Portable snapshot bundle (manifest.json + Markdown + activity.json). |
+| `axon profiles [--json]` | Show each profile's isolated paths/policy (no secrets). |
+
+Automations: `budget-guard`, `heartbeat`, `knowledge-reindex`, `context-export`, `link-suggester` (no Claude); `daily-log`, `inbox-triage`, `compaction`, `knowledge-digest` (via the token manager). Each is independently toggleable; an install with all automations off still runs and is useful.
 
 ---
 
@@ -28,23 +77,13 @@ A cross-platform **Go** daemon (`axon`) — a single self-contained binary — t
 
 ---
 
-## Quick start (target end-state, for the README of the generated repo)
+## Architecture (one paragraph)
 
-```bash
-git clone https://github.com/<you>/axon.git && cd axon
-cp axon.config.example.yaml axon.config.yaml   # set vault path, profile, budgets
-cp .env.example .env                           # set CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`)
-./scripts/install.sh                           # checks prereqs, builds the SPA + binary
-axon init                                       # scaffolds vault, DB, Claude config — verbose
-axon start                                      # daemon + dashboard (http://localhost:7777)
-axon doctor                                     # health check
-```
-
-`AXON_PROFILE=work axon init` provisions the work profile on the **work machine** (Claude Enterprise SSO). Personal and work are separate installations, not two profiles running at once.
+A cross-platform **Go** daemon (`axon`) — a single self-contained binary — beside an Obsidian vault. The vault (plain Markdown) is durable memory; the daemon owns one local **SQLite** database per profile (relational + FTS5 lexical + brute-force vector search over float32 BLOBs — see [ADR-010](docs/02-architecture.md)), a knowledge-ingestion pipeline (URL/PDF/file → clean Markdown → chunk → embed via **Ollama** → index), a portable scheduler, the token chokepoint, an **MCP server** of wikilink-safe vault + knowledge + token tools, and a real-time dashboard (a React/Recharts SPA embedded via `embed.FS`). Claude Code is the brain — reached through your subscription/enterprise login (not an API key): interactively (MCP + plugin + hooks + a generated vault `CLAUDE.md`) and headlessly (`claude -p`) for automations.
 
 ---
 
-## How to read this pack (build order)
+## Documentation (build order)
 
 | # | Document | Purpose |
 |---|----------|---------|

@@ -68,7 +68,7 @@ func TestVersionCommand(t *testing.T) {
 }
 
 func TestStubCommandsReportNotImplemented(t *testing.T) {
-	for _, name := range []string{"stop", "export"} {
+	for _, name := range []string{"stop"} {
 		t.Run(name, func(t *testing.T) {
 			_, err := run(t, name)
 			if err == nil || !strings.Contains(err.Error(), "not yet implemented") {

@@ -34,6 +34,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newIngestCmd(gf), newSearchCmd(gf), newStatusCmd(gf))
 	root.AddCommand(newRunCmd(gf), newStartCmd(gf))
 	root.AddCommand(newMCPCmd(gf), newHookCmd(gf))
+	root.AddCommand(newServiceCmd(gf), newExportCmd(gf), newProfilesCmd(gf))
 	root.AddCommand(newStubCmds(gf)...)
 	return root
 }

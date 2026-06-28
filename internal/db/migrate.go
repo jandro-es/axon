@@ -63,6 +63,11 @@ func applyMigration(sqlDB *sql.DB, m migration) error {
 	return tx.Commit()
 }
 
+// SchemaVersion returns the database's current migration version.
+func SchemaVersion(sqlDB *sql.DB) (int, error) {
+	return userVersion(sqlDB)
+}
+
 func userVersion(sqlDB *sql.DB) (int, error) {
 	var v int
 	if err := sqlDB.QueryRow("PRAGMA user_version;").Scan(&v); err != nil {

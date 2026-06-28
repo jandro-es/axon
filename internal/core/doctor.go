@@ -5,8 +5,10 @@ package core
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/jandro-es/axon/internal/config"
 )
@@ -83,7 +85,76 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 	checks = append(checks, binaryCheck("ollama", "ollama",
 		"Ollama found", "ollama not found on PATH (needed for local embeddings in Phase 2)"))
 
+	// 5–7. Profile-scoped prerequisites (FR-05): vault writable, dashboard port
+	// free, and the data-residency posture.
+	if cfg != nil {
+		if p, ok := cfg.Profiles[activeProfile]; ok {
+			paths := p.Paths()
+			checks = append(checks, vaultWritableCheck(paths.VaultPath))
+			checks = append(checks, portFreeCheck(p.Dashboard.Host, p.Dashboard.Port))
+			checks = append(checks, residencyCheck(p))
+		}
+	}
+
 	return DoctorReport{Checks: checks}
+}
+
+// vaultWritableCheck confirms the vault path is writable (or createable).
+func vaultWritableCheck(vaultPath string) Check {
+	const name = "vault-writable"
+	if vaultPath == "" {
+		return Check{name, StatusWarn, "no vault_path configured"}
+	}
+	target := vaultPath
+	// Walk up to the nearest existing ancestor and test writability there.
+	for {
+		if info, err := os.Stat(target); err == nil {
+			if !info.IsDir() {
+				return Check{name, StatusFail, fmt.Sprintf("%s exists but is not a directory", target)}
+			}
+			break
+		}
+		parent := filepath.Dir(target)
+		if parent == target {
+			break
+		}
+		target = parent
+	}
+	f, err := os.CreateTemp(target, ".axon-doctor-*")
+	if err != nil {
+		return Check{name, StatusFail, fmt.Sprintf("%s not writable: %v", target, err)}
+	}
+	_ = f.Close()
+	_ = os.Remove(f.Name())
+	return Check{name, StatusOK, "vault path writable: " + vaultPath}
+}
+
+// portFreeCheck confirms the dashboard port is bindable on the loopback host.
+func portFreeCheck(host string, port int) Check {
+	const name = "dashboard-port"
+	if port == 0 {
+		return Check{name, StatusWarn, "no dashboard port configured"}
+	}
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return Check{name, StatusWarn, fmt.Sprintf("%s is in use (a daemon may already be running): %v", addr, err)}
+	}
+	_ = ln.Close()
+	return Check{name, StatusOK, "dashboard port free: " + addr}
+}
+
+// residencyCheck reports the data-residency posture (NFR-01: local-first).
+func residencyCheck(p config.Profile) Check {
+	const name = "data-residency"
+	res := p.Policy.DataResidency
+	if res == "" {
+		res = "local-only"
+	}
+	return Check{name, StatusOK, fmt.Sprintf("%s (all state on local disk; only Claude + Ollama + allowed ingest domains egress)", res)}
 }
 
 // apiKeyCheck implements the cardinal-rule guard: warn if ANTHROPIC_API_KEY is
