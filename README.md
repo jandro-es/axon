@@ -19,6 +19,16 @@ It is designed to be **cloned, configured with a handful of values, and stood up
 1. **No Claude call bypasses the token manager.** Every path to Claude goes through the Component-07 chokepoint: pre-flight estimate → budget check → run → ledger. The only Claude adapter is `claude -p` (subscription/enterprise) reached via `tokens.Manager.Run`.
 2. **No vault mutation that isn't wikilink-safe.** Renames go through `vault.move` (rewrites inbound links); content edits land in `axon:*` managed blocks via `vault.patch`; new notes via `vault.write`. There is **no** `vault.delete`. The vault FS is sandboxed against path traversal.
 
+## How it fits together
+
+![AXON system architecture](docs/diagrams/architecture.svg)
+
+The vault (Markdown) is durable memory; the **axon daemon** is the runtime around
+it; **Claude** (via Claude Code) is the brain and **Ollama** does local
+embeddings. SQLite is derived and disposable. *(Diagrams are editable —
+[architecture.excalidraw](docs/diagrams/architecture.excalidraw) — open at
+[excalidraw.com](https://excalidraw.com).)*
+
 ---
 
 ## Build & run
@@ -84,9 +94,19 @@ A cross-platform **Go** daemon (`axon`) — a single self-contained binary — t
 
 ---
 
-## Architecture (one paragraph)
+## Architecture & key flows
 
 A cross-platform **Go** daemon (`axon`) — a single self-contained binary — beside an Obsidian vault. The vault (plain Markdown) is durable memory; the daemon owns one local **SQLite** database per profile (relational + FTS5 lexical + brute-force vector search over float32 BLOBs — see [ADR-010](docs/02-architecture.md)), a knowledge-ingestion pipeline (URL/PDF/file → clean Markdown → chunk → embed via **Ollama** → index), a portable scheduler, the token chokepoint, an **MCP server** of wikilink-safe vault + knowledge + token tools, and a real-time dashboard (a React/Recharts SPA embedded via `embed.FS`). Claude Code is the brain — reached through your subscription/enterprise login (not an API key): interactively (MCP + plugin + hooks + a generated vault `CLAUDE.md`) and headlessly (`claude -p`) for automations.
+
+**Knowledge ingestion** — fetch → clean → redact → (idempotency gate) → summarise → write a linked note → chunk → embed → index:
+
+![AXON knowledge ingestion pipeline](docs/diagrams/ingestion-pipeline.svg)
+
+**The token chokepoint & automation lifecycle** — every automation gates on new
+material, every Claude call is estimated, budgeted, ledgered, and there is exactly
+one path to Claude:
+
+![AXON token chokepoint and automation lifecycle](docs/diagrams/token-chokepoint.svg)
 
 ---
 

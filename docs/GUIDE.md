@@ -27,6 +27,8 @@ dashboard. This guide takes you from a clean machine to a running, useful system
 
 ## 1. How it works (60-second overview)
 
+![AXON system architecture](diagrams/architecture.svg)
+
 - **The vault is the source of truth.** Everything lives as plain Markdown on
   disk. AXON's SQLite database is *derived* and disposable — `axon reindex`
   rebuilds it from the vault at any time.
@@ -243,6 +245,8 @@ extract main content → clean to Markdown → redact → hash (idempotency) →
 summarise → write a linked note in `03-Resources/Knowledge/` → chunk → embed →
 index**.
 
+![AXON knowledge ingestion pipeline](diagrams/ingestion-pipeline.svg)
+
 ```bash
 axon ingest https://example.com/article          # a URL
 axon ingest ./notes/meeting.md                    # a local file (CLI only)
@@ -317,7 +321,10 @@ all of them still leaves a working system (manual ingest/search + dashboard).
 
 ## 9. Token budgeting
 
-Every Claude call passes through the token manager:
+Every Claude call passes through the token manager — and there is exactly one
+path to Claude:
+
+![AXON token chokepoint and automation lifecycle](diagrams/token-chokepoint.svg)
 
 - **Pre-flight estimate** (local; exact counting only in `api_key` mode) → checked
   against the per-call budget and the day/week token windows.

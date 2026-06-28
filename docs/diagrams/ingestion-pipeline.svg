@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="736" height="944" viewBox="0 0 736 944" font-family="ui-sans-serif, -apple-system, Segoe UI, Roboto, sans-serif">
+<rect width="736" height="944" fill="#ffffff"/>
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1e1e1e"/></marker></defs>
+<text x="28" y="24" font-size="20" font-weight="700" fill="#1e1e1e">AXON — knowledge ingestion pipeline</text>
+<rect x="28" y="64" width="360" height="52" rx="10" fill="#e9ecef" stroke="#1e1e1e" stroke-width="2"/>
+<text x="208" y="95.4" font-size="16" fill="#1e1e1e" text-anchor="middle">Input:  URL · PDF · local file</text>
+<rect x="28" y="142" width="360" height="52" rx="10" fill="#ffc9c9" stroke="#1e1e1e" stroke-width="2"/>
+<text x="208" y="173.4" font-size="16" fill="#1e1e1e" text-anchor="middle">Policy check  (egress + redirects)</text>
+<rect x="28" y="220" width="360" height="52" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="208" y="251.4" font-size="16" fill="#1e1e1e" text-anchor="middle">Fetch / read  (size-capped, no JS)</text>
+<rect x="28" y="298" width="360" height="52" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="208" y="329.4" font-size="16" fill="#1e1e1e" text-anchor="middle">Extract &amp; clean → Markdown</text>
+<rect x="28" y="376" width="360" height="52" rx="10" fill="#ffc9c9" stroke="#1e1e1e" stroke-width="2"/>
+<text x="208" y="407.4" font-size="16" fill="#1e1e1e" text-anchor="middle">Redact  (policy rules, pre-persist)</text>
+<polygon points="208,454 358,490 208,526 58,490" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<text x="208" y="485.2" font-size="15" fill="#1e1e1e" text-anchor="middle">Content hash:</text>
+<text x="208" y="505.0" font-size="15" fill="#1e1e1e" text-anchor="middle">changed?</text>
+<rect x="478" y="462" width="230" height="56" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="593" y="485.5" font-size="14" fill="#1e1e1e" text-anchor="middle">Skip — no model call</text>
+<text x="593" y="504.0" font-size="14" fill="#1e1e1e" text-anchor="middle">(idempotent)</text>
+<rect x="28" y="552" width="360" height="52" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="208" y="583.4" font-size="16" fill="#1e1e1e" text-anchor="middle">Enrich → title, summary, tags, links</text>
+<rect x="28" y="630" width="360" height="52" rx="10" fill="#d0bfff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="208" y="661.4" font-size="16" fill="#1e1e1e" text-anchor="middle">Write note → 03-Resources/Knowledge</text>
+<rect x="28" y="708" width="360" height="52" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="208" y="739.4" font-size="16" fill="#1e1e1e" text-anchor="middle">Chunk + embed  (Ollama)</text>
+<rect x="28" y="786" width="360" height="52" rx="10" fill="#d0bfff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="208" y="817.4" font-size="16" fill="#1e1e1e" text-anchor="middle">Index:  FTS5 + vector store</text>
+<rect x="28" y="864" width="360" height="52" rx="10" fill="#e9ecef" stroke="#1e1e1e" stroke-width="2"/>
+<text x="208" y="895.4" font-size="16" fill="#1e1e1e" text-anchor="middle">Emit event → dashboard + ledger</text>
+<line x1="208" y1="116" x2="208" y2="142" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<line x1="208" y1="194" x2="208" y2="220" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<line x1="208" y1="272" x2="208" y2="298" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<line x1="208" y1="350" x2="208" y2="376" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<line x1="208" y1="428" x2="208" y2="454" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<line x1="358" y1="490" x2="478" y2="490" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="407.0" y="480.0" width="22" height="20" rx="4" fill="#ffffff" stroke="#ced4da" stroke-width="1"/>
+<text x="418" y="494.0" font-size="12.5" fill="#1e1e1e" text-anchor="middle">no</text>
+<line x1="208" y1="526" x2="208" y2="552" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="193.5" y="529.0" width="29" height="20" rx="4" fill="#ffffff" stroke="#ced4da" stroke-width="1"/>
+<text x="208" y="543.0" font-size="12.5" fill="#1e1e1e" text-anchor="middle">yes</text>
+<line x1="208" y1="604" x2="208" y2="630" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<line x1="208" y1="682" x2="208" y2="708" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<line x1="208" y1="760" x2="208" y2="786" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<line x1="208" y1="838" x2="208" y2="864" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+</svg>

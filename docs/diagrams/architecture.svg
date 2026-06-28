@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1086" height="528" viewBox="0 0 1086 528" font-family="ui-sans-serif, -apple-system, Segoe UI, Roboto, sans-serif">
+<rect width="1086" height="528" fill="#ffffff"/>
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1e1e1e"/></marker></defs>
+<text x="28" y="24" font-size="20" font-weight="700" fill="#1e1e1e">AXON — system architecture</text>
+<rect x="28" y="88" width="190" height="56" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="123" y="110.9" font-size="16" fill="#1e1e1e" text-anchor="middle">Obsidian</text>
+<text x="123" y="132.0" font-size="16" fill="#1e1e1e" text-anchor="middle">(edit the vault)</text>
+<rect x="28" y="224" width="190" height="56" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="123" y="246.9" font-size="16" fill="#1e1e1e" text-anchor="middle">Claude Code</text>
+<text x="123" y="268.0" font-size="16" fill="#1e1e1e" text-anchor="middle">(in the vault)</text>
+<rect x="28" y="344" width="190" height="56" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="123" y="366.9" font-size="16" fill="#1e1e1e" text-anchor="middle">Browser</text>
+<text x="123" y="388.0" font-size="16" fill="#1e1e1e" text-anchor="middle">(dashboard)</text>
+<rect x="488" y="68" width="220" height="72" rx="10" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<text x="598" y="99.2" font-size="15" fill="#1e1e1e" text-anchor="middle">Vault — Markdown</text>
+<text x="598" y="119.0" font-size="15" fill="#1e1e1e" text-anchor="middle">(source of truth)</text>
+<rect x="488" y="174" width="220" height="232" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="598" y="235.7" font-size="15" fill="#1e1e1e" text-anchor="middle">axon daemon</text>
+<text x="598" y="255.5" font-size="15" fill="#1e1e1e" text-anchor="middle"></text>
+<text x="598" y="275.3" font-size="15" fill="#1e1e1e" text-anchor="middle">• scheduler + automations</text>
+<text x="598" y="295.1" font-size="15" fill="#1e1e1e" text-anchor="middle">• ingestion pipeline</text>
+<text x="598" y="314.9" font-size="15" fill="#1e1e1e" text-anchor="middle">• token manager</text>
+<text x="598" y="334.7" font-size="15" fill="#1e1e1e" text-anchor="middle">• MCP server</text>
+<text x="598" y="354.5" font-size="15" fill="#1e1e1e" text-anchor="middle">• dashboard API</text>
+<rect x="488" y="440" width="220" height="60" rx="10" fill="#d0bfff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="598" y="464.9" font-size="16" fill="#1e1e1e" text-anchor="middle">SQLite</text>
+<text x="598" y="486.0" font-size="16" fill="#1e1e1e" text-anchor="middle">(derived: FTS5 + vectors)</text>
+<rect x="868" y="180" width="190" height="56" rx="10" fill="#ffd8a8" stroke="#1e1e1e" stroke-width="2"/>
+<text x="963" y="202.9" font-size="16" fill="#1e1e1e" text-anchor="middle">Claude</text>
+<text x="963" y="224.0" font-size="16" fill="#1e1e1e" text-anchor="middle">(claude -p)</text>
+<rect x="868" y="272" width="190" height="56" rx="10" fill="#ffd8a8" stroke="#1e1e1e" stroke-width="2"/>
+<text x="963" y="294.9" font-size="16" fill="#1e1e1e" text-anchor="middle">Ollama</text>
+<text x="963" y="316.0" font-size="16" fill="#1e1e1e" text-anchor="middle">(embeddings)</text>
+<rect x="868" y="364" width="190" height="56" rx="10" fill="#ffc9c9" stroke="#1e1e1e" stroke-width="2"/>
+<text x="963" y="397.4" font-size="16" fill="#1e1e1e" text-anchor="middle">Web URLs / PDFs</text>
+<line x1="218" y1="116" x2="488" y2="104" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="335.0" y="100.0" width="36" height="20" rx="4" fill="#ffffff" stroke="#ced4da" stroke-width="1"/>
+<text x="353" y="114.0" font-size="12.5" fill="#1e1e1e" text-anchor="middle">edit</text>
+<line x1="218" y1="252" x2="488" y2="246" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="317.5" y="239.0" width="71" height="20" rx="4" fill="#ffffff" stroke="#ced4da" stroke-width="1"/>
+<text x="353" y="253.0" font-size="12.5" fill="#1e1e1e" text-anchor="middle">MCP tools</text>
+<line x1="218" y1="372" x2="488" y2="372" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="314.0" y="362.0" width="78" height="20" rx="4" fill="#ffffff" stroke="#ced4da" stroke-width="1"/>
+<text x="353" y="376.0" font-size="12.5" fill="#1e1e1e" text-anchor="middle">HTTP / SSE</text>
+<line x1="598" y1="174" x2="598" y2="140" stroke="#1e1e1e" stroke-width="2" marker-start="url(#ah)" marker-end="url(#ah)"/>
+<rect x="503.0" y="147.0" width="190" height="20" rx="4" fill="#ffffff" stroke="#ced4da" stroke-width="1"/>
+<text x="598" y="161.0" font-size="12.5" fill="#1e1e1e" text-anchor="middle">read / wikilink-safe write</text>
+<line x1="598" y1="406" x2="598" y2="440" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="569.5" y="413.0" width="57" height="20" rx="4" fill="#ffffff" stroke="#ced4da" stroke-width="1"/>
+<text x="598" y="427.0" font-size="12.5" fill="#1e1e1e" text-anchor="middle">reindex</text>
+<line x1="708" y1="220" x2="868" y2="208" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="731.5" y="196.0" width="113" height="36" rx="4" fill="#ffffff" stroke="#ced4da" stroke-width="1"/>
+<text x="788" y="210.0" font-size="12.5" fill="#1e1e1e" text-anchor="middle">claude -p</text>
+<text x="788" y="226.0" font-size="12.5" fill="#1e1e1e" text-anchor="middle">(via token mgr)</text>
+<line x1="708" y1="300" x2="868" y2="300" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="766.5" y="290.0" width="43" height="20" rx="4" fill="#ffffff" stroke="#ced4da" stroke-width="1"/>
+<text x="788" y="304.0" font-size="12.5" fill="#1e1e1e" text-anchor="middle">embed</text>
+<line x1="708" y1="384" x2="868" y2="392" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="756.0" y="370.0" width="64" height="36" rx="4" fill="#ffffff" stroke="#ced4da" stroke-width="1"/>
+<text x="788" y="384.0" font-size="12.5" fill="#1e1e1e" text-anchor="middle">ingest</text>
+<text x="788" y="400.0" font-size="12.5" fill="#1e1e1e" text-anchor="middle">(policy)</text>
+<text x="28" y="77.0" font-size="13" fill="#868e96" text-anchor="start" font-weight="600">YOU</text>
+<text x="868" y="167.0" font-size="13" fill="#868e96" text-anchor="start" font-weight="600">EXTERNAL</text>
+</svg>
