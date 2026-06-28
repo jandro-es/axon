@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -69,7 +70,7 @@ func TestResolveSecret(t *testing.T) {
 		{"literal passthrough", "plain-value", "plain-value", false},
 		{"env present", "env:MY_TOKEN", "sk-secret", false},
 		{"env missing", "env:NOT_SET_XYZ", "", true},
-		{"keychain unimplemented", "keychain:foo", "", true},
+		{"keychain missing name", "keychain:", "", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -81,6 +82,30 @@ func TestResolveSecret(t *testing.T) {
 				t.Errorf("ResolveSecret(%q) = %q, want %q", tt.ref, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestResolveSecretKeychain(t *testing.T) {
+	// Stub the OS keychain so the test is hermetic (no real keyring in CI).
+	orig := keychainGet
+	t.Cleanup(func() { keychainGet = orig })
+	keychainGet = func(service, account string) (string, error) {
+		if service == keychainService && account == "OAUTH" {
+			return "kc-secret", nil
+		}
+		return "", fmt.Errorf("not found")
+	}
+
+	got, err := ResolveSecret("keychain:OAUTH")
+	if err != nil {
+		t.Fatalf("keychain resolve: %v", err)
+	}
+	if got != "kc-secret" {
+		t.Errorf("keychain value = %q, want kc-secret", got)
+	}
+	// A missing item surfaces an error (not a panic).
+	if _, err := ResolveSecret("keychain:NOPE"); err == nil {
+		t.Error("missing keychain item should error")
 	}
 }
 

@@ -152,12 +152,18 @@ defaults in the example file. Validate before you run:
 
 ```bash
 axon config validate
+axon config get limits.daily_tokens          # read a value (profile-relative dotted key)
+axon config set models.synthesis claude-opus-4-8   # update one (comment-preserving, re-validated)
 ```
+
+`config set` edits only the target key, preserves the file's comments and
+formatting, and refuses to write a change that would make the config invalid.
 
 ### `.env` (secrets only)
 
-Secrets never live in the YAML — they're referenced by name (`env:NAME`) and
-resolved from `.env` at runtime, never logged or sent to the model.
+Secrets never live in the YAML — they're referenced by name (`env:NAME`, or
+`keychain:NAME` for the OS keychain) and resolved at runtime (`env:` from `.env`
+or the real environment), never logged or sent to the model.
 
 ```bash
 cp .env.example .env
@@ -249,7 +255,8 @@ index**.
 
 ```bash
 axon ingest https://example.com/article          # a URL
-axon ingest ./notes/meeting.md                    # a local file (CLI only)
+axon ingest ./notes/meeting.md                    # a local Markdown/text file (CLI only)
+axon ingest ./papers/report.pdf                   # a local PDF (text extracted) (CLI only)
 axon ingest https://example.com/article --dry-run # show the intended note + token estimate, write nothing
 ```
 

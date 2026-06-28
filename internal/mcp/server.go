@@ -88,6 +88,12 @@ func NewServer(deps Deps) *mcp.Server {
 			return nil, out, err
 		})
 
+	mcp.AddTool(s, &mcp.Tool{Name: "metrics_query", Description: "Token-ledger aggregates (by day/operation/model) over a recent window plus current budget windows."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in MetricsIn) (*mcp.CallToolResult, MetricsOut, error) {
+			out, err := t.Metrics(ctx, in, time.Now())
+			return nil, out, err
+		})
+
 	mcp.AddTool(s, &mcp.Tool{Name: "automations_list", Description: "List automations with their essential flag, policy permission and last run."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ NoArgs) (*mcp.CallToolResult, ListOut, error) {
 			out, err := t.ListAutomations(ctx)

@@ -193,12 +193,27 @@ tool is wikilink-safe and path-sandboxed **in the server**, so vault safety hold
 regardless of client. `axon doctor` reports each client's registration and
 Desktop's reduced guarantees.
 
+To register a community **Obsidian MCP** server as an alternative backend
+alongside AXON's own, set `profiles.<p>.interop.obsidian_mcp` (FR-54) — `axon mcp
+install` then wires both, with AXON's server staying the default.
+
+## Everything in the contract is built
+
+Beyond the phased build, every **M/S** requirement in [`docs/03`](docs/03-requirements.md)
+is implemented, including: **PDF ingestion** (`axon ingest paper.pdf`),
+**`axon config get/set`** (comment-preserving, re-validated), **`axon stop`**
+(graceful daemon shutdown via a pidfile), the **`metrics_query`** MCP tool,
+**`keychain:` secret references**, and the optional **`auth_mode: api_key`**
+direct-API adapter with exact `count_tokens` and per-token cost (subscription/
+enterprise stay on Claude Code). See the [CHANGELOG](CHANGELOG.md) for the list.
+
 ## Roadmap
 
-Phases 0–9 are built (see the [CHANGELOG](CHANGELOG.md)) — the full
-spec pack (`docs/00`–`13`) is implemented. Future work is tracked in the
-[CHANGELOG](CHANGELOG.md) "not yet implemented" notes (e.g. PDF ingestion, the
-optional `api_key` adapter, the FR-54 community-Obsidian-MCP interop seam).
+Phases 0–9 and every **M/S** requirement are built — the full spec pack
+(`docs/00`–`13`) is implemented. What remains is explicitly post-v1 (**C**
+priority) or optional polish: capture-by-Inbox auto-detect (FR-26), chart
+CSV/JSON export (FR-64), and minor hardening (heartbeat model synthesis,
+resolved-IP pinning on ingest). See the [CHANGELOG](CHANGELOG.md).
 
 ## Contributing
 

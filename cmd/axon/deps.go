@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"os"
 
 	"github.com/jandro-es/axon/internal/agent"
 	"github.com/jandro-es/axon/internal/automations"
@@ -70,10 +71,20 @@ func embeddingsProvider(profile config.Profile) embeddings.Provider {
 	return embeddings.NewOllama(profile.Embeddings.Host, profile.Embeddings.Model, profile.Embeddings.Dim)
 }
 
-// agentAdapter builds the Claude Code (`claude -p`) adapter for this profile,
-// resolving the OAuth token from the environment (.env-backed). The token is
-// optional — without it, a headless run relies on an interactive `claude login`.
+// agentAdapter builds the Claude adapter for this profile. In api_key mode it is
+// the direct Anthropic API adapter (ADR-008: the only path that bypasses Claude
+// Code, in exchange for exact count_tokens + per-token cost). Otherwise it is the
+// Claude Code (`claude -p`) adapter on the user's subscription/enterprise login,
+// resolving the optional OAuth token for headless automations.
 func (d *profileDeps) agentAdapter() agent.Agent {
+	if d.profile.Claude.AuthMode == "api_key" {
+		// The key comes from ANTHROPIC_API_KEY (.env-backed) or a config secret ref.
+		key := os.Getenv("ANTHROPIC_API_KEY")
+		if key == "" {
+			key, _ = config.ResolveSecret(d.profile.Claude.OAuthToken)
+		}
+		return agent.NewAPIKey(key)
+	}
 	oauth, _ := config.ResolveSecret(d.profile.Claude.OAuthToken)
 	return agent.NewClaudeCode(agent.ClaudeCodeOptions{
 		ConfigDir:  d.paths.ConfigDir,

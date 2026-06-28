@@ -19,7 +19,7 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "axon",
 		Short:         "AXON — a local-first AI operating system for an Obsidian vault",
-		Long:          "AXON turns an Obsidian vault into a self-maintaining second brain.\nImplemented: `config validate`, `doctor`, `init`, `reindex`.",
+		Long:          "AXON turns an Obsidian vault into a self-maintaining second brain.\nThe full command set is implemented; run `axon <command> --help` for details.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -32,7 +32,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newConfigCmd(gf), newDoctorCmd(gf), newVersionCmd())
 	root.AddCommand(newInitCmd(gf), newReindexCmd(gf), newOnboardCmd(gf))
 	root.AddCommand(newIngestCmd(gf), newSearchCmd(gf), newStatusCmd(gf))
-	root.AddCommand(newRunCmd(gf), newStartCmd(gf))
+	root.AddCommand(newRunCmd(gf), newStartCmd(gf), newStopCmd(gf))
 	root.AddCommand(newMCPCmd(gf), newHookCmd(gf))
 	root.AddCommand(newServiceCmd(gf), newExportCmd(gf), newProfilesCmd(gf))
 	root.AddCommand(newStubCmds(gf)...)

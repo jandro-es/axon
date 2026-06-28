@@ -40,6 +40,30 @@ type Profile struct {
 	// an absent block resolves to sensible defaults so existing configs keep
 	// working unchanged.
 	Memory MemoryConfig `yaml:"memory"`
+	// Interop wires optional external/community MCP backends (FR-54). Optional.
+	Interop InteropConfig `yaml:"interop"`
+}
+
+// InteropConfig configures optional third-party MCP servers AXON can register
+// alongside its own when wiring a client (FR-54, ADR-005). AXON's server stays
+// the default vault contract; these are alternatives the user opts into.
+type InteropConfig struct {
+	// ObsidianMCP is a community Obsidian MCP server offered as an alternative
+	// vault backend behind the same tool contract.
+	ObsidianMCP ExternalMCPServer `yaml:"obsidian_mcp"`
+}
+
+// ExternalMCPServer is a launch spec for a third-party stdio MCP server.
+type ExternalMCPServer struct {
+	Enabled bool              `yaml:"enabled"`
+	Command string            `yaml:"command"`
+	Args    []string          `yaml:"args"`
+	Env     map[string]string `yaml:"env"`
+}
+
+// Configured reports whether the external server is enabled and has a command.
+func (e ExternalMCPServer) Configured() bool {
+	return e.Enabled && e.Command != ""
 }
 
 // MemoryConfig governs the personal identity & memory layer injected at

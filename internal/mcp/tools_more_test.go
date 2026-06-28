@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/jandro-es/axon/internal/core"
 )
@@ -68,6 +69,23 @@ func TestDailyAppendTool(t *testing.T) {
 	n, _ = v.Read(ctx, out.Path)
 	if !contains(n.Body, "second") {
 		t.Error("second append not present")
+	}
+}
+
+func TestMetricsQueryTool(t *testing.T) {
+	ctx := context.Background()
+	tools, _, _ := newTestTools(t, nil)
+	out, err := tools.Metrics(ctx, MetricsIn{SinceDays: 7}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// With no ledger activity the aggregates are zero but the shape is valid and
+	// budget windows are populated from the manager.
+	if out.SinceDays != 7 || out.ByModel == nil || out.ByOperation == nil {
+		t.Errorf("metrics out = %+v", out)
+	}
+	if out.DayLimit == 0 {
+		t.Error("expected a day budget limit from the manager")
 	}
 }
 

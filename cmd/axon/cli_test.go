@@ -67,13 +67,13 @@ func TestVersionCommand(t *testing.T) {
 	}
 }
 
-func TestStubCommandsReportNotImplemented(t *testing.T) {
-	for _, name := range []string{"stop"} {
-		t.Run(name, func(t *testing.T) {
-			_, err := run(t, name)
-			if err == nil || !strings.Contains(err.Error(), "not yet implemented") {
-				t.Errorf("%s: expected not-implemented error, got %v", name, err)
-			}
-		})
+func TestNoStubCommandsRemain(t *testing.T) {
+	// Every CLI command is now implemented; the stub list must be empty.
+	if cmds := newStubCmds(&globalFlags{}); len(cmds) != 0 {
+		names := make([]string, 0, len(cmds))
+		for _, c := range cmds {
+			names = append(names, c.Name())
+		}
+		t.Errorf("expected no stub commands, got %v", names)
 	}
 }

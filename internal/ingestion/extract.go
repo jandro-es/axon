@@ -3,12 +3,14 @@ package ingestion
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net/url"
 	"path/filepath"
 	"strings"
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	readability "github.com/go-shiori/go-readability"
+	"github.com/ledongthuc/pdf"
 )
 
 // Extracted is the cleaned, structured result of the extract+clean stages: the
@@ -55,6 +57,38 @@ func ExtractHTML(raw []byte, pageURL string) (Extracted, error) {
 		ex.Date = article.PublishedTime.UTC().Format("2006-01-02")
 	}
 	return ex, nil
+}
+
+// ExtractPDF extracts the plain text from a PDF's bytes and turns it into
+// Extracted (FR-21), routed through the same enrich/chunk/embed pipeline as URLs
+// and text files. The PDF parser can panic on malformed input, so extraction is
+// wrapped in a recover — a bad PDF yields a clear error, never a daemon crash.
+// The content is treated strictly as data, never instructions (NFR-05).
+func ExtractPDF(raw []byte, path string) (ex Extracted, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("parse PDF %q: %v", path, r)
+		}
+	}()
+	reader, perr := pdf.NewReader(bytes.NewReader(raw), int64(len(raw)))
+	if perr != nil {
+		return Extracted{}, fmt.Errorf("read PDF %q: %w", path, perr)
+	}
+	textReader, perr := reader.GetPlainText()
+	if perr != nil {
+		return Extracted{}, fmt.Errorf("extract PDF text %q: %w", path, perr)
+	}
+	var buf bytes.Buffer
+	if _, perr := io.Copy(&buf, textReader); perr != nil {
+		return Extracted{}, fmt.Errorf("read PDF text %q: %w", path, perr)
+	}
+	md := normalizeMarkdown(buf.String())
+	title := firstHeading(md)
+	if title == "" {
+		base := filepath.Base(path)
+		title = strings.TrimSuffix(base, filepath.Ext(base))
+	}
+	return Extracted{Title: title, Markdown: md}, nil
 }
 
 // ExtractFile turns a local Markdown/text file into Extracted. Markdown is kept

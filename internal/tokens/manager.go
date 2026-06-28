@@ -167,7 +167,14 @@ func downgradeKey(key string) string {
 	}
 }
 
-// estimateCall returns the pre-flight input estimate for a call.
+// tokenCounter is satisfied by an adapter that can count input tokens exactly
+// (the api_key direct-API adapter). When present, the manager uses it for an
+// exact pre-flight estimate instead of the local heuristic (FR-40).
+type tokenCounter interface {
+	CountTokens(ctx context.Context, model, system, prompt string) (int, error)
+}
+
+// estimateCall returns the heuristic pre-flight input estimate for a call.
 func (m *manager) estimateCall(call AgentCall) int {
 	var b strings.Builder
 	b.WriteString(call.System)
@@ -178,11 +185,25 @@ func (m *manager) estimateCall(call AgentCall) int {
 	return m.estimator.Estimate(b.String())
 }
 
+// estimateInput returns the pre-flight input estimate for a call at a resolved
+// model. In api_key mode it uses the exact count_tokens endpoint (falling back
+// to the heuristic on error); otherwise it uses the local heuristic (FR-40).
+func (m *manager) estimateInput(ctx context.Context, model string, call AgentCall) int {
+	if m.cfg.AuthMode == "api_key" {
+		if c, ok := m.agent.(tokenCounter); ok {
+			if n, err := c.CountTokens(ctx, model, call.System, joinMessages(call.Messages)); err == nil {
+				return n
+			}
+		}
+	}
+	return m.estimateCall(call)
+}
+
 // Authorize runs the pre-flight: estimate, resolve model, check per-call and
 // day/week windows, and decide proceed/downgrade/defer/deny (docs/07 §2).
 func (m *manager) Authorize(ctx context.Context, call AgentCall) (Authorization, error) {
-	est := m.estimateCall(call)
 	model := m.resolveModel(call.ModelKey)
+	est := m.estimateInput(ctx, model, call)
 	auth := Authorization{Decision: DecisionProceed, Model: model, EstInput: est}
 
 	// Per-call input cap: too-large context can't be made to fit by switching

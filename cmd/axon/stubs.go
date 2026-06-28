@@ -20,15 +20,13 @@ func newVersionCmd() *cobra.Command {
 	}
 }
 
-// newStubCmds returns the commands that are part of the CLI surface but not yet
-// implemented in Phase 0. Each names the phase that will deliver it, so the
-// skeleton is honest about scope rather than silently absent.
+// newStubCmds returns CLI-surface commands that are not yet implemented. The
+// full command set is now built, so this list is empty — the function is kept as
+// the single, honest place to declare any future not-yet-implemented command.
 func newStubCmds(_ *globalFlags) []*cobra.Command {
 	stubs := []struct {
 		use, short, phase string
-	}{
-		{"stop", "Stop the daemon (use Ctrl-C, or `axon service` for OS supervision)", "Phase 7"},
-	}
+	}{}
 	cmds := make([]*cobra.Command, 0, len(stubs))
 	for _, s := range stubs {
 		phase := s.phase

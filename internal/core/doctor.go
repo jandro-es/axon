@@ -98,10 +98,22 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 			// with each Claude client, and is each client's guarantee honest.
 			checks = append(checks, claudeCodeWiringCheck(paths.VaultPath))
 			checks = append(checks, claudeDesktopCheck(activeProfile))
+			checks = append(checks, interopCheck(p))
 		}
 	}
 
 	return DoctorReport{Checks: checks}
+}
+
+// interopCheck reports the optional external-MCP backend posture (FR-54). It is
+// informational: AXON's own server is always the default vault contract.
+func interopCheck(p config.Profile) Check {
+	const name = "interop:obsidian-mcp"
+	obs := p.Interop.ObsidianMCP
+	if !obs.Configured() {
+		return Check{name, StatusOK, "not configured (AXON's own server is the vault backend)"}
+	}
+	return Check{name, StatusOK, fmt.Sprintf("configured (%s) — registered alongside AXON by `axon mcp install`", obs.Command)}
 }
 
 // claudeCodeWiringCheck reports whether the project's Claude Code wiring exists

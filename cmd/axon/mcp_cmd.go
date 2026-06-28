@@ -82,9 +82,31 @@ func newMCPInstallCmd(gf *globalFlags) *cobra.Command {
 				AxonHome:   config.AxonHome(),
 			}
 
+			// FR-54: an optional community Obsidian MCP server, registered alongside
+			// AXON's own (which remains the default vault contract).
+			obs := deps.profile.Interop.ObsidianMCP
+
 			if printOnly {
-				fmt.Fprint(out, p.PrintJSON())
+				servers := map[string]any{clients.ServerName: p.AxonEntry()}
+				if obs.Configured() {
+					servers["obsidian"] = clients.Entry(obs.Command, obs.Args, obs.Env)
+				}
+				fmt.Fprint(out, clients.PrintJSON(servers))
 				return nil
+			}
+
+			// installInterop registers the optional Obsidian backend into the same
+			// client config file (.mcp.json or claude_desktop_config.json).
+			installInterop := func(path string) {
+				if !obs.Configured() {
+					return
+				}
+				entry := clients.Entry(obs.Command, obs.Args, obs.Env)
+				if r, oerr := clients.InstallServer(path, "obsidian", entry); oerr != nil {
+					fmt.Fprintf(out, "⚠ obsidian interop (FR-54): %v\n", oerr)
+				} else {
+					fmt.Fprintf(out, "Obsidian MCP backend: %s (interop; AXON remains the default)\n", r.Action)
+				}
 			}
 
 			switch client {
@@ -98,6 +120,7 @@ func newMCPInstallCmd(gf *globalFlags) *cobra.Command {
 				} else {
 					fmt.Fprintf(out, "Claude Code: wiring already present under %s\n", deps.paths.VaultPath)
 				}
+				installInterop(filepath.Join(deps.paths.VaultPath, ".claude", ".mcp.json"))
 				fmt.Fprintln(out, "Open Claude Code in the vault to use the AXON tools, hooks and skills.")
 				return nil
 
@@ -114,6 +137,7 @@ func newMCPInstallCmd(gf *globalFlags) *cobra.Command {
 					return ierr
 				}
 				fmt.Fprintf(out, "Claude Desktop: %s %s (profile %q)\n", r.Action, r.Path, deps.name)
+				installInterop(cfgPath)
 				if r.Action != "unchanged" {
 					fmt.Fprintln(out, "Restart Claude Desktop to load the AXON tools.")
 				}

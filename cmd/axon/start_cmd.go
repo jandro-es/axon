@@ -38,6 +38,14 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 			svc := deps.buildServices(bus)
 			out := cmd.OutOrStdout()
 
+			// Record the pid so `axon stop` can signal this daemon (FR-04).
+			if pidPath, perr := writePidFile(deps.paths.DataDir); perr != nil {
+				fmt.Fprintf(out, "⚠ could not write pidfile: %v\n", perr)
+			} else {
+				defer removePidFile(deps.paths.DataDir)
+				fmt.Fprintf(out, "pid %d (%s)\n", os.Getpid(), pidPath)
+			}
+
 			sigCtx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			ctx, cancel := context.WithCancel(sigCtx)

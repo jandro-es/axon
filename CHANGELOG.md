@@ -4,6 +4,41 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/) (pre-1.0: minor versions may break).
 
+## [0.10.0] — 2026-06-28
+
+Completed the remaining deferred requirements, so every M/S requirement in the
+contract (`docs/03`) is now implemented.
+
+### Added
+
+- **PDF ingestion (FR-21)** — PDFs go through the same fetch→extract→enrich→
+  chunk→embed pipeline as URLs and text files (`internal/ingestion`, via
+  `ledongthuc/pdf`); malformed PDFs surface a clear error, never a crash.
+- **`config get` / `config set` (FR-04)** — read and update config values by
+  dotted key (resolved relative to the active profile). `set` preserves comments
+  and formatting and re-validates before writing; invalid changes are refused.
+- **`stop` (FR-04)** — gracefully stops the daemon for the active profile via a
+  per-profile pidfile (`start` now writes one); stale pidfiles are cleaned up.
+- **`metrics_query` MCP tool (FR-50)** — token-ledger aggregates (by day/
+  operation/model) plus current budget windows, for dashboards and agents.
+- **Obsidian MCP interop (FR-54)** — `profiles.<p>.interop.obsidian_mcp` registers
+  a community Obsidian MCP server alongside AXON's own when running
+  `axon mcp install`; AXON's server stays the default vault contract.
+- **`api_key` direct-API adapter (FR-33/FR-40/FR-41)** — in `auth_mode: api_key`
+  AXON calls the Anthropic API directly (`anthropic-sdk-go`) with **exact
+  `count_tokens`** pre-flight and per-token cost; subscription/enterprise still
+  use Claude Code. Still mediated by the token-manager chokepoint.
+- **Keychain secrets** — `keychain:NAME` references resolve from the OS keychain
+  (`zalando/go-keyring`), alongside `env:NAME`.
+
+### Notes / optional future polish (not contract requirements)
+
+- Heartbeat is intentionally model-free (cheapest automation); an optional
+  one-line model synthesis remains a possible enhancement.
+- The ingest fetcher re-validates egress policy on every redirect and blocks
+  link-local/metadata IPs (NFR-05); pinning the resolved IP across the dial is a
+  further defense-in-depth hardening.
+
 ## [0.9.0] — 2026-06-28
 
 Phase 9 — multi-client integration (Claude Desktop) (FR-74…FR-76, ADR-012,
@@ -100,12 +135,14 @@ The initial feature-complete build, implemented in phases against
   refused; provenance-field redaction; dashboard `Host`-header (anti
   DNS-rebinding) guard; hardened `PreToolUse` denylist.
 
-### Notes / not yet implemented
+### Notes / not yet implemented (at 0.7.0)
 
 - PDF ingestion, the optional `auth_mode: api_key` in-process adapter, heartbeat
   model synthesis, richer `/health`, DNS-rebinding IP pinning on ingest, and
-  `config get/set`.
+  `config get/set`. *(PDF ingestion, the api_key adapter and `config get/set`
+  were implemented in 0.10.0.)*
 
+[0.10.0]: https://github.com/jandro-es/axon/releases/tag/v0.10.0
 [0.9.0]: https://github.com/jandro-es/axon/releases/tag/v0.9.0
 [0.8.0]: https://github.com/jandro-es/axon/releases/tag/v0.8.0
 [0.7.0]: https://github.com/jandro-es/axon/releases/tag/v0.7.0

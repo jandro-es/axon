@@ -108,6 +108,16 @@ profiles:
       session_tokens: 1500    # token ceiling for the injected profile block
       recent_entries: 10      # how many newest MEMORY entries to inject
 
+    # Optional interop (FR-54): register a community Obsidian MCP server alongside
+    # AXON's own when running `axon mcp install`. AXON's server stays the default
+    # vault contract; this is an alternative backend a client can also use.
+    interop:
+      obsidian_mcp:
+        enabled: false                       # set true to register it
+        command: "npx"
+        args: ["-y", "obsidian-mcp", "~/Notes/Personal"]
+        # env: { OBSIDIAN_API_KEY: "..." }   # if the community server needs one
+
   # ===========================================================================
   # WORK installation (SEPARATE machine) — Claude Enterprise SSO, no API.
   # Locked down: fewer automations, tighter limits, deny-by-default ingest,

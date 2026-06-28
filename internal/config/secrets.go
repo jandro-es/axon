@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/zalando/go-keyring"
 )
 
 // Secret reference prefixes used in the YAML (e.g. oauth_token: env:NAME).
@@ -12,6 +14,14 @@ const (
 	secretPrefixEnv      = "env:"
 	secretPrefixKeychain = "keychain:"
 )
+
+// keychainService is the OS-keychain service name AXON stores secrets under, so
+// a `keychain:NAME` reference resolves to the (service=axon, account=NAME) item.
+const keychainService = "axon"
+
+// keychainGet is indirected so tests can stub keychain access without a real
+// OS keyring (which is unavailable in CI/headless environments).
+var keychainGet = keyring.Get
 
 // LoadDotEnv reads a .env file of KEY=VALUE lines into the process environment.
 // Lines that are blank or start with '#' are ignored; surrounding single or
@@ -55,7 +65,8 @@ func LoadDotEnv(path string) error {
 // ResolveSecret resolves a secret reference to its value. A bare value (no
 // recognised prefix) is returned as-is so non-secret literals still work. An
 // env: reference reads the named environment variable and errors if it is
-// unset. keychain: is recognised but not yet implemented (Phase 7).
+// unset. A keychain: reference reads the item from the OS keychain (service
+// "axon", account = the name after the prefix).
 func ResolveSecret(ref string) (string, error) {
 	switch {
 	case ref == "":
@@ -68,7 +79,15 @@ func ResolveSecret(ref string) (string, error) {
 		}
 		return v, nil
 	case strings.HasPrefix(ref, secretPrefixKeychain):
-		return "", fmt.Errorf("keychain secret resolution is not yet implemented")
+		name := strings.TrimPrefix(ref, secretPrefixKeychain)
+		if name == "" {
+			return "", fmt.Errorf("keychain reference is missing a name")
+		}
+		v, err := keychainGet(keychainService, name)
+		if err != nil {
+			return "", fmt.Errorf("keychain secret %q: %w (store it with: `axon` reads service=%q account=%q from the OS keychain)", name, err, keychainService, name)
+		}
+		return v, nil
 	default:
 		return ref, nil
 	}

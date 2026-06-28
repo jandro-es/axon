@@ -183,20 +183,23 @@ func (p *Pipeline) read(ctx context.Context, in Input) (*Document, error) {
 	switch in.Kind {
 	case KindURL:
 		return p.Fetcher.Fetch(ctx, in.URL)
-	case KindFile:
+	case KindFile, KindPDF:
+		// Both are local files; PDFs are parsed in the extract stage.
 		return ReadFile(in.Path)
-	case KindPDF:
-		return nil, fmt.Errorf("PDF ingestion is a follow-up (FR-21); URL and text/Markdown files are supported")
 	default:
 		return nil, fmt.Errorf("unsupported input kind %q", in.Kind)
 	}
 }
 
 func (p *Pipeline) extract(in Input, doc *Document) (Extracted, error) {
-	if in.Kind == KindURL {
+	switch in.Kind {
+	case KindURL:
 		return ExtractHTML(doc.Body, in.URL)
+	case KindPDF:
+		return ExtractPDF(doc.Body, in.Path)
+	default:
+		return ExtractFile(doc.Body, in.Path), nil
 	}
-	return ExtractFile(doc.Body, in.Path), nil
 }
 
 // relatedNotes runs a best-effort hybrid search to ground link suggestions in

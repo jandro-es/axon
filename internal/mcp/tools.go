@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jandro-es/axon/internal/automations"
 	"github.com/jandro-es/axon/internal/config"
@@ -307,6 +308,61 @@ func (t *Tools) Status(ctx context.Context) (StatusOut, error) {
 		WeekUsed: st.Week.Used, WeekLimit: st.Week.Limit, WeekPct: st.Week.Pct,
 		GuardPaused: st.GuardPaused,
 	}, nil
+}
+
+// --- metrics.query ----------------------------------------------------------
+
+type MetricsIn struct {
+	SinceDays int `json:"since_days,omitempty" jsonschema:"window in days to aggregate (default 7)"`
+}
+
+type MetricBucket struct {
+	Day       string `json:"day"`
+	Operation string `json:"operation"`
+	Model     string `json:"model"`
+	Input     int64  `json:"input"`
+	Output    int64  `json:"output"`
+}
+
+type MetricsOut struct {
+	SinceDays   int              `json:"since_days"`
+	TotalInput  int64            `json:"total_input"`
+	TotalOutput int64            `json:"total_output"`
+	ByModel     map[string]int64 `json:"by_model"`
+	ByOperation map[string]int64 `json:"by_operation"`
+	Buckets     []MetricBucket   `json:"buckets"`
+	DayUsed     int64            `json:"day_used"`
+	DayLimit    int64            `json:"day_limit"`
+	WeekUsed    int64            `json:"week_used"`
+	WeekLimit   int64            `json:"week_limit"`
+}
+
+// Metrics returns token-ledger aggregates (by day/operation/model) over a recent
+// window plus the current budget windows — the read-only counterpart to
+// tokens_status for dashboards and agent introspection (FR-50).
+func (t *Tools) Metrics(ctx context.Context, in MetricsIn, now time.Time) (MetricsOut, error) {
+	days := in.SinceDays
+	if days <= 0 {
+		days = 7
+	}
+	since := now.UTC().AddDate(0, 0, -days).Format(time.RFC3339)
+	rows, err := db.TokenSeries(ctx, t.deps.DB, since)
+	if err != nil {
+		return MetricsOut{}, err
+	}
+	out := MetricsOut{SinceDays: days, ByModel: map[string]int64{}, ByOperation: map[string]int64{}}
+	for _, r := range rows {
+		out.Buckets = append(out.Buckets, MetricBucket{Day: r.Day, Operation: r.Operation, Model: r.Model, Input: r.Input, Output: r.Output})
+		out.TotalInput += r.Input
+		out.TotalOutput += r.Output
+		out.ByModel[r.Model] += r.Input + r.Output
+		out.ByOperation[r.Operation] += r.Input + r.Output
+	}
+	if st, err := t.deps.Manager.Status(ctx, t.deps.Profile); err == nil {
+		out.DayUsed, out.DayLimit = st.Day.Used, st.Day.Limit
+		out.WeekUsed, out.WeekLimit = st.Week.Used, st.Week.Limit
+	}
+	return out, nil
 }
 
 // --- automations.list / run -------------------------------------------------

@@ -58,10 +58,19 @@ func (p Params) entry() map[string]any {
 	return e
 }
 
+// AxonEntry is the AXON server's mcpServers value (exported for callers that
+// build a combined registration, e.g. AXON + an interop backend).
+func (p Params) AxonEntry() map[string]any { return p.entry() }
+
 // PrintJSON renders the `{ "mcpServers": { "axon": … } }` block for manual
 // pasting (the `--print` path). It writes nothing.
 func (p Params) PrintJSON() string {
-	doc := map[string]any{"mcpServers": map[string]any{ServerName: p.entry()}}
+	return PrintJSON(map[string]any{ServerName: p.entry()})
+}
+
+// PrintJSON renders a `{ "mcpServers": { … } }` block for manual pasting.
+func PrintJSON(servers map[string]any) string {
+	doc := map[string]any{"mcpServers": servers}
 	b, _ := json.MarshalIndent(doc, "", "  ")
 	return string(b) + "\n"
 }
@@ -87,12 +96,33 @@ type InstallResult struct {
 	Action string // created | added | updated | unchanged
 }
 
+// Entry builds a generic mcpServers entry (command + args + optional env), used
+// for interop servers such as a community Obsidian MCP backend (FR-54).
+func Entry(command string, args []string, env map[string]string) map[string]any {
+	anyArgs := make([]any, len(args))
+	for i, a := range args {
+		anyArgs[i] = a
+	}
+	e := map[string]any{"command": command, "args": anyArgs}
+	if len(env) > 0 {
+		e["env"] = env
+	}
+	return e
+}
+
 // InstallDesktop merges AXON's server entry into the Claude Desktop config at
-// configPath, NON-DESTRUCTIVELY: it preserves every other server and unknown
-// top-level key, touching only mcpServers["axon"]. A missing file is created; an
-// unparseable existing file is refused (so a hand-edited config is never
-// clobbered — the caller should fall back to `--print`).
+// configPath. Convenience wrapper over InstallServer.
 func InstallDesktop(configPath string, p Params) (InstallResult, error) {
+	return InstallServer(configPath, ServerName, p.entry())
+}
+
+// InstallServer merges a single named server entry into a Claude client config
+// (claude_desktop_config.json OR a project .mcp.json — same `mcpServers` shape),
+// NON-DESTRUCTIVELY: it preserves every other server and unknown top-level key,
+// touching only mcpServers[name]. A missing file is created; an unparseable
+// existing file is refused (so a hand-edited config is never clobbered — the
+// caller should fall back to `--print`).
+func InstallServer(configPath, name string, entry map[string]any) (InstallResult, error) {
 	res := InstallResult{Path: configPath}
 
 	root := map[string]any{}
@@ -116,9 +146,8 @@ func InstallDesktop(configPath string, p Params) (InstallResult, error) {
 		servers = map[string]any{}
 	}
 
-	newEntry := p.entry()
-	switch existing, ok := servers[ServerName]; {
-	case ok && jsonEqual(existing, newEntry):
+	switch existing, ok := servers[name]; {
+	case ok && jsonEqual(existing, entry):
 		res.Action = "unchanged"
 		return res, nil
 	case ok:
@@ -129,7 +158,7 @@ func InstallDesktop(configPath string, p Params) (InstallResult, error) {
 		res.Action = "created"
 	}
 
-	servers[ServerName] = newEntry
+	servers[name] = entry
 	root["mcpServers"] = servers
 	if err := writeJSONAtomic(configPath, root); err != nil {
 		return res, err

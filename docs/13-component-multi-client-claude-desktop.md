@@ -91,10 +91,25 @@ go through the same wikilink-safe, atomic vault ops. Document that a heavy
 concurrent write workload is serialised, and that the daemon (`axon start`) should
 be the one running automations.
 
-## 6. Interop note (stretch — FR-54)
-The same seam allows pointing a client at a community Obsidian MCP server as an
-alternative vault backend behind AXON's tool contract; AXON's own server remains
-the default (ADR-005).
+## 6. Interop: community Obsidian MCP backend (FR-54 — built)
+A profile may configure a community Obsidian MCP server as an alternative vault
+backend behind the same tool contract:
+
+```yaml
+profiles:
+  personal:
+    interop:
+      obsidian_mcp:
+        enabled: true
+        command: npx
+        args: ["-y", "obsidian-mcp", "~/Notes/Personal"]
+```
+
+When set, `axon mcp install --client code|desktop` (and `--print`) registers an
+`obsidian` server entry **alongside** AXON's own — using the same non-destructive
+merge — into the client config. **AXON's server remains the default vault
+contract** (ADR-005); the Obsidian server is an alternative the client can also
+use. `axon doctor` reports the interop posture (`interop:obsidian-mcp`).
 
 ## 7. Acceptance checks
 - `axon mcp install --client desktop` writes a profile-scoped `axon` entry into

@@ -2,6 +2,12 @@
 
 Requirements are the build contract. Each is testable. Priority: **M** (must, v1), **S** (should, v1 if time), **C** (could, post-v1). IDs are stable references for the roadmap and acceptance gates.
 
+> **Status:** every **M** and **S** requirement is implemented (incl. PDF
+> ingestion FR-21, `config get/set` + `stop` FR-04, the `metrics_query` tool
+> FR-50, the `api_key` exact-`count_tokens` adapter FR-40/41, and the Obsidian
+> MCP interop FR-54). The remaining **C** items (FR-26 capture-by-Inbox, FR-64
+> chart CSV/JSON export, NFR-13 is done) are explicitly post-v1.
+
 ## Functional requirements
 
 ### Setup, profiles & CLI
@@ -69,7 +75,7 @@ Requirements are the build contract. Each is testable. Priority: **M** (must, v1
 | FR-51 | M | `axon init` writes a valid `.mcp.json` (or equivalent) so Claude Code discovers the AXON MCP server, scoped to the active profile. |
 | FR-52 | M | Provide Claude Code **hooks**: `SessionStart` (inject compact vault/budget status), `PreToolUse` (block unsafe vault file ops; enforce wikilink-safe path), `PostToolUse` (log AXON-tool token round-trips, flag budget), `Stop` (suggest compaction when context is large). Hooks are deterministic and policy-enforcing. |
 | FR-53 | M | Provide a Claude Code **plugin** bundling skills (e.g. `ingest-url`, `run-daily-log`, `triage-inbox`, `suggest-links`) and subagents (e.g. `librarian` for deep vault search, `summariser` for distillation) plus a `CLAUDE.md` template encoding the vault schema and conventions. |
-| FR-54 | S | Interop: allow configuring an external/community Obsidian MCP server as an alternative vault backend behind the same tool contract. |
+| FR-54 | S | Interop: allow configuring an external/community Obsidian MCP server as an alternative vault backend behind the same tool contract. *(Built: `profiles.<p>.interop.obsidian_mcp` is registered alongside AXON's own server by `axon mcp install`; AXON's server stays the default — Component 13 §6, `internal/clients`.)* |
 
 ### Dashboard & observability
 
