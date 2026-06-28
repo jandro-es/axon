@@ -49,7 +49,7 @@ dashboard. This guide takes you from a clean machine to a running, useful system
 
 | Requirement | Why | Notes |
 |-------------|-----|-------|
-| **Go 1.22+** | build the binary | only if building from source |
+| **Go 1.26+** | build the binary | only if building from source (a dependency requires it) |
 | **Node 18+ / npm** | build the dashboard SPA | build-time only; the binary embeds the result |
 | **Claude Code CLI** (`claude`) | the "brain" | install from claude.com/code; log in with your plan |
 | **Ollama** | local embeddings for search | install from ollama.com; pull an embedding model |
@@ -58,7 +58,7 @@ dashboard. This guide takes you from a clean machine to a running, useful system
 Check what you have:
 
 ```bash
-go version          # go1.22+
+go version          # go1.26+
 node --version      # v18+
 claude --version    # Claude Code CLI
 ollama --version    # Ollama

@@ -1,7 +1,12 @@
 # AXON — A Local-First AI Operating System for Obsidian
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg?logo=go&logoColor=white)](go.mod)
+[![CI](https://github.com/jandro-es/axon/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
+[![Single binary](https://img.shields.io/badge/build-single%20static%20binary-success.svg)](#build--run)
+
 > **Status:** Implemented (Phases 0–7). A single Go binary + an embedded React/Recharts dashboard.
-> **Module:** `github.com/jandro-es/axon` · **Go 1.22+** · pure-Go SQLite (no cgo).
+> **Module:** `github.com/jandro-es/axon` · **Go 1.26+** · pure-Go SQLite (no cgo).
 
 AXON turns an Obsidian vault into a **second brain that maintains itself**. It is a local-first runtime that wires **Claude** and **Claude Code** into your vault, runs configurable automations (heartbeats, daily logs, compaction, exports, re-indexing), ingests external knowledge (articles, URLs, PDFs), accounts for every token it spends, and surfaces everything on a real-time local dashboard.
 
@@ -116,3 +121,24 @@ Also in this pack: [`CLAUDE.md`](CLAUDE.md) (build-agent instructions), [`axon.c
 - **Don't** let any automation write to the vault without wikilink-safe operations and a dry-run mode.
 
 Everything else is specified in the documents above.
+
+---
+
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for build/test
+instructions, coding conventions, and the two cardinal rules every change must
+respect. Found a security issue? Please report it privately per
+[SECURITY.md](SECURITY.md).
+
+## License
+
+AXON is released under the [MIT License](LICENSE) — © 2026 jandro-es. You're free
+to use, modify and distribute it; the software is provided "as is", without
+warranty. See [`LICENSE`](LICENSE) for the full text and [`CHANGELOG.md`](CHANGELOG.md)
+for release notes.
+
+> AXON is an independent, local-first tool. "Claude" and "Claude Code" are
+> products of Anthropic; "Obsidian" and "Ollama" are their respective owners'
+> products. AXON integrates with them but is not affiliated with or endorsed by
+> them.
