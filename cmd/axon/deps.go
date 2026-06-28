@@ -3,9 +3,15 @@ package main
 import (
 	"database/sql"
 
+	"github.com/jandro-es/axon/internal/agent"
+	"github.com/jandro-es/axon/internal/automations"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/embeddings"
+	"github.com/jandro-es/axon/internal/events"
+	"github.com/jandro-es/axon/internal/ingestion"
+	"github.com/jandro-es/axon/internal/search"
+	"github.com/jandro-es/axon/internal/tokens"
 	"github.com/jandro-es/axon/internal/vault"
 )
 
@@ -61,6 +67,35 @@ func loadProfileDeps(gf *globalFlags, openDB bool) (*profileDeps, error) {
 // embedding is actually attempted.
 func embeddingsProvider(profile config.Profile) embeddings.Provider {
 	return embeddings.NewOllama(profile.Embeddings.Host, profile.Embeddings.Model, profile.Embeddings.Dim)
+}
+
+// agentAdapter builds the Claude Code (`claude -p`) adapter for this profile,
+// resolving the OAuth token from the environment (.env-backed). The token is
+// optional — without it, a headless run relies on an interactive `claude login`.
+func (d *profileDeps) agentAdapter() agent.Agent {
+	oauth, _ := config.ResolveSecret(d.profile.Claude.OAuthToken)
+	return agent.NewClaudeCode(agent.ClaudeCodeOptions{
+		ConfigDir:  d.paths.ConfigDir,
+		OAuthToken: oauth,
+		AuthMode:   d.profile.Claude.AuthMode,
+	})
+}
+
+// buildEngine assembles the automation engine with the token-manager chokepoint,
+// the real claude -p adapter, search and a (deterministic-enricher) pipeline.
+// Requires the database to be open.
+func (d *profileDeps) buildEngine(bus *events.Bus) *automations.Engine {
+	searcher := search.New(d.db, d.embedder)
+	mgr := tokens.New(d.db, d.agentAdapter(), searcher, bus, managerConfig(d.name, d.profile, d.cfg))
+	pipeline := &ingestion.Pipeline{
+		Vault: d.vault, DB: d.db, Embedder: d.embedder,
+		Enricher: ingestion.Heuristic{}, Fetcher: ingestion.NewHTTPFetcher(),
+		Policy: d.profile.Policy, Profile: d.name, Bus: bus,
+	}
+	return automations.NewEngine(automations.EngineDeps{
+		Profile: d.name, Config: d.profile, DB: d.db, Vault: d.vault,
+		Manager: mgr, Searcher: searcher, Embedder: d.embedder, Pipeline: pipeline, Bus: bus,
+	})
 }
 
 // close releases the database if open.

@@ -106,6 +106,40 @@ func GetNoteIDByPath(ctx context.Context, q Queryer, path string) (*int64, error
 	return &id, nil
 }
 
+// OversizedNote is a note exceeding a word-count threshold (compaction target).
+type OversizedNote struct {
+	Path      string
+	WordCount int
+}
+
+// NotesOverWordCount returns notes whose word_count exceeds threshold, largest
+// first, capped at limit.
+func NotesOverWordCount(ctx context.Context, q Queryer2, threshold, limit int) ([]OversizedNote, error) {
+	rows, err := q.QueryContext(ctx,
+		`SELECT path, word_count FROM notes WHERE word_count > ? ORDER BY word_count DESC LIMIT ?;`,
+		threshold, limit)
+	if err != nil {
+		return nil, fmt.Errorf("oversized notes: %w", err)
+	}
+	defer rows.Close()
+	var out []OversizedNote
+	for rows.Next() {
+		var n OversizedNote
+		if err := rows.Scan(&n.Path, &n.WordCount); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
+// CountSourcesSince returns how many sources were fetched at/after sinceTS (an
+// RFC3339 string), used to gate the weekly knowledge-digest.
+func CountSourcesSince(ctx context.Context, q Queryer, sinceTS string) (int, error) {
+	return scanCount(q.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM sources WHERE fetched_at >= ?;`, sinceTS))
+}
+
 // GetNotePathByID returns the vault-relative path for a note id, or "".
 func GetNotePathByID(ctx context.Context, q Queryer, id int64) (string, error) {
 	var path string

@@ -27,8 +27,6 @@ func newStubCmds(_ *globalFlags) []*cobra.Command {
 	stubs := []struct {
 		use, short, phase string
 	}{
-		{"run", "Run an automation on demand", "Phase 4"},
-		{"start", "Start the daemon", "Phase 4"},
 		{"stop", "Stop the daemon", "Phase 4"},
 		{"mcp", "Run the AXON MCP server over stdio", "Phase 5"},
 		{"export", "Export a portable context snapshot", "Phase 4"},
