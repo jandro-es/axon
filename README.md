@@ -7,6 +7,8 @@ AXON turns an Obsidian vault into a **second brain that maintains itself**. It i
 
 It is designed to be **cloned, configured with a handful of values, and stood up with one command** — twice over, in fact: a `personal` profile and a `work` profile, on different machines, under different Claude accounts and different restriction policies.
 
+> 📖 **New here? Start with the [Installation, Setup & Usage Guide](docs/GUIDE.md)** — a complete walkthrough from a clean machine to a running system.
+
 ## Two cardinal rules (enforced in code)
 
 1. **No Claude call bypasses the token manager.** Every path to Claude goes through the Component-07 chokepoint: pre-flight estimate → budget check → run → ledger. The only Claude adapter is `claude -p` (subscription/enterprise) reached via `tokens.Manager.Run`.
@@ -87,6 +89,7 @@ A cross-platform **Go** daemon (`axon`) — a single self-contained binary — b
 
 | # | Document | Purpose |
 |---|----------|---------|
+| — | [**Installation, Setup & Usage Guide**](docs/GUIDE.md) | **Start here.** End-to-end: install, configure, run, and use every feature. |
 | 00 | [Research & best practices](docs/00-research-and-best-practices.md) | The findings this design is grounded in. Read for the "why". |
 | 01 | [PRD](docs/01-prd.md) | Vision, goals, users, scope, success criteria. |
 | 02 | [Architecture](docs/02-architecture.md) | System design, module boundaries, data flow, ADRs. |
