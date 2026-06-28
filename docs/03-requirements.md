@@ -1,0 +1,104 @@
+# 03 — Requirements
+
+Requirements are the build contract. Each is testable. Priority: **M** (must, v1), **S** (should, v1 if time), **C** (could, post-v1). IDs are stable references for the roadmap and acceptance gates.
+
+## Functional requirements
+
+### Setup, profiles & CLI
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-01 | M | `axon init` scaffolds the vault structure, initialises the SQLite DB (with `sqlite-vec` + FTS5), installs the Claude Code plugin and writes `.claude/` (`CLAUDE.md`, `.mcp.json`, hooks), pulls the embedding model, and prints a clear, ordered progress log of every step and its result. |
+| FR-02 | M | `axon init` is **idempotent**: re-running converges state and reports "no changes" where nothing differs; it never duplicates or clobbers user content. |
+| FR-03 | M | All behaviour derives from `axon.config.yaml` + `.env`; **profiles** (`personal`, `work`, …) fully isolate data dir, secrets, Claude account/`auth_mode`, policy and automation set. One installation runs one active profile (personal and work are separate installations); profile chosen via `AXON_PROFILE` or `--profile`. |
+| FR-04 | M | CLI commands: `init`, `start`, `stop`, `status`, `doctor`, `ingest <url\|path>`, `search <query>`, `reindex`, `run <automation>`, `export`, `mcp`, `config <get\|set\|validate>`. Each supports `--profile` and `--json`. |
+| FR-05 | M | `axon doctor` checks prerequisites (Go toolchain if building, Ollama reachable + model present, the `claude` CLI present and authenticated for the profile's `auth_mode`, **no stray `ANTHROPIC_API_KEY` on subscription/enterprise**, vault writable, DB healthy, ports free) and reports each as pass/warn/fail with a remediation hint. |
+| FR-06 | S | `axon` can emit OS service units (launchd/systemd/Task Scheduler) to supervise the daemon, without the core depending on them. |
+| FR-07 | M | A first run with **all automations disabled** still starts, serves the dashboard, and supports manual `ingest`/`search`. |
+
+### Vault & methodology
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-10 | M | Scaffold a PARA + Inbox layout plus `Daily/`, `MOCs/`, `Templates/`, `.axon/`, `.claude/` (see Component 04), each non-system folder seeded with a short README explaining its purpose. |
+| FR-11 | M | Provide note templates (daily note, atomic note, project, knowledge/source, MOC) with consistent YAML frontmatter (see Component 04 §frontmatter). |
+| FR-12 | M | All vault mutations use **wikilink-safe** operations: renaming/moving a note updates every inbound `[[link]]` and alias; deletes are blocked from automation and require explicit confirmation. |
+| FR-13 | M | The daemon maintains an up-to-date **link graph** (notes, wikilinks, tags, backlinks) derived from the vault, rebuildable via `reindex`. |
+| FR-14 | S | Generate in-vault **Dataview/Bases dashboards** (open inbox, active projects, recent ingests, link-suggestion queue) and rely on Obsidian's native graph for in-vault visualisation. |
+
+### Knowledge ingestion
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-20 | M | Ingest a **URL**: fetch (respect egress allowlist), extract main readable content, convert to clean Markdown, strip boilerplate. |
+| FR-21 | M | Ingest a **PDF** and a local **Markdown/text** file via the same pipeline. |
+| FR-22 | M | Enrich each source under a token budget: title, source URL/author/date, concise summary, tags, and ≥1 suggested wikilink to existing notes; write as a note in `03-Resources/Knowledge`. |
+| FR-23 | M | Chunk and **embed** via the embedding provider (Ollama default), upsert vectors into `sqlite-vec` and text into FTS5; store source + chunk metadata. |
+| FR-24 | M | Ingestion is idempotent on content hash; re-ingesting updates the note and re-embeds only changed chunks. |
+| FR-25 | M | **Hybrid search** (lexical FTS5 + semantic vector) with rank fusion, exposed via CLI and MCP, returning note refs + snippets + scores. |
+| FR-26 | C | Capture-by-Inbox: a special Inbox note/format where pasted URLs are auto-detected and queued for ingestion on the next ingestion tick. |
+
+### Automation engine
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-30 | M | A portable **scheduler** runs automations on cron expressions and/or change events, with per-automation enable flag, schedule, model, token budget, dry-run, and catch-up policy — all from config. |
+| FR-31 | M | Each automation **gates on new material** (content hashes / change detection); with nothing relevant changed, it logs a skip and makes **no** Claude call. |
+| FR-32 | M | Ship these standard automations (each independently toggleable): **heartbeat**, **daily-log**, **inbox-triage**, **compaction**, **context-export**, **knowledge-reindex**, **knowledge-digest**, **link-suggester**, **budget-guard**. (Specified in Component 06.) |
+| FR-33 | M | Automations run via the agent adapter (Claude Code `claude -p` by default; the direct-API in-process adapter only in `auth_mode: api_key`), respect dry-run (compute + log intended changes without writing), and record a run record with status, duration, tokens (cost in `api_key` mode) and a diff summary. |
+| FR-34 | M | `axon run <automation> [--dry-run]` triggers any automation manually with the same code path as the scheduler. |
+| FR-35 | S | Per-automation **locks** prevent overlapping runs; a hung run times out and is recorded as failed. |
+
+### Context & token awareness
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-40 | M | Before any Claude call, **pre-flight** with a token estimate (local estimator on subscription/enterprise; exact `count_tokens` in `auth_mode: api_key`); record the estimate; refuse/downgrade/defer if it would breach the active token window/credit. |
+| FR-41 | M | After every Claude call (interactive-via-hooks and headless `claude -p`), record reported `usage` (input/output/cache tokens), model, operation, profile, timestamp — and computed cost **in `api_key` mode** — to the **token ledger**. |
+| FR-42 | M | Enforce **budgets**: per-profile daily and weekly **token** caps and per-automation caps (plus per-dollar caps in `auth_mode: api_key`); expose remaining budget via CLI, MCP and dashboard. |
+| FR-43 | M | **budget-guard** automatically pauses non-essential automations as the cap approaches (configurable thresholds) and resumes when the window resets; essential automations and interactive use are never silently blocked but are surfaced. |
+| FR-44 | M | **Compaction** distils stale session logs and oversized notes into durable summary notes, shrinking future context, and records tokens-saved estimates. |
+| FR-45 | M | **Model selection** per operation/automation (e.g. Haiku for classification, Sonnet for routine edits, Opus for synthesis), overridable in config. |
+| FR-46 | S | Retrieval-first context assembly: never send the whole vault; build context from top-k hybrid-search results with a configurable token ceiling. |
+
+### Agent bridge (Claude Code integration)
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-50 | M | Ship an **MCP server** exposing tools: `vault.search`, `vault.read`, `vault.write`, `vault.patch`, `vault.move` (wikilink-safe), `daily.append`, `knowledge.ingest`, `knowledge.search`, `tokens.status`, `metrics.query`, `automations.list`, `automations.run`. (Tool contracts in Component 08.) |
+| FR-51 | M | `axon init` writes a valid `.mcp.json` (or equivalent) so Claude Code discovers the AXON MCP server, scoped to the active profile. |
+| FR-52 | M | Provide Claude Code **hooks**: `SessionStart` (inject compact vault/budget status), `PreToolUse` (block unsafe vault file ops; enforce wikilink-safe path), `PostToolUse` (log AXON-tool token round-trips, flag budget), `Stop` (suggest compaction when context is large). Hooks are deterministic and policy-enforcing. |
+| FR-53 | M | Provide a Claude Code **plugin** bundling skills (e.g. `ingest-url`, `run-daily-log`, `triage-inbox`, `suggest-links`) and subagents (e.g. `librarian` for deep vault search, `summariser` for distillation) plus a `CLAUDE.md` template encoding the vault schema and conventions. |
+| FR-54 | S | Interop: allow configuring an external/community Obsidian MCP server as an alternative vault backend behind the same tool contract. |
+
+### Dashboard & observability
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-60 | M | A local web dashboard (React/Recharts SPA) at a configurable port shows, with **real-time** updates (SSE/WebSocket): tokens over time (by day/automation/model), usage/budget gauges (cost gauges in `api_key` mode), automation run timeline + success rate, ingestion throughput + queue depth, and vault growth (notes/links/words). |
+| FR-61 | M | An interactive **knowledge graph** view: nodes = notes, edges = wikilinks plus high-similarity vector neighbours (toggle), with basic filtering by folder/tag. |
+| FR-62 | M | A structured **event log/activity feed** of runs, ingests, skips, budget events and errors, filterable, streamed live. |
+| FR-63 | M | Dashboard reads only from the daemon API; it never holds secrets and binds to localhost by default. |
+| FR-64 | C | Export any chart's underlying data as CSV/JSON. |
+
+## Non-functional requirements
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| NFR-01 | M | **Local-first:** no required cloud services beyond Claude itself (reached via Claude Code, or the Claude API in `api_key` mode) and user-chosen ingestion URLs; all persistent state on local disk. |
+| NFR-02 | M | **Cross-platform:** macOS, Linux, Windows (WSL allowed only where it clearly simplifies, and documented). |
+| NFR-03 | M | **Reproducible:** clone → set ≤6 values → `axon init` → running system in ≤15 min; deterministic given the same config. |
+| NFR-04 | M | **Isolated profiles:** no shared data, secrets or account between profiles; verified by inspection. |
+| NFR-05 | M | **Safety:** secrets never logged or sent to the model; redaction applied pre-send; egress allow-listed; destructive ops gated; fetched content treated as data not instructions. |
+| NFR-06 | M | **Durability:** atomic vault writes; vault is reconstructable source of truth; DB rebuildable via `reindex`. |
+| NFR-07 | M | **Observability:** every Claude call, automation run, ingest and error is logged with structured fields and visible on the dashboard within ≤5s. |
+| NFR-08 | M | **Frugality:** mandatory token chokepoint (ADR-007); no Claude call without pre-flight + budget check. |
+| NFR-09 | S | **Performance:** hybrid search returns in <500ms for a 5k-note vault on commodity hardware; daemon idle CPU negligible; embedding batch size and worker pool tuned for Ollama. |
+| NFR-10 | M | **Clear output:** every long-running command streams human-readable progress; failures state the cause and a remediation step. |
+| NFR-11 | S | **Testability:** providers (agent, embeddings, fetcher) are interfaces with fakes; automations runnable in dry-run; a `--profile test` uses a temp vault + in-memory/temp DB. |
+| NFR-12 | M | **Config-driven extensibility:** new automations and ingestion sources are added by dropping a module + config, not by editing core wiring. |
+| NFR-13 | C | **Backups:** `axon export` snapshots are portable, plain-format and self-describing (manifest + Markdown + JSON). |
+
+## Traceability
+
+Each roadmap milestone (Component 11) lists the FR/NFR IDs it satisfies; each component spec restates the IDs it owns. No requirement is "done" until a documented acceptance check passes.

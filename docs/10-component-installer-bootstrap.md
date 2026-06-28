@@ -1,0 +1,59 @@
+# 10 — Component: Installer & Bootstrap
+
+**Owns:** FR-01…FR-07, NFR-03, NFR-10.
+**Goal:** Clone → set a handful of values → one command → a running, healthy system, with clear output — reproducibly, per profile, idempotently.
+
+## 1. The flow
+
+```bash
+git clone … && cd axon
+cp axon.config.example.yaml axon.config.yaml   # set vault_path, profile, budgets
+cp .env.example .env                           # set CLAUDE_CODE_OAUTH_TOKEN for the profile you run
+./scripts/install.sh                           # or install.ps1 on Windows
+axon init                                       # the bootstrap (idempotent, verbose)
+axon start                                      # daemon + dashboard
+```
+
+`./scripts/install.sh` handles **toolchain** (verify Go 1.22+; build the dashboard SPA in `web/` with Node/Vite then `go build ./cmd/axon` with the assets embedded; install the `axon` binary onto `PATH`; sanity-check Ollama + the `claude` CLI presence and login state; if using the cgo SQLite driver, verify a C toolchain — the pure-Go `ncruces` driver needs none). `axon init` handles **environment convergence** for the active profile. The split keeps OS-level package wrangling out of the cross-platform Go code. Because the daemon ships as a single static binary with the SPA embedded, an alternative install path is to download a prebuilt release binary and skip both build steps (no Go or Node needed).
+
+## 2. `axon init` — steps (each prints status: ✓ done / ↻ already / ⚠ fixed / ✗ failed + hint)
+
+1. **Resolve profile & config.** Load `axon.config.yaml` + `.env`; resolve `active_profile`; validate against the config schema (struct tags + validator); print the resolved (secret-redacted) config summary.
+2. **Prerequisite checks.** Go toolchain (if building from source); Ollama reachable; required embedding model present (offer to `ollama pull`); the `claude` CLI present **and authenticated for this `auth_mode`** (subscription/enterprise login, or a valid `CLAUDE_CODE_OAUTH_TOKEN` for headless); **warn loudly if `ANTHROPIC_API_KEY` is set** while `auth_mode` is subscription/enterprise (it would divert Claude Code to API billing); ports free; vault path writable. Each as pass/warn/fail with remediation. (Shared with `axon doctor`.)
+3. **Data dir.** Create `$AXON_HOME/profiles/<name>/` (`db.sqlite`, `logs/`, `exports/`, `snapshots/`, `claude/`). Skip if present.
+4. **Database.** Create/upgrade the SQLite DB; load `sqlite-vec`; create tables + `vec0`/FTS5; run migrations to current `schema_version`. Idempotent.
+5. **Embedding model.** Pull/verify the model; assert configured `dim` matches the live model (fail with a clear message if not).
+6. **Vault scaffold.** Create the PARA/Inbox/Daily/MOCs/Templates structure **only where missing**; seed folder READMEs and note templates; **never overwrite** existing user notes. If the vault already has content, detect and adapt (don't clobber); report what was added.
+7. **Claude Code wiring.** Write `.claude/CLAUDE.md` (from template, profile-aware), `.claude/.mcp.json` (AXON MCP, profile-scoped), `.claude/settings.json` (hooks), and install the plugin into `.claude/plugins/axon/`. Set the profile's `CLAUDE_CONFIG_DIR`. If files exist, **merge** non-destructively and report diffs.
+8. **In-vault dashboards.** Generate the Dataview/Bases dashboard notes.
+9. **First index.** Run an initial `reindex` (build link graph; embed existing notes) with a progress bar; respects budget (embeddings are local/free, no Claude cost).
+10. **Summary.** Print a final report: what was created vs already present, the dashboard URL, and next steps. Exit 0 only if all critical steps succeeded.
+
+**Idempotency (FR-02):** a second `axon init` re-validates and converges; every step reports "already" where nothing changed; the final summary says "no changes". Achieved by content/feature detection, not by blindly rewriting.
+
+## 3. Profiles & separate installations (FR-03, NFR-04)
+
+- Personal and work are **separate installations** on separate machines, each running one active profile — they never co-run in one process. `AXON_PROFILE=work axon init` provisions the work profile's isolated data dir + vault + Claude config + policy on the work box.
+- The example config ships **both** `personal` and `work` profiles so either installation is a one-flag operation and both templates live in version control.
+- Separate accounts: each profile's `claude.config_dir` (`CLAUDE_CONFIG_DIR`) + `auth_mode` + its own `CLAUDE_CODE_OAUTH_TOKEN` ensure interactive and headless Claude use the right account; personal is a Max subscription, work is Enterprise SSO with no API.
+- Restrictions: the profile `policy` block (egress allowlist, ingest domain allow/deny, redaction, `allowed_automations`, token limits) is applied everywhere — ingestion, automations, the token manager — so the work install is genuinely more constrained, not just nominally.
+
+## 4. Clear output (NFR-10)
+
+- Every long step streams human-readable progress (spinners/bars); on failure, the message names the cause and the fix (e.g. "Ollama not reachable at localhost:11434 — start it with `ollama serve`").
+- `--json` emits machine-readable step results for scripting/CI.
+- A run transcript is saved to `.axon/logs/init-<ts>.log`.
+
+## 5. Lifecycle commands
+- `axon start|stop|status` — daemon control; `start` also serves the dashboard; `status` shows health + budget + last runs.
+- `axon doctor` — the prerequisite checks on demand (FR-05).
+- `axon reindex [--embeddings]` — rebuild derived state from the vault (ADR-006); `--embeddings` forces full re-embed (after a model change).
+- `axon export` — context-export bundle on demand.
+- `axon service install|uninstall` — emit/remove OS service units (FR-06, optional).
+
+## 6. Acceptance checks
+- Fresh machine: clone → ≤6 values → `init` → `start` → `doctor` green in ≤15 min (S1/NFR-03).
+- Second `axon init` reports no changes (S2/FR-02).
+- An existing vault with notes is scaffolded **without** clobbering user content (FR-01).
+- `AXON_PROFILE=work` produces a fully isolated instance (S7/NFR-04).
+- A missing prerequisite yields a precise remediation message and a non-zero exit (NFR-10).

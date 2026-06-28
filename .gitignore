@@ -1,0 +1,32 @@
+# Secrets & local config (copy the .example files instead)
+.env
+axon.config.yaml
+prices.yaml
+
+# AXON runtime state (per-profile data dir, if placed inside the repo)
+.axon/
+*.sqlite
+*.sqlite-*
+profiles/
+
+# Go build output
+/axon
+/axon.exe
+/dist/
+/bin/
+*.test
+*.out
+coverage.*
+
+# Dashboard SPA (web/) — Node toolchain at build time only
+web/node_modules/
+web/dist/
+web/.vite/
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
