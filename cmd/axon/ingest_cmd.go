@@ -30,7 +30,7 @@ func newIngestCmd(gf *globalFlags) *cobra.Command {
 				DB:       deps.db,
 				Embedder: deps.embedder,
 				Enricher: ingestion.Heuristic{},
-				Fetcher:  ingestion.NewHTTPFetcher(),
+				Fetcher:  ingestion.NewHTTPFetcher(deps.profile.Policy),
 				Policy:   deps.profile.Policy,
 				Profile:  deps.name,
 			}
@@ -40,6 +40,9 @@ func newIngestCmd(gf *globalFlags) *cobra.Command {
 			res, runErr := pipeline.Ingest(cmd.Context(), args[0], ingestion.IngestOptions{
 				DryRun:     dryRun,
 				ApplyLinks: false,
+				// The CLI is user-initiated, so local-file ingestion is allowed
+				// here (it is not on the agent-driven MCP path).
+				AllowLocalFiles: true,
 			})
 
 			out := cmd.OutOrStdout()

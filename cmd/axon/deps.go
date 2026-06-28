@@ -98,7 +98,7 @@ func (d *profileDeps) buildServices(bus *events.Bus) services {
 	mgr := tokens.New(d.db, d.agentAdapter(), searcher, bus, managerConfig(d.name, d.profile, d.cfg))
 	pipeline := &ingestion.Pipeline{
 		Vault: d.vault, DB: d.db, Embedder: d.embedder,
-		Enricher: ingestion.Heuristic{}, Fetcher: ingestion.NewHTTPFetcher(),
+		Enricher: ingestion.Heuristic{}, Fetcher: ingestion.NewHTTPFetcher(d.profile.Policy),
 		Policy: d.profile.Policy, Profile: d.name, Bus: bus,
 	}
 	engine := automations.NewEngine(automations.EngineDeps{

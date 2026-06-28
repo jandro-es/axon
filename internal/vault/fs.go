@@ -36,9 +36,24 @@ func NewFS(dir string) *FS {
 // Root returns the absolute-ish vault root path.
 func (v *FS) Root() string { return v.root }
 
-// abs maps a vault-relative (slash-separated) path to an OS path under root.
-func (v *FS) abs(rel string) string {
-	return filepath.Join(v.root, filepath.FromSlash(rel))
+// safeAbs maps a vault-relative (slash-separated) path to an OS path under root,
+// REFUSING any path that is absolute or escapes the vault via "..". This is the
+// security boundary for the vault: MCP tools pass agent-supplied paths straight
+// to Read/Write/Patch/Move, so without containment a crafted path like
+// "../../etc/passwd" would read or overwrite arbitrary host files. Every helper
+// that touches the filesystem goes through here.
+func (v *FS) safeAbs(rel string) (string, error) {
+	if strings.TrimSpace(rel) == "" {
+		return "", fmt.Errorf("empty vault path")
+	}
+	if filepath.IsAbs(rel) || strings.HasPrefix(filepath.ToSlash(rel), "/") {
+		return "", fmt.Errorf("vault path %q must be relative, not absolute", rel)
+	}
+	clean := filepath.Clean(filepath.FromSlash(rel))
+	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("vault path %q escapes the vault root", rel)
+	}
+	return filepath.Join(v.root, clean), nil
 }
 
 // rel maps an OS path under root back to a slash-separated vault-relative path.
@@ -89,7 +104,10 @@ func (v *FS) Read(ctx context.Context, rel string) (*Note, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	abs := v.abs(rel)
+	abs, err := v.safeAbs(rel)
+	if err != nil {
+		return nil, err
+	}
 	data, err := os.ReadFile(abs)
 	if err != nil {
 		return nil, fmt.Errorf("read note %q: %w", rel, err)
@@ -122,7 +140,10 @@ func (v *FS) Patch(ctx context.Context, rel, block, content string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	abs := v.abs(rel)
+	abs, err := v.safeAbs(rel)
+	if err != nil {
+		return err
+	}
 	data, err := os.ReadFile(abs)
 	if err != nil {
 		return fmt.Errorf("patch note %q: %w", rel, err)
@@ -143,33 +164,39 @@ func (v *FS) Move(ctx context.Context, from, to string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	fromAbs, toAbs := v.abs(from), v.abs(to)
+	fromAbs, err := v.safeAbs(from)
+	if err != nil {
+		return err
+	}
+	toAbs, err := v.safeAbs(to)
+	if err != nil {
+		return err
+	}
 	if _, err := os.Stat(fromAbs); err != nil {
 		return fmt.Errorf("move source %q: %w", from, err)
 	}
 	if _, err := os.Stat(toAbs); err == nil {
 		return fmt.Errorf("move destination %q already exists", to)
 	}
-	if err := os.MkdirAll(filepath.Dir(toAbs), 0o755); err != nil {
-		return fmt.Errorf("create destination dir for %q: %w", to, err)
-	}
 
-	// Move the file itself first (atomic rename).
-	if err := os.Rename(fromAbs, toAbs); err != nil {
-		return fmt.Errorf("rename %q -> %q: %w", from, to, err)
-	}
-
-	// Rewrite inbound links in every other note.
+	// Stage all inbound-link rewrites BEFORE touching the filesystem, so a read
+	// error aborts the move with nothing changed (no half-rewritten vault).
 	paths, err := v.List(ctx)
 	if err != nil {
 		return err
 	}
 	toSlash := filepath.ToSlash(to)
+	type rewrite struct{ path, content string }
+	var staged []rewrite
 	for _, p := range paths {
-		if p == toSlash {
+		if p == filepath.ToSlash(from) || p == toSlash {
 			continue // the moved note's own outbound links are unaffected
 		}
-		data, err := os.ReadFile(v.abs(p))
+		abs, err := v.safeAbs(p)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(abs)
 		if err != nil {
 			return fmt.Errorf("scan %q for links: %w", p, err)
 		}
@@ -178,8 +205,20 @@ func (v *FS) Move(ctx context.Context, from, to string) error {
 		if n == 0 {
 			continue
 		}
-		if err := v.writeRaw(p, reassemble(fm, newBody)); err != nil {
-			return err
+		staged = append(staged, rewrite{p, reassemble(fm, newBody)})
+	}
+
+	if err := os.MkdirAll(filepath.Dir(toAbs), 0o755); err != nil {
+		return fmt.Errorf("create destination dir for %q: %w", to, err)
+	}
+	// Move the file (atomic rename), then apply the staged, already-computed
+	// rewrites (each write is itself atomic).
+	if err := os.Rename(fromAbs, toAbs); err != nil {
+		return fmt.Errorf("rename %q -> %q: %w", from, to, err)
+	}
+	for _, rw := range staged {
+		if err := v.writeRaw(rw.path, rw.content); err != nil {
+			return fmt.Errorf("rewrite inbound links in %q (note moved; some links may need repair): %w", rw.path, err)
 		}
 	}
 	return nil
@@ -187,16 +226,24 @@ func (v *FS) Move(ctx context.Context, from, to string) error {
 
 // --- creation helpers (used by the scaffold; never clobber existing files) ---
 
-// Exists reports whether a vault-relative path exists.
+// Exists reports whether a vault-relative path exists. An unsafe (escaping)
+// path is reported as non-existent.
 func (v *FS) Exists(rel string) bool {
-	_, err := os.Stat(v.abs(rel))
+	abs, err := v.safeAbs(rel)
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(abs)
 	return err == nil
 }
 
 // EnsureDir creates a vault-relative directory if missing. created reports
 // whether it had to be made.
 func (v *FS) EnsureDir(rel string) (created bool, err error) {
-	abs := v.abs(rel)
+	abs, err := v.safeAbs(rel)
+	if err != nil {
+		return false, err
+	}
 	if _, statErr := os.Stat(abs); statErr == nil {
 		return false, nil
 	}
@@ -222,8 +269,12 @@ func (v *FS) Create(rel, content string) (created bool, err error) {
 // writing the new whole-file content atomically. Used for AXON-managed system
 // files like .axon/review-queue.md; not for human notes.
 func (v *FS) Append(rel, content string) error {
+	abs, err := v.safeAbs(rel)
+	if err != nil {
+		return err
+	}
 	existing := ""
-	if data, err := os.ReadFile(v.abs(rel)); err == nil {
+	if data, rerr := os.ReadFile(abs); rerr == nil {
 		existing = string(data)
 	}
 	if existing != "" && !strings.HasSuffix(existing, "\n") {
@@ -236,7 +287,10 @@ func (v *FS) Append(rel, content string) error {
 // file in the destination directory then renames it into place, so a reader
 // never observes a half-written note (NFR-06).
 func (v *FS) writeRaw(rel, content string) error {
-	abs := v.abs(rel)
+	abs, err := v.safeAbs(rel)
+	if err != nil {
+		return err
+	}
 	dir := filepath.Dir(abs)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create dir for %q: %w", rel, err)
@@ -267,6 +321,12 @@ func (v *FS) writeRaw(rel, content string) error {
 		return fmt.Errorf("commit %q: %w", rel, err)
 	}
 	cleanup = false
+	// Best-effort fsync of the parent directory so the rename itself is durable
+	// (NFR-06). Ignored where unsupported (e.g. Windows).
+	if d, derr := os.Open(dir); derr == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
 	return nil
 }
 

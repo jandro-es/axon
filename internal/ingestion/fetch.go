@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/jandro-es/axon/internal/config"
 )
 
 // maxFetchBytes caps a fetched/read body to guard memory (NFR-05 "cap response
@@ -16,16 +18,33 @@ const maxFetchBytes = 16 << 20
 // userAgent identifies AXON politely to origin servers.
 const userAgent = "axon/0.2 (+local-first knowledge ingestion)"
 
-// HTTPFetcher fetches URLs over HTTP(S). It performs no policy checks itself —
-// the pipeline enforces policy before calling Fetch — and executes no
-// JavaScript. Local files are read by ReadFile, not this type.
+// HTTPFetcher fetches URLs over HTTP(S). The pipeline enforces policy on the
+// initial host, and this fetcher RE-validates policy on every redirect hop so a
+// redirect cannot escape the egress allowlist to an internal/metadata host
+// (SSRF). It executes no JavaScript. Local files are read by ReadFile.
 type HTTPFetcher struct {
 	client *http.Client
 }
 
-// NewHTTPFetcher returns a fetcher with a sane per-request timeout.
-func NewHTTPFetcher() *HTTPFetcher {
-	return &HTTPFetcher{client: &http.Client{Timeout: 30 * time.Second}}
+// NewHTTPFetcher returns a fetcher that enforces the profile's ingest egress
+// policy on every redirect hop (not just the initial request).
+func NewHTTPFetcher(policy config.PolicyConfig) *HTTPFetcher {
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
+				return fmt.Errorf("refusing redirect to non-http(s) scheme %q", req.URL.Scheme)
+			}
+			if err := CheckIngestPolicy(policy, req.URL.Hostname()); err != nil {
+				return fmt.Errorf("refusing redirect to disallowed host: %w", err)
+			}
+			return nil
+		},
+	}
+	return &HTTPFetcher{client: client}
 }
 
 // Fetch GETs url and returns the (size-capped) body. Treated strictly as data.

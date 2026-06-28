@@ -47,7 +47,7 @@ func newTestTools(t *testing.T, files map[string]string) (*Tools, *vault.FS, *ag
 		Limits: config.LimitsConfig{DailyTokens: 1_000_000, WeeklyTokens: 5_000_000, GuardPauseAtPct: 80},
 	}
 	mgr := tokens.New(d, fake, searcher, nil, tokens.Config{Profile: "test", AuthMode: "subscription", Models: profile.Models, Limits: profile.Limits})
-	pipeline := &ingestion.Pipeline{Vault: v, DB: d, Embedder: emb, Enricher: ingestion.Heuristic{}, Fetcher: ingestion.NewHTTPFetcher(), Profile: "test"}
+	pipeline := &ingestion.Pipeline{Vault: v, DB: d, Embedder: emb, Enricher: ingestion.Heuristic{}, Fetcher: ingestion.NewHTTPFetcher(config.PolicyConfig{}), Profile: "test"}
 	engine := automations.NewEngine(automations.EngineDeps{Profile: "test", Config: profile, DB: d, Vault: v, Manager: mgr, Searcher: searcher, Embedder: emb})
 	return NewTools(Deps{
 		Profile: "test", Config: profile, DB: d, Vault: v,

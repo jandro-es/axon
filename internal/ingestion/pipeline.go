@@ -40,6 +40,11 @@ type Pipeline struct {
 type IngestOptions struct {
 	DryRun     bool // do everything except write/embed; report intended note
 	ApplyLinks bool // if true, suggestions are applied (default: queued for review)
+	// AllowLocalFiles permits reading local files (file://, plain paths). It is
+	// true for the user-initiated CLI `ingest`, but FALSE for agent-driven paths
+	// (the MCP knowledge_ingest tool), so a prompt-injected agent cannot read
+	// arbitrary host files (e.g. ~/.ssh/id_rsa) into the vault and the model.
+	AllowLocalFiles bool
 }
 
 // IngestResult summarises a run for the CLI/MCP and the event stream.
@@ -61,10 +66,17 @@ func (p *Pipeline) Ingest(ctx context.Context, arg string, opts IngestOptions) (
 	in := ClassifyInput(arg)
 	res := IngestResult{Input: arg, Status: "failed"}
 
-	// Stage 1 — policy (URL only): refuse denied domains before fetching.
-	if in.Kind == KindURL {
+	// Stage 1 — policy. URLs are gated by the egress allowlist; local files are
+	// refused unless the caller explicitly allowed them (CLI only, never the
+	// agent-driven MCP path) — an SSRF/local-file-read guard (NFR-05).
+	switch in.Kind {
+	case KindURL:
 		if err := CheckIngestPolicy(p.Policy, in.Host); err != nil {
 			return res, err
+		}
+	case KindFile, KindPDF:
+		if !opts.AllowLocalFiles {
+			return res, fmt.Errorf("local-file ingestion of %q is not permitted on this path (agent-driven ingestion is URL-only)", arg)
 		}
 	}
 
@@ -89,6 +101,16 @@ func (p *Pipeline) Ingest(ctx context.Context, arg string, opts IngestOptions) (
 		return res, err
 	}
 	cleaned, redacted := redactor.Redact(ex.Markdown)
+	// Redact provenance fields too — a secret in an HTML <title>/byline would
+	// otherwise reach the model (enrich prompt), the note frontmatter, the note
+	// path slug, and the event stream unredacted.
+	var rm bool
+	ex.Title, rm = redactor.Redact(ex.Title)
+	redacted = redacted || rm
+	ex.Author, rm = redactor.Redact(ex.Author)
+	redacted = redacted || rm
+	ex.Date, rm = redactor.Redact(ex.Date)
+	redacted = redacted || rm
 	res.Redacted = redacted
 
 	// Stage 6 — hash + idempotency.
@@ -146,7 +168,10 @@ func (p *Pipeline) Ingest(ctx context.Context, arg string, opts IngestOptions) (
 
 	// Suggested links go to the review queue (human approves) unless applied.
 	if len(enr.SuggestedLinks) > 0 && !opts.ApplyLinks {
-		_ = p.appendReviewQueue(notePath, enr.SuggestedLinks)
+		if err := p.appendReviewQueue(notePath, enr.SuggestedLinks); err != nil {
+			p.emit(events.LevelWarn, "ingest.review_queue.fail",
+				fmt.Sprintf("could not write link suggestions to the review queue: %v", err), nil)
+		}
 	}
 
 	p.emit(events.LevelInfo, "ingest.done",

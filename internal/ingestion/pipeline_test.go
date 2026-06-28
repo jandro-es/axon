@@ -75,7 +75,7 @@ func TestIngestLocalFileProducesRetrievableNote(t *testing.T) {
 		"# Reciprocal Rank Fusion\n\nRRF blends lexical BM25 search with semantic vector search. "+
 			"It scores documents by rank position across lists.\n")
 
-	res, err := p.Ingest(ctx, file, IngestOptions{})
+	res, err := p.Ingest(ctx, file, IngestOptions{AllowLocalFiles: true})
 	if err != nil {
 		t.Fatalf("ingest: %v", err)
 	}
@@ -122,12 +122,12 @@ func TestIngestSecondSourceGetsGroundedSuggestion(t *testing.T) {
 
 	// First source establishes content to link to.
 	a := writeFile(t, dir, "a.md", "# Vector Databases\n\nVector databases index embeddings for semantic search and retrieval.\n")
-	if _, err := p.Ingest(ctx, a, IngestOptions{}); err != nil {
+	if _, err := p.Ingest(ctx, a, IngestOptions{AllowLocalFiles: true}); err != nil {
 		t.Fatal(err)
 	}
 	// Second, related source should suggest linking to the first (S6 "≥1 link").
 	b := writeFile(t, dir, "b.md", "# Semantic Search\n\nSemantic search over embeddings powers modern retrieval and vector databases.\n")
-	res, err := p.Ingest(ctx, b, IngestOptions{})
+	res, err := p.Ingest(ctx, b, IngestOptions{AllowLocalFiles: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,12 +146,12 @@ func TestReingestUnchangedSkipsWithNoEmbedding(t *testing.T) {
 	ctx := context.Background()
 	file := writeFile(t, dir, "x.md", "# Title\n\nStable content that will not change between runs.\n")
 
-	if _, err := p.Ingest(ctx, file, IngestOptions{}); err != nil {
+	if _, err := p.Ingest(ctx, file, IngestOptions{AllowLocalFiles: true}); err != nil {
 		t.Fatal(err)
 	}
 	callsAfterFirst := emb.EmbedCalls()
 
-	res, err := p.Ingest(ctx, file, IngestOptions{})
+	res, err := p.Ingest(ctx, file, IngestOptions{AllowLocalFiles: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestDeniedDomainFailsBeforeFetch(t *testing.T) {
 	}
 	p, _, fetch := newTestPipeline(t, policy)
 
-	_, err := p.Ingest(context.Background(), "https://evil.example.com/article", IngestOptions{})
+	_, err := p.Ingest(context.Background(), "https://evil.example.com/article", IngestOptions{AllowLocalFiles: true})
 	if err == nil {
 		t.Fatal("expected a policy error for a denied domain")
 	}
@@ -193,7 +193,7 @@ func TestRedactionAppliedBeforePersist(t *testing.T) {
 	ctx := context.Background()
 
 	file := writeFile(t, dir, "leak.md", "# Config\n\nThe key is AKIA1234567890ABCDEF and must be scrubbed.\n")
-	res, err := p.Ingest(ctx, file, IngestOptions{})
+	res, err := p.Ingest(ctx, file, IngestOptions{AllowLocalFiles: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,13 +209,53 @@ func TestRedactionAppliedBeforePersist(t *testing.T) {
 	}
 }
 
+func TestLocalFileRefusedOnAgentPath(t *testing.T) {
+	p, _, _ := newTestPipeline(t, openPolicy())
+	dir := t.TempDir()
+	secret := writeFile(t, dir, "secret.md", "# Secret\n\nlocal file contents\n")
+
+	// Default (AllowLocalFiles=false) is the agent/MCP path — must refuse.
+	if _, err := p.Ingest(context.Background(), secret, IngestOptions{}); err == nil {
+		t.Error("agent-path local-file ingestion must be refused")
+	}
+	if _, err := p.Ingest(context.Background(), "file://"+secret, IngestOptions{}); err == nil {
+		t.Error("agent-path file:// ingestion must be refused")
+	}
+	// The note must not have been written.
+	if n, _ := db.CountChunks(context.Background(), p.DB); n != 0 {
+		t.Errorf("refused ingestion still wrote %d chunks", n)
+	}
+}
+
+func TestRedactionScrubsTitle(t *testing.T) {
+	policy := openPolicy()
+	policy.RedactionRules = []string{`AKIA[0-9A-Z]{16}`}
+	p, _, _ := newTestPipeline(t, policy)
+	dir := t.TempDir()
+	ctx := context.Background()
+
+	// Secret in the H1 (becomes the title) — must not survive into title/frontmatter.
+	file := writeFile(t, dir, "leak.md", "# Key AKIA1234567890ABCDEF here\n\nBody.\n")
+	res, err := p.Ingest(ctx, file, IngestOptions{AllowLocalFiles: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(res.Title, "AKIA1234567890ABCDEF") {
+		t.Errorf("secret leaked into title: %q", res.Title)
+	}
+	n, _ := p.Vault.Read(ctx, res.NotePath)
+	if strings.Contains(n.FrontmatterString("title"), "AKIA1234567890ABCDEF") {
+		t.Errorf("secret leaked into frontmatter title")
+	}
+}
+
 func TestDryRunWritesNothing(t *testing.T) {
 	p, emb, _ := newTestPipeline(t, openPolicy())
 	dir := t.TempDir()
 	ctx := context.Background()
 	file := writeFile(t, dir, "d.md", "# Draft\n\nThis is a dry run and should not be written or embedded.\n")
 
-	res, err := p.Ingest(ctx, file, IngestOptions{DryRun: true})
+	res, err := p.Ingest(ctx, file, IngestOptions{DryRun: true, AllowLocalFiles: true})
 	if err != nil {
 		t.Fatal(err)
 	}

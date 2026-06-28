@@ -152,9 +152,14 @@ func (e *Engine) Run(ctx context.Context, a Automation, dryRun bool) (Outcome, e
 	}
 
 	// Persist the change-gate cursor only on a real (non-dry) successful run, so
-	// a dry-run never "consumes" the change.
+	// a dry-run never "consumes" the change. A dropped cursor write would make
+	// the next tick re-detect the same material as "changed" and re-spend tokens,
+	// so surface the failure rather than swallowing it.
 	if !dryRun && change.Cursor != "" {
-		_ = db.SetCursor(ctx, e.deps.DB, name, change.Cursor, e.now().UTC().Format(time.RFC3339))
+		if err := db.SetCursor(ctx, e.deps.DB, name, change.Cursor, e.now().UTC().Format(time.RFC3339)); err != nil {
+			e.deps.Log.Warn("failed to persist change-gate cursor; automation may re-run on unchanged material",
+				"automation", name, "error", err)
+		}
 	}
 
 	e.emit(events.LevelInfo, "automation.run", out)
@@ -181,9 +186,11 @@ func (e *Engine) runCtx(runID int64, dryRun bool) RunCtx {
 func (e *Engine) finishSkipped(ctx context.Context, out Outcome, runID int64, reason string) (Outcome, error) {
 	out.Status = db.RunSkipped
 	out.SkipReason = reason
-	_ = db.FinishRun(ctx, e.deps.DB, db.RunUpdate{
+	if err := db.FinishRun(ctx, e.deps.DB, db.RunUpdate{
 		ID: runID, Status: db.RunSkipped, FinishedAt: e.now().UTC().Format(time.RFC3339), SkipReason: reason,
-	})
+	}); err != nil {
+		e.deps.Log.Warn("failed to record skipped run", "automation", out.Automation, "error", err)
+	}
 	e.emit(events.LevelInfo, "automation.skip", out)
 	return out, nil
 }
@@ -191,9 +198,11 @@ func (e *Engine) finishSkipped(ctx context.Context, out Outcome, runID int64, re
 func (e *Engine) finishFailed(ctx context.Context, out Outcome, runID int64, runErr error) (Outcome, error) {
 	out.Status = db.RunFailed
 	out.Err = runErr.Error()
-	_ = db.FinishRun(ctx, e.deps.DB, db.RunUpdate{
+	if err := db.FinishRun(ctx, e.deps.DB, db.RunUpdate{
 		ID: runID, Status: db.RunFailed, FinishedAt: e.now().UTC().Format(time.RFC3339), Error: runErr.Error(),
-	})
+	}); err != nil {
+		e.deps.Log.Warn("failed to record failed run", "automation", out.Automation, "error", err)
+	}
 	e.emit(events.LevelError, "automation.fail", out)
 	return out, runErr
 }

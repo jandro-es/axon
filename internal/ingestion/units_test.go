@@ -27,6 +27,7 @@ func TestCheckIngestPolicy(t *testing.T) {
 		{"work denies random host", work, "evil.example.com", true},
 		{"work denies bare external", work, "news.ycombinator.com", true},
 		{"empty host", personal, "", true},
+		{"link-local metadata IP refused even when permissive", personal, "169.254.169.254", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

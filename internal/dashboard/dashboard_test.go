@@ -42,7 +42,7 @@ func newTestServer(t *testing.T) (*Server, *sql.DB, *events.Bus, tokens.Manager)
 func TestHealthEndpoint(t *testing.T) {
 	srv, _, _, _ := newTestServer(t)
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/health", nil))
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "http://127.0.0.1/health", nil))
 	if rec.Code != 200 {
 		t.Fatalf("status = %d", rec.Code)
 	}
@@ -62,7 +62,7 @@ func TestUsageMatchesManagerStatus(t *testing.T) {
 	_ = db.AddBudgetUsage(ctx, dbtx, "test", "day", time.Now().UTC().Format("2006-01-02"), 250, 0)
 
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/api/usage", nil))
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "http://127.0.0.1/api/usage", nil))
 	var out map[string]any
 	_ = json.Unmarshal(rec.Body.Bytes(), &out)
 
@@ -83,7 +83,7 @@ func TestTokensSplitByAutomationAndModel(t *testing.T) {
 	_, _ = db.InsertLedger(ctx, dbtx, db.LedgerRow{TS: ts, Profile: "test", Operation: "ingest.enrich", Model: "haiku", InputTokens: 50, OutputTokens: 10})
 
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/api/tokens?days=7", nil))
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "http://127.0.0.1/api/tokens?days=7", nil))
 	var buckets []db.TokenBucket
 	if err := json.Unmarshal(rec.Body.Bytes(), &buckets); err != nil {
 		t.Fatal(err)
@@ -110,7 +110,7 @@ func TestGraphEndpoint(t *testing.T) {
 	_ = db.InsertLink(ctx, dbtx, db.LinkRow{SrcNoteID: a, DstPath: "b", DstNoteID: &b, Kind: "wikilink"})
 
 	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/api/graph", nil))
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "http://127.0.0.1/api/graph", nil))
 	var g db.Graph
 	if err := json.Unmarshal(rec.Body.Bytes(), &g); err != nil {
 		t.Fatal(err)
@@ -186,6 +186,17 @@ func TestEventPersistence(t *testing.T) {
 	t.Fatal("event was not persisted to the events table")
 }
 
+func TestRejectsNonLoopbackHost(t *testing.T) {
+	srv, _, _, _ := newTestServer(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "http://evil.example.com/api/vault", nil)
+	req.Host = "evil.example.com"
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != 403 {
+		t.Errorf("non-loopback Host should be 403 (DNS-rebinding guard), got %d", rec.Code)
+	}
+}
+
 func TestLocalhostBindAndNoSecrets(t *testing.T) {
 	srv := New(Config{Profile: "p", Host: "127.0.0.1", Port: 7777})
 	if !strings.HasPrefix(srv.Addr(), "127.0.0.1:") {
@@ -196,7 +207,7 @@ func TestLocalhostBindAndNoSecrets(t *testing.T) {
 	srv2, dbtx, _, _ := newTestServer(t)
 	for _, path := range []string{"/health", "/api/usage", "/api/vault"} {
 		rec := httptest.NewRecorder()
-		srv2.Handler().ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		srv2.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "http://127.0.0.1"+path, nil))
 		body := rec.Body.String()
 		for _, secret := range []string{"sk-ant", "oauth", "OAUTH", "ANTHROPIC_API_KEY", "token_"} {
 			if strings.Contains(body, secret) {

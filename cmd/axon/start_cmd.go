@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -31,19 +32,33 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer deps.close()
 
 			bus := events.NewBus()
-			defer bus.Close()
 			logger := events.NewLogger(cmd.OutOrStdout(), events.FormatText, "info")
 			svc := deps.buildServices(bus)
 			out := cmd.OutOrStdout()
 
-			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+			sigCtx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
+			ctx, cancel := context.WithCancel(sigCtx)
+
+			// Shutdown order matters: cancel the context (so the dashboard +
+			// PersistEvents goroutines return), WAIT for them, and only THEN close
+			// the bus and DB — otherwise those goroutines race a closed DB/bus.
+			var wg sync.WaitGroup
+			defer func() {
+				cancel()
+				wg.Wait()
+				bus.Close()
+				deps.close()
+			}()
 
 			// Persist every event to the events table for the activity-feed history.
-			go dashboard.PersistEvents(ctx, bus, deps.db)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				dashboard.PersistEvents(ctx, bus, deps.db)
+			}()
 
 			// Schedule automations.
 			sched := scheduler.New(scheduler.Options{Log: logger, Jitter: 5 * time.Second})
@@ -75,7 +90,9 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 					Bus:     bus,
 					Static:  web.Assets(),
 				})
+				wg.Add(1)
 				go func() {
+					defer wg.Done()
 					if err := dash.ListenAndServe(ctx); err != nil {
 						fmt.Fprintf(out, "⚠ dashboard: %v\n", err)
 					}
@@ -88,7 +105,8 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 			fmt.Fprintln(out, "daemon running — press Ctrl-C to stop")
 
 			if once {
-				// Test/inspection mode: don't block on signals.
+				// Test/inspection mode: don't block on signals. The deferred
+				// cancel()+wg.Wait() tears down the dashboard/persister cleanly.
 				<-sched.Stop().Done()
 				return nil
 			}

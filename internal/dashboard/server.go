@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"net"
 	"net/http"
 	"time"
 
@@ -65,13 +66,39 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/graph", s.jsonHandler(s.dataGraph))
 	mux.HandleFunc("GET /api/activity", s.jsonHandler(s.dataActivity))
 	mux.Handle("/", s.staticHandler())
-	return mux
+	return s.guardHost(mux)
+}
+
+// guardHost rejects requests whose Host header is not loopback. This defeats
+// DNS-rebinding: a malicious web page the user visits cannot rebind a hostname
+// to 127.0.0.1 and read the (localhost-only) dashboard API, because the browser
+// still sends the attacker's Host header (FR-63 hardening).
+func (s *Server) guardHost(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		switch host {
+		case "localhost", "127.0.0.1", "::1", "[::1]":
+			next.ServeHTTP(w, r)
+		default:
+			http.Error(w, "forbidden host", http.StatusForbidden)
+		}
+	})
 }
 
 // ListenAndServe binds the configured (loopback) address and serves until ctx
-// is cancelled.
+// is cancelled. Every request's context derives from ctx (via BaseContext), so
+// cancelling ctx promptly unblocks in-flight SSE handlers instead of waiting out
+// the shutdown grace period.
 func (s *Server) ListenAndServe(ctx context.Context) error {
-	srv := &http.Server{Addr: s.addr, Handler: s.Handler(), ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{
+		Addr:              s.addr,
+		Handler:           s.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+		BaseContext:       func(net.Listener) context.Context { return ctx },
+	}
 	go func() {
 		<-ctx.Done()
 		shutCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)

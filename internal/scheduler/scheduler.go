@@ -106,6 +106,8 @@ func (s *Scheduler) jitterDelay() time.Duration {
 }
 
 func (s *Scheduler) ctx() context.Context {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.runCtx == nil {
 		return context.Background()
 	}
@@ -127,7 +129,9 @@ func (s *Scheduler) CatchUp(ctx context.Context) {
 
 // Start begins the schedule. ctx cancels in-flight jitter waits on Stop.
 func (s *Scheduler) Start(ctx context.Context) {
+	s.mu.Lock()
 	s.runCtx = ctx
+	s.mu.Unlock()
 	s.cron.Start()
 }
 

@@ -2,6 +2,7 @@ package ingestion
 
 import (
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/jandro-es/axon/internal/config"
@@ -30,6 +31,12 @@ func (e *PolicyError) Error() string {
 func CheckIngestPolicy(p config.PolicyConfig, host string) error {
 	if host == "" {
 		return &PolicyError{Host: host, Reason: "empty host"}
+	}
+	// Always refuse link-local literal IPs (cloud metadata 169.254.169.254,
+	// fe80::/10) regardless of the allowlist — never a legitimate ingest target,
+	// and the classic SSRF pivot.
+	if ip := net.ParseIP(host); ip != nil && ip.IsLinkLocalUnicast() {
+		return &PolicyError{Host: host, Reason: "link-local address refused (SSRF guard)"}
 	}
 	explicitAllow := matchesAnyExact(p.IngestDomainsAllow, host)
 
