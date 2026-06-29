@@ -1,17 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
+  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  RadialBarChart, RadialBar, PolarAngleAxis,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 
-const COLORS = ['#5b8def', '#3ecf8e', '#e6a23c', '#f06363', '#a78bfa', '#22d3ee', '#f472b6', '#94a3b8']
+/* ── palette ─────────────────────────────────────────────────────────────── */
+const SIGNAL = { teal: '#2fe0cf', indigo: '#6f7cf2', violet: '#b07cf0' }
+const SEMA = { ok: '#41d693', warn: '#f5b14b', err: '#fb6f6f', faint: '#616d83' }
+const PALETTE = ['#2fe0cf', '#6f7cf2', '#b07cf0', '#f5b14b', '#fb6f8f', '#41d693', '#5bb6f0', '#c4cdde']
+const color = (i) => PALETTE[((i % PALETTE.length) + PALETTE.length) % PALETTE.length]
 
-// useFetch polls a JSON endpoint on an interval.
+/* ── data hooks ──────────────────────────────────────────────────────────── */
 function useFetch(url, interval = 5000) {
   const [data, setData] = useState(null)
   useEffect(() => {
     let alive = true
-    const load = () =>
-      fetch(url).then((r) => r.json()).then((d) => alive && setData(d)).catch(() => {})
+    const load = () => fetch(url).then((r) => r.json()).then((d) => alive && setData(d)).catch(() => {})
     load()
     const id = setInterval(load, interval)
     return () => { alive = false; clearInterval(id) }
@@ -19,7 +24,6 @@ function useFetch(url, interval = 5000) {
   return data
 }
 
-// useSSE accumulates live events from the daemon's /events stream.
 function useSSE() {
   const [events, setEvents] = useState([])
   const [connected, setConnected] = useState(false)
@@ -27,171 +31,411 @@ function useSSE() {
     const es = new EventSource('/events')
     es.onopen = () => setConnected(true)
     es.onerror = () => setConnected(false)
-    es.onmessage = (e) => pushEvent(e)
-    // Named events (kind) also arrive; capture them generically.
-    const handler = (e) => pushEvent(e)
-    function pushEvent(e) {
-      try {
-        const ev = JSON.parse(e.data)
-        setEvents((prev) => [ev, ...prev].slice(0, 300))
-      } catch {}
+    const push = (e) => {
+      try { setEvents((prev) => [JSON.parse(e.data), ...prev].slice(0, 400)) } catch {}
     }
-    ;['ingest.done', 'automation.run', 'automation.skip', 'automation.fail', 'token.ledger', 'token.deny', 'budget'].forEach(
-      (k) => es.addEventListener(k, handler),
-    )
+    es.onmessage = push
+    ;['ingest.done', 'automation.run', 'automation.skip', 'automation.fail', 'token.ledger', 'token.deny', 'budget']
+      .forEach((k) => es.addEventListener(k, push))
     return () => es.close()
   }, [])
   return { events, connected }
 }
 
-function Gauge({ label, used, limit, pct, paused }) {
-  const p = Math.min(100, pct || 0)
+/* ── formatting ──────────────────────────────────────────────────────────── */
+const num = (n) => (n || 0).toLocaleString()
+const kfmt = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e4 ? 0 : 1) + 'k' : String(n || 0))
+const shortDay = (d) => (d || '').slice(5)
+const parseTags = (t) => { try { const a = JSON.parse(t || '[]'); return Array.isArray(a) ? a : [] } catch { return [] } }
+const shortOp = (op) => (op || '').replace(/^automation\./, '').replace(/^ingest\./, 'ingest:')
+function fmtTime(ts) { try { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) } catch { return ts } }
+function fmtDur(a, b) {
+  const s = (new Date(b) - new Date(a)) / 1000
+  if (!isFinite(s) || s < 0) return '—'
+  if (s < 1) return '<1s'
+  if (s < 60) return s.toFixed(s < 10 ? 1 : 0) + 's'
+  if (s < 3600) return Math.floor(s / 60) + 'm ' + Math.round(s % 60) + 's'
+  return Math.floor(s / 3600) + 'h ' + Math.round((s % 3600) / 60) + 'm'
+}
+
+/* ── aggregations ────────────────────────────────────────────────────────── */
+// tokensDaily collapses the per-day/operation/model buckets into a day series.
+function tokensDaily(tokens) {
+  const by = {}
+  for (const b of tokens || []) {
+    const d = (by[b.day] = by[b.day] || { day: b.day, input: 0, output: 0, total: 0 })
+    d.input += b.input || 0; d.output += b.output || 0; d.total += (b.input || 0) + (b.output || 0)
+  }
+  return Object.values(by).sort((a, b) => a.day.localeCompare(b.day))
+}
+// pieBy sums a token field by a key, returns top slices + an "other" rollup.
+function pieBy(tokens, keyFn, top = 6) {
+  const m = {}
+  for (const b of tokens || []) m[keyFn(b)] = (m[keyFn(b)] || 0) + (b.input || 0) + (b.output || 0)
+  const all = Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
+  if (all.length <= top) return all
+  const head = all.slice(0, top)
+  head.push({ name: 'other', value: all.slice(top).reduce((s, x) => s + x.value, 0) })
+  return head
+}
+const sumField = (arr, f) => (arr || []).reduce((s, x) => s + (x[f] || 0), 0)
+
+/* ── shared UI ───────────────────────────────────────────────────────────── */
+function Card({ title, meta, span, children }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      <div className="row" style={{ border: 'none', padding: 0 }}>
-        <span className="muted">{label}</span>
-        <span>{(used || 0).toLocaleString()} / {(limit || 0).toLocaleString()} ({p.toFixed(1)}%)</span>
-      </div>
-      <div className="bar"><span className={paused ? 'warn' : ''} style={{ width: `${p}%` }} /></div>
+    <section className={`card${span ? ' ' + span : ''}`}>
+      {title && <div className="eyebrow"><span>{title}</span>{meta != null && <span className="meta">{meta}</span>}</div>}
+      {children}
+    </section>
+  )
+}
+
+function Tile({ label, value, unit, accent }) {
+  return (
+    <div className="tile">
+      <div className={`num${accent ? ' accent' : ''}`}>{value}{unit && <small>{unit}</small>}</div>
+      <span className="lbl">{label}</span>
     </div>
   )
 }
 
-function UsageCard({ usage }) {
-  if (!usage) return <div className="card"><h2>Usage & budget</h2><span className="muted">loading…</span></div>
-  return (
-    <div className="card">
-      <h2>Usage & budget</h2>
-      <Gauge label="Day" used={usage.day_used} limit={usage.day_limit} pct={usage.day_pct} paused={usage.guard_paused} />
-      <Gauge label="Week" used={usage.week_used} limit={usage.week_limit} pct={usage.week_pct} paused={usage.guard_paused} />
-      <div className="muted" style={{ marginTop: 6 }}>
-        budget-guard: {usage.guard_paused ? <span className="status-failed">PAUSED (≥ {usage.guard_pct}%)</span> : <span className="status-ok">ok</span>}
-      </div>
-    </div>
-  )
-}
+function Empty({ children }) { return <div className="empty">{children}</div> }
 
-function VaultCard({ vault }) {
-  if (!vault) return null
-  const kpis = [
-    ['Notes', vault.notes], ['Links', vault.links], ['Words', vault.words],
-    ['Sources', vault.sources], ['Inbox backlog', vault.inbox_backlog],
-  ]
+function CustomTooltip({ active, payload, label }) {
+  if (!active || !payload || !payload.length) return null
   return (
-    <div className="card">
-      <h2>Vault growth</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {kpis.map(([k, v]) => (
-          <div key={k}><div className="kpi">{(v || 0).toLocaleString()}</div><small className="muted">{k}</small></div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// TokensCard stacks token spend by automation × model per day.
-function TokensCard({ tokens }) {
-  const { rows, keys } = useMemo(() => {
-    if (!tokens || !tokens.length) return { rows: [], keys: [] }
-    const keySet = new Set()
-    const byDay = {}
-    for (const b of tokens) {
-      const key = `${shortOp(b.operation)} · ${b.model}`
-      keySet.add(key)
-      byDay[b.day] = byDay[b.day] || { day: b.day }
-      byDay[b.day][key] = (byDay[b.day][key] || 0) + (b.input || 0) + (b.output || 0)
-    }
-    return { rows: Object.values(byDay), keys: [...keySet] }
-  }, [tokens])
-
-  return (
-    <div className="card full">
-      <h2>Tokens — by automation × model</h2>
-      {rows.length === 0 ? <span className="muted">no token spend yet</span> : (
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={rows}>
-            <CartesianGrid stroke="#2a2f3a" vertical={false} />
-            <XAxis dataKey="day" stroke="#8b93a7" fontSize={11} />
-            <YAxis stroke="#8b93a7" fontSize={11} />
-            <Tooltip contentStyle={{ background: '#1d212b', border: '1px solid #2a2f3a' }} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            {keys.map((k, i) => (
-              <Bar key={k} dataKey={k} stackId="t" fill={COLORS[i % COLORS.length]} />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      )}
-    </div>
-  )
-}
-
-function RunsCard({ runs }) {
-  return (
-    <div className="card">
-      <h2>Automation runs</h2>
-      <div className="feed">
-        {(runs || []).map((r) => (
-          <div className="row" key={r.id}>
-            <span>{r.automation}</span>
-            <span className={`status-${r.status}`}>{r.status}{r.skip_reason ? ` (${r.skip_reason})` : ''}</span>
-          </div>
-        ))}
-        {(!runs || runs.length === 0) && <span className="muted">no runs yet</span>}
-      </div>
-    </div>
-  )
-}
-
-function IngestionCard({ ingestion }) {
-  if (!ingestion) return null
-  const total = (ingestion.series || []).reduce((a, b) => a + b.count, 0)
-  return (
-    <div className="card">
-      <h2>Ingestion</h2>
-      <div className="kpi">{total}<small> sources</small></div>
-      <div className="row"><span className="muted">embedding queue</span><span>{ingestion.embedding_queue}</span></div>
-      {(ingestion.series || []).map((b, i) => (
-        <div className="row" key={i}><span className="muted">{b.day} · {b.status}</span><span>{b.count}</span></div>
+    <div className="tip">
+      {label != null && label !== '' && <div className="tip-h">{label}</div>}
+      {payload.map((p, i) => (
+        <div className="tip-r" key={i}>
+          <span className="k"><i className="swatch" style={{ background: p.color || p.payload?.fill || SIGNAL.teal }} />{p.name}</span>
+          <span className="v">{num(p.value)}</span>
+        </div>
       ))}
     </div>
   )
 }
 
-// GraphCard renders the knowledge graph (notes + wikilinks) with folder/tag filters.
-function GraphCard({ graph }) {
+class ErrorBoundary extends React.Component {
+  constructor(p) { super(p); this.state = { err: null } }
+  static getDerivedStateFromError(err) { return { err } }
+  render() {
+    if (this.state.err) {
+      return (
+        <Card title="view isolated" span="span-12">
+          <div className="error-card">
+            <p>This panel hit a snag, so it was isolated to keep the rest of the dashboard running. Switch tabs and back to retry.</p>
+            <code>{String(this.state.err)}</code>
+          </div>
+        </Card>
+      )
+    }
+    return this.props.children
+  }
+}
+
+/* ── budget ──────────────────────────────────────────────────────────────── */
+function gaugeColor(pct, paused) {
+  if (paused) return SEMA.err
+  if (pct >= 80) return SEMA.warn
+  return SIGNAL.teal
+}
+function Gauge({ cap, pct, paused }) {
+  const p = Math.max(0, Math.min(100, pct || 0))
+  const fill = gaugeColor(p, paused)
+  return (
+    <div className="gauge">
+      <ResponsiveContainer width="100%" height="100%">
+        <RadialBarChart innerRadius="72%" outerRadius="100%" data={[{ value: p }]} startAngle={90} endAngle={-270}>
+          <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
+          <RadialBar background={{ fill: '#1b2333' }} dataKey="value" cornerRadius={9} fill={fill} />
+        </RadialBarChart>
+      </ResponsiveContainer>
+      <div className="readout">
+        <div className="pct" style={{ color: fill }}>{p.toFixed(0)}%</div>
+        <div className="cap">{cap}</div>
+      </div>
+    </div>
+  )
+}
+
+function BudgetCard({ usage, span }) {
+  const u = usage || {}
+  return (
+    <Card title="Token budget" meta={u.guard_paused ? `guard paused ≥ ${u.guard_pct}%` : 'guard armed'} span={span}>
+      <div className="gauges">
+        <Gauge cap="Today" pct={u.day_pct} paused={u.guard_paused} />
+        <Gauge cap="This week" pct={u.week_pct} paused={u.guard_paused} />
+        <div className="gauge-info">
+          <div className="legend-row"><span className="k"><i className="swatch" style={{ background: gaugeColor(u.day_pct, u.guard_paused) }} />Day</span><span className="v">{num(u.day_used)} / {num(u.day_limit)}</span></div>
+          <div className="legend-row"><span className="k"><i className="swatch" style={{ background: gaugeColor(u.week_pct, u.guard_paused) }} />Week</span><span className="v">{num(u.week_used)} / {num(u.week_limit)}</span></div>
+          <div className="legend-row">
+            <span className="k">budget-guard</span>
+            <span className="v" style={{ color: u.guard_paused ? SEMA.err : SEMA.ok }}>{u.guard_paused ? 'PAUSED' : 'ok'}</span>
+          </div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+/* ── tokens ──────────────────────────────────────────────────────────────── */
+function TokenTrend({ tokens, span, title = 'Token spend' }) {
+  const daily = useMemo(() => tokensDaily(tokens), [tokens])
+  const total = sumField(daily, 'total')
+  return (
+    <Card title={title} meta={`${num(total)} tokens · ${daily.length}d`} span={span}>
+      {daily.length === 0 ? <Empty>No Claude usage recorded yet. Spend appears here as automations run.</Empty> : (
+        <ResponsiveContainer width="100%" height={250}>
+          <AreaChart data={daily} margin={{ top: 6, right: 6, bottom: 0, left: -8 }}>
+            <defs>
+              <linearGradient id="gIn" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={SIGNAL.indigo} stopOpacity={0.55} /><stop offset="100%" stopColor={SIGNAL.indigo} stopOpacity={0.02} /></linearGradient>
+              <linearGradient id="gOut" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={SIGNAL.teal} stopOpacity={0.6} /><stop offset="100%" stopColor={SIGNAL.teal} stopOpacity={0.02} /></linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="day" tickFormatter={shortDay} fontSize={11} tickLine={false} axisLine={false} minTickGap={24} />
+            <YAxis tickFormatter={kfmt} fontSize={11} tickLine={false} axisLine={false} width={42} />
+            <Tooltip content={<CustomTooltip />} labelFormatter={shortDay} />
+            <Area type="monotone" dataKey="input" name="input" stackId="1" stroke={SIGNAL.indigo} strokeWidth={1.5} fill="url(#gIn)" />
+            <Area type="monotone" dataKey="output" name="output" stackId="1" stroke={SIGNAL.teal} strokeWidth={1.5} fill="url(#gOut)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
+    </Card>
+  )
+}
+
+function DonutCard({ title, data, span }) {
+  const total = sumField(data, 'value')
+  return (
+    <Card title={title} meta={num(total)} span={span}>
+      {data.length === 0 ? <Empty>Nothing recorded yet.</Empty> : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ width: 168, height: 168, flex: '0 0 auto' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={data} dataKey="value" nameKey="name" innerRadius={50} outerRadius={78} paddingAngle={2} stroke="none">
+                  {data.map((d, i) => <Cell key={i} fill={color(i)} />)}
+                </Pie>
+                <Tooltip content={<CustomTooltip />} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="list" style={{ flex: 1, minWidth: 150 }}>
+            {data.map((d, i) => (
+              <div className="legend-row" key={d.name} style={{ padding: '5px 0' }}>
+                <span className="k"><i className="swatch" style={{ background: color(i) }} /><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>{d.name}</span></span>
+                <span className="v">{kfmt(d.value)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function TokensByOpModel({ tokens, span }) {
+  const { rows, keys } = useMemo(() => {
+    const keySet = new Set(); const byDay = {}
+    for (const b of tokens || []) {
+      const k = `${shortOp(b.operation)} · ${b.model}`
+      keySet.add(k)
+      byDay[b.day] = byDay[b.day] || { day: b.day }
+      byDay[b.day][k] = (byDay[b.day][k] || 0) + (b.input || 0) + (b.output || 0)
+    }
+    return { rows: Object.values(byDay).sort((a, b) => a.day.localeCompare(b.day)), keys: [...keySet] }
+  }, [tokens])
+  return (
+    <Card title="Spend by automation × model" meta={`${keys.length} streams`} span={span}>
+      {rows.length === 0 ? <Empty>No token spend yet.</Empty> : (
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={rows} margin={{ top: 6, right: 6, bottom: 0, left: -8 }}>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="day" tickFormatter={shortDay} fontSize={11} tickLine={false} axisLine={false} minTickGap={24} />
+            <YAxis tickFormatter={kfmt} fontSize={11} tickLine={false} axisLine={false} width={42} />
+            <Tooltip content={<CustomTooltip />} labelFormatter={shortDay} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+            {keys.map((k, i) => <Bar key={k} dataKey={k} stackId="t" fill={color(i)} radius={i === keys.length - 1 ? [3, 3, 0, 0] : 0} maxBarSize={34} />)}
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </Card>
+  )
+}
+
+/* ── automations / runs ──────────────────────────────────────────────────── */
+const STATUS_COLOR = { ok: SEMA.ok, failed: SEMA.err, skipped: SEMA.faint, 'dry-run': SEMA.warn }
+function RunsList({ runs, span, limit = 14, title = 'Recent automations' }) {
+  const list = (runs || []).slice(0, limit)
+  return (
+    <Card title={title} meta={runs ? `${runs.length} runs` : ''} span={span}>
+      <div className="list">
+        {list.map((r) => (
+          <div className="li" key={r.id}>
+            <span className={`sdot ${r.status}`} />
+            <span className="grow">{r.automation}{r.skip_reason ? <span className="muted" style={{ color: SEMA.faint }}> · {r.skip_reason}</span> : ''}</span>
+            {r.tokens > 0 && <span className="mono">{kfmt(r.tokens)} tok</span>}
+            <span className="mono">{r.finished_at ? fmtDur(r.started_at, r.finished_at) : '…'}</span>
+            <span className={`badge ${r.status}`}>{r.status}</span>
+          </div>
+        ))}
+        {list.length === 0 && <Empty>No automation runs yet. They’ll appear as the scheduler fires, or run one with <code>axon run &lt;name&gt;</code>.</Empty>}
+      </div>
+    </Card>
+  )
+}
+
+function RunStats({ runs, span }) {
+  const { dist, perAuto } = useMemo(() => {
+    const d = {}, pa = {}
+    for (const r of runs || []) {
+      d[r.status] = (d[r.status] || 0) + 1
+      pa[r.automation] = (pa[r.automation] || 0) + 1
+    }
+    return {
+      dist: Object.entries(d).map(([name, value]) => ({ name, value })),
+      perAuto: Object.entries(pa).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 8),
+    }
+  }, [runs])
+  return (
+    <Card title="Run outcomes" meta={`${runs ? runs.length : 0} total`} span={span}>
+      {(!runs || runs.length === 0) ? <Empty>No runs to summarise yet.</Empty> : (
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ width: 150, height: 150, flex: '0 0 auto' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={dist} dataKey="value" nameKey="name" innerRadius={44} outerRadius={70} paddingAngle={2} stroke="none">
+                  {dist.map((d) => <Cell key={d.name} fill={STATUS_COLOR[d.name] || SEMA.faint} />)}
+                </Pie>
+                <Tooltip content={<CustomTooltip />} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <ResponsiveContainer width="100%" height={150}>
+              <BarChart data={perAuto} layout="vertical" margin={{ left: 4, right: 12, top: 2, bottom: 2 }}>
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="name" width={108} fontSize={11} tickLine={false} axisLine={false} />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+                <Bar dataKey="value" name="runs" fill={SIGNAL.indigo} radius={[0, 4, 4, 0]} maxBarSize={16} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/* ── knowledge / ingestion ───────────────────────────────────────────────── */
+function VaultTiles({ vault, ingestion, span }) {
+  const v = vault || {}, ing = ingestion || {}
+  return (
+    <Card title="Vault" span={span}>
+      <div className="tiles">
+        <Tile label="Notes" value={num(v.notes)} accent />
+        <Tile label="Links" value={num(v.links)} />
+        <Tile label="Words" value={kfmt(v.words || 0)} />
+        <Tile label="Sources" value={num(v.sources)} />
+        <Tile label="Inbox" value={num(v.inbox_backlog)} />
+        <Tile label="Embed queue" value={num(ing.embedding_queue)} />
+      </div>
+    </Card>
+  )
+}
+
+function IngestTrend({ ingestion, span }) {
+  const { rows, statuses } = useMemo(() => {
+    const set = new Set(); const byDay = {}
+    for (const b of ingestion?.series || []) {
+      set.add(b.status || 'unknown')
+      byDay[b.day] = byDay[b.day] || { day: b.day }
+      byDay[b.day][b.status || 'unknown'] = (byDay[b.day][b.status || 'unknown'] || 0) + b.count
+    }
+    return { rows: Object.values(byDay).sort((a, b) => (a.day || '').localeCompare(b.day || '')), statuses: [...set] }
+  }, [ingestion])
+  return (
+    <Card title="Ingestion" meta={`${rows.length}d`} span={span}>
+      {rows.length === 0 ? <Empty>No sources ingested yet. Try <code>axon ingest &lt;url&gt;</code>.</Empty> : (
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={rows} margin={{ top: 6, right: 6, bottom: 0, left: -12 }}>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="day" tickFormatter={shortDay} fontSize={11} tickLine={false} axisLine={false} minTickGap={20} />
+            <YAxis allowDecimals={false} fontSize={11} tickLine={false} axisLine={false} width={34} />
+            <Tooltip content={<CustomTooltip />} labelFormatter={shortDay} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+            {statuses.map((s, i) => <Bar key={s} dataKey={s} stackId="s" fill={s === 'failed' ? SEMA.err : color(i)} radius={i === statuses.length - 1 ? [3, 3, 0, 0] : 0} maxBarSize={34} />)}
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </Card>
+  )
+}
+
+function FoldersCard({ graph, span }) {
+  const data = useMemo(() => {
+    const m = {}
+    for (const n of graph?.nodes || []) { const top = (n.path || '').split('/')[0]; if (top) m[top] = (m[top] || 0) + 1 }
+    return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 8)
+  }, [graph])
+  return (
+    <Card title="Notes by folder" meta={`${data.length} folders`} span={span}>
+      {data.length === 0 ? <Empty>No notes indexed yet.</Empty> : (
+        <ResponsiveContainer width="100%" height={Math.max(120, data.length * 30)}>
+          <BarChart data={data} layout="vertical" margin={{ left: 4, right: 14, top: 2, bottom: 2 }}>
+            <XAxis type="number" hide allowDecimals={false} />
+            <YAxis type="category" dataKey="name" width={104} fontSize={11} tickLine={false} axisLine={false} />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+            <Bar dataKey="value" name="notes" radius={[0, 4, 4, 0]} maxBarSize={18}>
+              {data.map((d, i) => <Cell key={d.name} fill={color(i)} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+    </Card>
+  )
+}
+
+/* ── knowledge graph (the signature) ─────────────────────────────────────── */
+function GraphCard({ graph, span }) {
   const [folder, setFolder] = useState('')
   const [tag, setTag] = useState('')
+  const [hover, setHover] = useState(null)
+
+  const nodesAll = graph?.nodes || []
+  const edgesAll = graph?.edges || []
+
   const folders = useMemo(() => {
-    const s = new Set()
-    ;(graph?.nodes || []).forEach((n) => { const top = n.path.split('/')[0]; if (top) s.add(top) })
-    return [...s].sort()
-  }, [graph])
+    const s = new Set(); nodesAll.forEach((n) => { const t = (n.path || '').split('/')[0]; if (t) s.add(t) }); return [...s].sort()
+  }, [nodesAll])
   const tags = useMemo(() => {
-    const s = new Set()
-    ;(graph?.nodes || []).forEach((n) => parseTags(n.tags).forEach((t) => s.add(t)))
-    return [...s].sort()
-  }, [graph])
+    const s = new Set(); nodesAll.forEach((n) => parseTags(n.tags).forEach((t) => s.add(t))); return [...s].sort()
+  }, [nodesAll])
+  const folderColor = useMemo(() => Object.fromEntries(folders.map((f, i) => [f, color(i)])), [folders])
 
   const view = useMemo(() => {
-    if (!graph) return { nodes: [], edges: [] }
-    let nodes = graph.nodes
-    if (folder) nodes = nodes.filter((n) => n.path.startsWith(folder + '/'))
+    let nodes = nodesAll
+    if (folder) nodes = nodes.filter((n) => (n.path || '').startsWith(folder + '/'))
     if (tag) nodes = nodes.filter((n) => parseTags(n.tags).includes(tag))
     const ids = new Set(nodes.map((n) => n.id))
-    const edges = graph.edges.filter((e) => ids.has(e.source) && ids.has(e.target))
-    // Deterministic circular layout.
-    const N = nodes.length
+    const edges = edgesAll.filter((e) => ids.has(e.source) && ids.has(e.target))
+    const CX = 300, CY = 232, R = 198, N = nodes.length
     const placed = nodes.map((n, i) => {
-      const a = (2 * Math.PI * i) / Math.max(1, N)
-      return { ...n, x: 200 + 160 * Math.cos(a), y: 170 + 140 * Math.sin(a) }
+      const ang = (2 * Math.PI * i) / Math.max(1, N)
+      const j = (i * 0.6180339887) % 1            // deterministic organic jitter
+      const rad = R * (0.5 + 0.5 * j)
+      return { ...n, x: CX + rad * Math.cos(ang), y: CY + rad * Math.sin(ang) }
     })
     const pos = Object.fromEntries(placed.map((n) => [n.id, n]))
-    return { nodes: placed, edges, pos }
-  }, [graph, folder, tag])
+    const adj = {}
+    edges.forEach((e) => { (adj[e.source] = adj[e.source] || new Set()).add(e.target); (adj[e.target] = adj[e.target] || new Set()).add(e.source) })
+    return { nodes: placed, edges, pos, adj }
+  }, [nodesAll, edgesAll, folder, tag])
+
+  const neighbors = hover != null ? (view.adj[hover] || new Set()) : null
+  const dim = (id) => hover != null && id !== hover && !(neighbors && neighbors.has(id))
 
   return (
-    <div className="card full">
-      <h2>Knowledge graph — {view.nodes.length} notes, {view.edges.length} links</h2>
+    <Card title="Knowledge graph" meta={`${view.nodes.length} notes · ${view.edges.length} links`} span={span}>
       <div className="filters">
         <select value={folder} onChange={(e) => setFolder(e.target.value)}>
           <option value="">all folders</option>
@@ -202,45 +446,97 @@ function GraphCard({ graph }) {
           {tags.map((t) => <option key={t} value={t}>#{t}</option>)}
         </select>
       </div>
-      <svg width="100%" viewBox="0 0 400 340" style={{ background: '#13161d', borderRadius: 8 }}>
-        {view.edges.map((e, i) => {
-          const a = view.pos[e.source], b = view.pos[e.target]
-          if (!a || !b) return null
-          return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#2a2f3a" strokeWidth="1" />
-        })}
-        {view.nodes.map((n) => (
-          <g key={n.id}>
-            <circle cx={n.x} cy={n.y} r={4 + Math.min(6, (n.words || 0) / 200)} fill={COLORS[(n.type || '').length % COLORS.length]}>
-              <title>{n.path}</title>
-            </circle>
-          </g>
-        ))}
-        {view.nodes.length === 0 && <text x="200" y="170" textAnchor="middle">no notes match</text>}
-      </svg>
-    </div>
+      <div className="graph-wrap">
+        <svg viewBox="0 0 600 464" role="img" aria-label="knowledge graph">
+          <defs>
+            <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="2.4" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+          </defs>
+          {view.edges.map((e, i) => {
+            const a = view.pos[e.source], b = view.pos[e.target]
+            if (!a || !b) return null
+            const lit = hover != null && (e.source === hover || e.target === hover)
+            return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+              stroke={lit ? SIGNAL.teal : '#26304a'} strokeWidth={lit ? 1.4 : 0.7}
+              strokeOpacity={hover == null ? 0.5 : lit ? 0.85 : 0.08} />
+          })}
+          {view.nodes.map((n) => {
+            const r = 3.2 + Math.min(7, (n.words || 0) / 220) + (n.id === hover ? 2 : 0)
+            const f = folderColor[(n.path || '').split('/')[0]] || SIGNAL.teal
+            return (
+              <circle key={n.id} cx={n.x} cy={n.y} r={r} fill={f}
+                fillOpacity={dim(n.id) ? 0.22 : 1}
+                filter={n.id === hover ? 'url(#glow)' : undefined}
+                style={{ cursor: 'pointer', transition: 'fill-opacity .12s' }}
+                onMouseEnter={() => setHover(n.id)} onMouseLeave={() => setHover(null)}>
+                <title>{n.path}</title>
+              </circle>
+            )
+          })}
+          {hover != null && view.pos[hover] && (
+            <text className="node-label" x={view.pos[hover].x} y={view.pos[hover].y - 11} textAnchor="middle">
+              {(view.pos[hover].path || '').split('/').pop().replace(/\.md$/, '')}
+            </text>
+          )}
+          {view.nodes.length === 0 && (
+            <text x="300" y="232" textAnchor="middle" fill={SEMA.faint} fontSize="13">
+              No notes match — adjust the filters, or run `axon reindex`.
+            </text>
+          )}
+        </svg>
+      </div>
+      {folders.length > 0 && (
+        <div className="graph-legend">
+          {folders.map((f) => <span key={f}><i className="swatch" style={{ background: folderColor[f] }} />{f}</span>)}
+        </div>
+      )}
+    </Card>
   )
 }
 
-function ActivityCard({ live, initial }) {
+/* ── activity feed ───────────────────────────────────────────────────────── */
+function ActivityCard({ live, initial, span }) {
+  const [level, setLevel] = useState('all')
   const merged = useMemo(() => {
     const seen = new Set(live.map((e) => e.message + e.ts))
     const base = (initial || []).filter((e) => !seen.has(e.message + e.ts))
-    return [...live, ...base].slice(0, 200)
+    return [...live, ...base].slice(0, 300)
   }, [live, initial])
+  const counts = useMemo(() => {
+    const c = { all: merged.length, info: 0, warn: 0, error: 0 }
+    merged.forEach((e) => { if (c[e.level] != null) c[e.level]++ })
+    return c
+  }, [merged])
+  const shown = level === 'all' ? merged : merged.filter((e) => e.level === level)
   return (
-    <div className="card full">
-      <h2>Activity feed</h2>
+    <Card title="Activity" meta={`${merged.length} events`} span={span}>
+      <div className="filters">
+        <div className="seg">
+          {['all', 'info', 'warn', 'error'].map((l) => (
+            <button key={l} className={level === l ? 'on' : ''} onClick={() => setLevel(l)}>{l} {counts[l] ? `· ${counts[l]}` : ''}</button>
+          ))}
+        </div>
+      </div>
       <div className="feed">
-        {merged.map((e, i) => (
+        {shown.map((e, i) => (
           <div className={`evt lvl-${e.level}`} key={i}>
-            <span className="muted">{fmtTime(e.ts)}</span> [{e.kind}] {e.message}
+            <span className="t">{fmtTime(e.ts)}</span>
+            {e.kind && <span className="kind">{e.kind}</span>}
+            <span className="msg">{e.message}</span>
           </div>
         ))}
-        {merged.length === 0 && <span className="muted">no activity yet</span>}
+        {shown.length === 0 && <Empty>No activity yet. Runs, ingests and token events stream here live.</Empty>}
       </div>
-    </div>
+    </Card>
   )
 }
+
+/* ── app shell ───────────────────────────────────────────────────────────── */
+const TABS = [
+  ['overview', 'Overview'], ['tokens', 'Tokens'], ['automations', 'Automations'],
+  ['knowledge', 'Knowledge'], ['graph', 'Graph'], ['activity', 'Activity'],
+]
 
 export default function App() {
   const [tab, setTab] = useState('overview')
@@ -254,31 +550,75 @@ export default function App() {
   const activity = useFetch('/api/activity', 15000)
   const { events, connected } = useSSE()
 
-  const tabs = ['overview', 'tokens', 'runs', 'ingestion', 'graph', 'activity']
+  const healthy = health?.status === 'ok'
+  const byModel = useMemo(() => pieBy(tokens, (b) => b.model), [tokens])
+  const byOp = useMemo(() => pieBy(tokens, (b) => shortOp(b.operation)), [tokens])
+
   return (
-    <>
-      <div className="header">
-        <h1>AXON</h1>
-        <span className={`pill ${health?.status === 'ok' ? 'ok' : 'warn'}`}>{health?.profile || '—'} · {health?.status || '…'}</span>
-        <span className={`pill ${connected ? 'ok' : 'warn'}`}>{connected ? 'live' : 'offline'}</span>
-      </div>
-      <div className="tabs">
-        {tabs.map((t) => (
-          <button key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{t}</button>
+    <div className="app">
+      <header className="topbar">
+        <div className="topbar-inner">
+          <div className="brand">
+            <span className="brand-mark" />
+            <span className="brand-name"><b>AX</b>ON</span>
+            <span className="brand-sub">second-brain console</span>
+          </div>
+          <div className="topbar-spacer" />
+          <span className={`chip ${healthy ? 'ok' : 'warn'}`}><i className="dot" />{health?.profile || '—'}</span>
+          <span className={`chip ${health?.db ? 'ok' : 'warn'}`}><i className="dot" />db {health?.db ? 'ok' : '—'}</span>
+          <span className={`chip ${connected ? 'live' : 'off'}`}><i className="dot" />{connected ? 'live' : 'offline'}</span>
+        </div>
+        <div className="signal-line" />
+      </header>
+
+      <nav className="nav">
+        {TABS.map(([id, label]) => (
+          <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>{label}</button>
         ))}
-      </div>
-      <div className="grid">
-        {tab === 'overview' && <><UsageCard usage={usage} /><VaultCard vault={vault} /><RunsCard runs={runs} /><TokensCard tokens={tokens} /></>}
-        {tab === 'tokens' && <><TokensCard tokens={tokens} /><UsageCard usage={usage} /></>}
-        {tab === 'runs' && <RunsCard runs={runs} />}
-        {tab === 'ingestion' && <><IngestionCard ingestion={ingestion} /><VaultCard vault={vault} /></>}
-        {tab === 'graph' && <GraphCard graph={graph} />}
-        {tab === 'activity' && <ActivityCard live={events} initial={activity} />}
-      </div>
-    </>
+      </nav>
+
+      <ErrorBoundary key={tab}>
+        <main className="grid">
+          {tab === 'overview' && <>
+            <VaultTiles vault={vault} ingestion={ingestion} span="span-8" />
+            <BudgetCard usage={usage} span="span-4" />
+            <TokenTrend tokens={tokens} span="span-8" />
+            <RunsList runs={runs} span="span-4" limit={9} />
+            <IngestTrend ingestion={ingestion} span="span-6" />
+            <ActivityCard live={events} initial={activity} span="span-6" />
+          </>}
+
+          {tab === 'tokens' && <>
+            <BudgetCard usage={usage} span="span-5" />
+            <TokenTrend tokens={tokens} span="span-7" />
+            <DonutCard title="By model" data={byModel} span="span-4" />
+            <DonutCard title="By operation" data={byOp} span="span-4" />
+            <Card title="Totals" span="span-4">
+              <div className="tiles">
+                <Tile label="Total" value={kfmt(sumField(tokens, 'input') + sumField(tokens, 'output'))} accent />
+                <Tile label="Input" value={kfmt(sumField(tokens, 'input'))} />
+                <Tile label="Output" value={kfmt(sumField(tokens, 'output'))} />
+              </div>
+            </Card>
+            <TokensByOpModel tokens={tokens} span="span-12" />
+          </>}
+
+          {tab === 'automations' && <>
+            <RunStats runs={runs} span="span-12" />
+            <RunsList runs={runs} span="span-12" limit={40} title="Run history" />
+          </>}
+
+          {tab === 'knowledge' && <>
+            <VaultTiles vault={vault} ingestion={ingestion} span="span-12" />
+            <IngestTrend ingestion={ingestion} span="span-7" />
+            <FoldersCard graph={graph} span="span-5" />
+          </>}
+
+          {tab === 'graph' && <GraphCard graph={graph} span="span-12" />}
+
+          {tab === 'activity' && <ActivityCard live={events} initial={activity} span="span-12" />}
+        </main>
+      </ErrorBoundary>
+    </div>
   )
 }
-
-function shortOp(op) { return (op || '').replace(/^automation\./, '').replace(/^ingest\./, 'ingest:') }
-function parseTags(t) { try { const a = JSON.parse(t || '[]'); return Array.isArray(a) ? a : [] } catch { return [] } }
-function fmtTime(ts) { try { return new Date(ts).toLocaleTimeString() } catch { return ts } }
