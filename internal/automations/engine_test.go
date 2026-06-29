@@ -18,6 +18,10 @@ import (
 	"github.com/jandro-es/axon/internal/vault"
 )
 
+// harnessClock is the fixed time every harness-built engine and token manager
+// runs at, so tests are deterministic and never depend on the real date.
+var harnessClock = time.Date(2026, 6, 28, 12, 0, 0, 0, time.UTC)
+
 type harness struct {
 	engine *Engine
 	vault  *vault.FS
@@ -46,14 +50,17 @@ func newHarness(t *testing.T, limits config.LimitsConfig) *harness {
 		Models: config.ModelsConfig{Classify: "haiku", Routine: "sonnet", Synthesis: "opus"},
 		Limits: limits,
 	}
+	// The manager shares the harness clock so budget windows are keyed to the
+	// same day the engine reports — otherwise budget tests depend on the real
+	// wall-clock date and rot over time.
 	mgr := tokens.New(d, fake, searcher, nil, tokens.Config{
 		Profile: "test", AuthMode: "subscription", Models: profile.Models, Limits: limits,
+		Now: func() time.Time { return harnessClock },
 	})
-	fixed := time.Date(2026, 6, 28, 12, 0, 0, 0, time.UTC)
 	eng := NewEngine(EngineDeps{
 		Profile: "test", Config: profile, DB: d, Vault: vault.NewFS(vdir),
 		Manager: mgr, Searcher: searcher, Embedder: emb,
-		Now: func() time.Time { return fixed },
+		Now: func() time.Time { return harnessClock },
 	})
 	return &harness{engine: eng, vault: vault.NewFS(vdir), db: d, agent: fake}
 }
@@ -176,7 +183,7 @@ func TestEngineBudgetPausePausesNonEssential(t *testing.T) {
 	limits := config.LimitsConfig{DailyTokens: 100, WeeklyTokens: 1000, GuardPauseAtPct: 80}
 	h := newHarness(t, limits)
 	ctx := context.Background()
-	_ = db.AddBudgetUsage(ctx, h.db, "test", "day", "2026-06-28", 90, 0)
+	_ = db.AddBudgetUsage(ctx, h.db, "test", "day", harnessClock.UTC().Format("2006-01-02"), 90, 0)
 
 	nonEssential := fakeAutomation{name: "ne", essential: false, changed: true,
 		runFn: func(ctx context.Context, rc RunCtx) (RunResult, error) { return RunResult{Summary: "ran"}, nil }}

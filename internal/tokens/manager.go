@@ -111,6 +111,9 @@ type Config struct {
 	Models   config.ModelsConfig
 	Limits   config.LimitsConfig
 	Prices   map[string]config.Price
+	// Now optionally overrides the clock used for budget windows and ledger
+	// timestamps. Defaults to time.Now; set only by tests for determinism.
+	Now func() time.Time
 }
 
 // manager is the concrete chokepoint.
@@ -127,6 +130,10 @@ type manager struct {
 // New builds a Manager. agent and searcher may be nil for read-only callers;
 // Run requires a non-nil agent and BuildContext a non-nil searcher.
 func New(database *sql.DB, ag agent.Agent, searcher *search.Searcher, bus *events.Bus, cfg Config) Manager {
+	now := cfg.Now
+	if now == nil {
+		now = time.Now
+	}
 	return &manager{
 		db:        database,
 		agent:     ag,
@@ -134,7 +141,7 @@ func New(database *sql.DB, ag agent.Agent, searcher *search.Searcher, bus *event
 		bus:       bus,
 		estimator: newCachingEstimator(HeuristicEstimator{}),
 		cfg:       cfg,
-		now:       time.Now,
+		now:       now,
 	}
 }
 
