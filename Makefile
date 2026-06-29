@@ -7,7 +7,7 @@ PREFIX ?= /usr/local
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X main.version=$(VERSION)
 
-.PHONY: all build web binary test race vet fmt fmtcheck cover clean install tidy
+.PHONY: all build web binary test race vet fmt fmtcheck cover clean install tidy setup uninstall-macos
 
 all: web binary
 
@@ -54,6 +54,14 @@ tidy:
 install: binary
 	install -d $(PREFIX)/bin
 	install -m 0755 $(BINARY) $(PREFIX)/bin/$(BINARY)
+
+## setup: full macOS install — build, install binary, scaffold ~/.axon, Ollama + daemon at login
+setup:
+	PREFIX=$(PREFIX) scripts/install-macos.sh $(ARGS)
+
+## uninstall-macos: undo `make setup` (add ARGS="--purge" to also delete ~/.axon)
+uninstall-macos:
+	PREFIX=$(PREFIX) scripts/uninstall-macos.sh $(ARGS)
 
 ## clean: remove build artifacts
 clean:

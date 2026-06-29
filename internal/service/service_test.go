@@ -9,7 +9,8 @@ func testParams() Params {
 	return Params{
 		Profile:    "work",
 		Binary:     "/usr/local/bin/axon",
-		ConfigPath: "/home/u/axon.config.yaml",
+		ConfigPath: "/home/u/.axon/config.yaml",
+		EnvPath:    "/home/u/.axon/.env",
 		ConfigDir:  "/home/u/.axon/profiles/work/claude",
 		AxonHome:   "/home/u/.axon",
 		LogDir:     "/home/u/.axon/profiles/work/logs",
@@ -40,8 +41,8 @@ func TestUnitsAreProfileScopedAndIsolated(t *testing.T) {
 		if !strings.Contains(u.Label, "work") && !strings.Contains(u.Content, "work") {
 			t.Errorf("%s unit not profile-scoped: label=%q", u.Kind, u.Label)
 		}
-		// Runs the daemon with the right config + profile.
-		for _, want := range []string{"start", "axon.config.yaml", "work"} {
+		// Runs the daemon with the right config + profile + secrets file.
+		for _, want := range []string{"start", "config.yaml", "work", "--env", "/home/u/.axon/.env"} {
 			if !strings.Contains(u.Content, want) {
 				t.Errorf("%s unit missing %q", u.Kind, want)
 			}
@@ -69,6 +70,18 @@ func TestUnitsAreDeterministic(t *testing.T) {
 	}
 	if a, b := SystemdUnit(testParams()).Content, SystemdUnit(testParams()).Content; a != b {
 		t.Error("systemd unit is not deterministic")
+	}
+}
+
+func TestEnvFlagIsOptional(t *testing.T) {
+	p := testParams()
+	p.EnvPath = ""
+	if c := LaunchdUnit(p).Content; strings.Contains(c, "--env") {
+		t.Errorf("expected no --env flag when EnvPath is empty:\n%s", c)
+	}
+	p.EnvPath = "/home/u/.axon/.env"
+	if c := LaunchdUnit(p).Content; !strings.Contains(c, "--env") {
+		t.Error("expected --env flag when EnvPath is set")
 	}
 }
 

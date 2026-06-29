@@ -86,7 +86,7 @@ This requirement is first-class. Mechanisms the build must implement:
 
 Requirements "easily replicable" + "personal and work, different accounts/hardware/restrictions" imply:
 
-- **Declarative config** (`axon.config.yaml`) + **secrets** (`.env`/OS keychain), with **profiles** that fully isolate data dir, secrets, Claude account/credentials, automation set and a **policy** block (egress allowlist, ingestion domain allow/deny, redaction rules, budgets, which automations may run, local-only data residency).
+- **Declarative config** (`config.yaml`, at `~/.axon/config.yaml` by default) + **secrets** (`.env`/OS keychain), with **profiles** that fully isolate data dir, secrets, Claude account/credentials, automation set and a **policy** block (egress allowlist, ingestion domain allow/deny, redaction rules, budgets, which automations may run, local-only data residency).
 - **Profile-scoped Claude Code config.** Separate accounts via a per-profile `CLAUDE_CONFIG_DIR`/credentials and per-profile `auth_mode` + `CLAUDE_CODE_OAUTH_TOKEN` (no API key in the default modes).
 - **Idempotent bootstrap.** `axon init` is safe to re-run; it converges the environment and reports exactly what it changed. No hidden global state.
 - **Cross-platform scheduling.** Prefer an in-daemon scheduler (e.g. `gocron` or `robfig/cron/v3` in Go) over OS cron so a single config works on macOS/Linux/Windows; optionally *emit* launchd/systemd/Task-Scheduler units for users who want the daemon supervised by the OS.

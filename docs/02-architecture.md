@@ -73,7 +73,7 @@ axon/
     ...          # (db, vault, ingestion, embeddings, agent, tokens, scheduler, automations, api, events — see below)
   web/           # dashboard SPA — Vite + React + Recharts; built to web/dist and embedded via embed.FS
   plugin/        # Claude Code plugin: skills/, agents/, hooks/, .mcp.json template, CLAUDE.md template
-  scripts/       # install.sh / install.ps1, prereq checks
+  scripts/       # install-macos.sh / uninstall-macos.sh (+ _common.sh): macOS build, install, launchd/Ollama wiring
   templates/     # vault scaffolding (folder READMEs, note templates, Dataview dashboards)
   axon.config.example.yaml
   .env.example

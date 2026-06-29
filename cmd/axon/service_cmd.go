@@ -32,12 +32,14 @@ func newServiceCmd(gf *globalFlags) *cobra.Command {
 			}
 			paths := profile.Paths()
 			absCfg, _ := filepath.Abs(gf.configPath)
+			absEnv, _ := filepath.Abs(gf.envPath)
 			binary, _ := os.Executable()
 
 			unit, err := service.ForOS(runtime.GOOS, service.Params{
 				Profile:    name,
 				Binary:     binary,
 				ConfigPath: absCfg,
+				EnvPath:    absEnv,
 				ConfigDir:  paths.ConfigDir,
 				AxonHome:   config.AxonHome(),
 				LogDir:     paths.LogsDir,

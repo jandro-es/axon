@@ -80,6 +80,35 @@ ollama pull nomic-embed-text
 
 ## 3. Installation
 
+### Quick install (macOS)
+
+One command builds everything, installs it, and wires up auto-start:
+
+```bash
+git clone https://github.com/jandro-es/axon.git && cd axon
+make setup          # == scripts/install-macos.sh
+```
+
+It is idempotent and verbose, and does the following:
+
+1. **Checks prerequisites** — Go, Node (optional, for the dashboard SPA), the `claude` CLI, and Ollama (installs Ollama via Homebrew if missing).
+2. **Builds** the dashboard SPA + the `axon` binary and installs it to `/usr/local/bin/axon` (override with `--prefix DIR`; uses `sudo` only if the target isn't writable).
+3. **Scaffolds** `~/.axon/config.yaml` and `~/.axon/.env` (chmod 600) from the shipped examples. On the **first** run it offers to open the config so you can set your `vault_path`; re-run `make setup` after editing.
+4. **Starts Ollama at login** via `brew services` and pulls your embedding model.
+5. **Runs `axon init`** to provision the profile (data dir, DB, vault scaffold, `.claude` wiring, first index).
+6. **Installs a launchd agent** (`~/Library/LaunchAgents/com.axon.<profile>.plist`) so the AXON daemon starts at login and restarts on crash, then verifies the dashboard answers.
+
+Useful flags: `--no-service` (skip auto-start), `--no-ollama` (manage Ollama yourself), `--profile NAME`, `--prefix DIR`, `--skip-build`.
+
+**Uninstall** everything with:
+
+```bash
+make uninstall-macos                 # stop + remove the daemon and binary; keep ~/.axon
+make uninstall-macos ARGS="--purge"  # also delete ~/.axon (config, secrets, DB) — your vault is never touched
+```
+
+> On **Linux**, use the manual build below plus `axon init` and `axon service install` (which emits a systemd `--user` unit). The steps are identical; only the auto-start mechanism differs.
+
 ### Build from source
 
 ```bash
@@ -461,13 +490,16 @@ The work profile is typically **more constrained**: a restrictive
 
 ## 13. Running as a background service
 
+On macOS, `make setup` already installs and loads the launchd agent for you — this
+section is for doing it by hand or on Linux/Windows.
+
 For OS-supervised operation (auto-start, restart on failure), emit a service unit
 for your platform — launchd (macOS), systemd `--user` (Linux), Task Scheduler
 (Windows):
 
 ```bash
-axon service print       # preview the generated unit + install/enable commands
-axon service install     # write it to the conventional location
+axon service print --env ~/.axon/.env     # preview the generated unit + install/enable commands
+axon service install --env ~/.axon/.env   # write it to the conventional location
 # then load it, e.g. on macOS:
 launchctl load ~/Library/LaunchAgents/com.axon.personal.plist
 # or on Linux:
@@ -476,9 +508,12 @@ systemctl --user enable --now axon-personal.service
 axon service uninstall   # remove the unit
 ```
 
-Units are profile-scoped and carry the isolated `AXON_HOME` / `CLAUDE_CONFIG_DIR`,
-so the right account and data dir are always used. Without a service, just run
-`axon start` in a terminal (Ctrl-C to stop).
+Units are profile-scoped and carry the isolated `AXON_HOME` / `CLAUDE_CONFIG_DIR`
+plus the `--config` and `--env` paths, so the supervised daemon uses the right
+account, data dir **and secrets** even though launchd/systemd start it with an
+empty working directory (where a bare `.env` wouldn't be found). Pass the same
+`--env` you use elsewhere. Without a service, just run `axon start` in a terminal
+(Ctrl-C to stop).
 
 ---
 
@@ -503,7 +538,7 @@ the vault is the source of truth, a full restore is: copy the vault back and run
 
 | Command | Purpose |
 |---------|---------|
-| `axon config validate` | Validate `axon.config.yaml` + the active profile. |
+| `axon config validate` | Validate `config.yaml` (default `~/.axon/config.yaml`) + the active profile. |
 | `axon doctor` | Prerequisite checks with remediation hints. |
 | `axon init` | Idempotently provision the profile (steps in §5). |
 | `axon reindex [--embeddings]` | Rebuild notes mirror + link graph from the vault. |

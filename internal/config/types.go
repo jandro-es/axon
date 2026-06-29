@@ -1,7 +1,8 @@
 // Package config defines AXON's declarative configuration surface: the typed
-// schema for axon.config.yaml, profile resolution, secret references, path
-// expansion and content hashing. Every other package depends on this one; it
-// depends on nothing internal (see the dependency rule in docs/02).
+// schema for config.yaml (read from ~/.axon/config.yaml by default), profile
+// resolution, secret references, path expansion and content hashing. Every other
+// package depends on this one; it depends on nothing internal (see the
+// dependency rule in docs/02).
 package config
 
 import (
@@ -10,7 +11,7 @@ import (
 	"strings"
 )
 
-// Config is the root of axon.config.yaml. One installation runs ONE active
+// Config is the root of config.yaml. One installation runs ONE active
 // profile, but the profiles map keeps both templates under version control.
 type Config struct {
 	Version       int                `yaml:"version" validate:"required,eq=1"`

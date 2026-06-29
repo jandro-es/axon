@@ -17,7 +17,8 @@ import (
 type Params struct {
 	Profile    string
 	Binary     string // absolute path to the axon binary
-	ConfigPath string // absolute path to axon.config.yaml
+	ConfigPath string // absolute path to the config file
+	EnvPath    string // absolute path to the .env secrets file (optional)
 	ConfigDir  string // CLAUDE_CONFIG_DIR (profile-isolated auth)
 	AxonHome   string // AXON_HOME
 	LogDir     string // where to write stdout/stderr
@@ -56,9 +57,16 @@ func ForOS(goos string, p Params) (Unit, error) {
 // label is the profile-scoped service identifier.
 func (p Params) label() string { return "axon-" + p.Profile }
 
-// args are the daemon start arguments shared by every unit.
+// args are the daemon start arguments shared by every unit. The --env flag is
+// included only when EnvPath is set, so the supervised daemon loads the profile's
+// secrets (e.g. CLAUDE_CODE_OAUTH_TOKEN) even though launchd/systemd start it
+// with an empty working directory where a bare ".env" would not be found.
 func (p Params) startArgs() []string {
-	return []string{"start", "--config", p.ConfigPath, "--profile", p.Profile}
+	args := []string{"start", "--config", p.ConfigPath, "--profile", p.Profile}
+	if p.EnvPath != "" {
+		args = append(args, "--env", p.EnvPath)
+	}
+	return args
 }
 
 // LaunchdUnit generates a macOS launchd LaunchAgent plist.

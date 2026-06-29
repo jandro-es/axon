@@ -24,7 +24,7 @@ var assets embed.FS
 type Params struct {
 	Profile    string // active profile name
 	Binary     string // absolute path to the axon binary
-	ConfigPath string // absolute path to axon.config.yaml
+	ConfigPath string // absolute path to the config file (config.yaml)
 	ConfigDir  string // CLAUDE_CONFIG_DIR (profile-isolated auth)
 	AxonHome   string // AXON_HOME
 }

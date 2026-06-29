@@ -31,7 +31,17 @@ embeddings. SQLite is derived and disposable. *(Diagrams are editable —
 
 ---
 
-## Build & run
+## Install (macOS, one command)
+
+```bash
+git clone https://github.com/jandro-es/axon.git && cd axon
+make setup           # build, install /usr/local/bin/axon, scaffold ~/.axon,
+                     # start Ollama + the AXON daemon at login (idempotent)
+```
+
+`make setup` (a thin wrapper over [`scripts/install-macos.sh`](scripts/install-macos.sh)) checks prerequisites, builds the binary + dashboard, installs everything, and — on the first run — opens `~/.axon/config.yaml` so you can set your `vault_path`. Re-run it any time after editing the config; it converges instead of clobbering. Undo it all with `make uninstall-macos` (add `ARGS="--purge"` to also delete `~/.axon`). See [docs/GUIDE.md](docs/GUIDE.md) for options (`--no-service`, `--no-ollama`, `--prefix`).
+
+## Build & run (manual / Linux)
 
 ```bash
 git clone https://github.com/jandro-es/axon.git && cd axon
@@ -62,7 +72,7 @@ Prerequisites: the `claude` CLI (logged in for your `auth_mode`), and **Ollama**
 |---------|--------------|
 | `axon init` | Idempotently provision the profile: data dir, DB, embedding check, vault scaffold, `.claude/` (CLAUDE.md, `.mcp.json`, hooks, plugin), Dataview dashboards, first index. |
 | `axon doctor` | Prerequisite checks: config, stray `ANTHROPIC_API_KEY`, `claude`/`ollama`, vault writable, port free, residency. |
-| `axon config validate` | Validate `axon.config.yaml`. |
+| `axon config validate` | Validate `config.yaml` (default `~/.axon/config.yaml`). |
 | `axon reindex [--embeddings]` | Rebuild the notes mirror + link graph from the vault (ADR-006); `--embeddings` re-embeds. |
 | `axon ingest <url\|path> [--dry-run]` | Policy-gated fetch → clean → redact → summarise → write → chunk → embed → index. |
 | `axon search <query> [--top-k]` | Hybrid lexical (FTS5) + semantic (vector) search. |
@@ -91,7 +101,7 @@ A cross-platform **Go** daemon (`axon`) — a single self-contained binary — t
 2. **The vault is the source of truth.** Databases are derived and disposable; they can always be rebuilt from the Markdown. Never store knowledge that exists *only* in SQLite.
 3. **Token frugality is a feature, not an afterthought.** Every Claude call is measured, budgeted, and justified. Automations run on *new material*, not on a clock for its own sake. See [Component 07](docs/07-component-context-token-manager.md).
 4. **Deterministic where it matters.** Guardrails (budgets, redaction, egress, wikilink integrity, destructive-op protection) are enforced by code and hooks, never by asking the model nicely.
-5. **Reproducible & multi-profile.** Behaviour is declared in `axon.config.yaml` + `.env`. Profiles are fully isolated (data dir, secrets, account, policy). Cloning the repo and running `axon init` is the entire setup.
+5. **Reproducible & multi-profile.** Behaviour is declared in `~/.axon/config.yaml` + `.env`. Profiles are fully isolated (data dir, secrets, account, policy). Cloning the repo and running `make setup` (macOS) is the entire setup.
 6. **Observable.** Nothing happens silently. Every run, token, ingest and error is logged and visible on the dashboard.
 7. **Start lean, evolve.** The most common failure mode of "second brain" systems is over-engineering. Ship the smallest thing that compounds, gated behind config flags.
 

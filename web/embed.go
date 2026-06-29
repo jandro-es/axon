@@ -1,7 +1,7 @@
 // Package web embeds the built dashboard SPA (web/dist) into the Go binary, so
 // the distributed binary is self-contained and needs no Node toolchain at
 // runtime (ADR-003). The dist directory is produced by `npm run build` (Vite);
-// install.sh builds it before `go build`.
+// `make web` (and scripts/install-macos.sh) build it before `go build`.
 package web
 
 import (
