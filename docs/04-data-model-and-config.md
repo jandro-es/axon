@@ -169,9 +169,9 @@ CREATE TABLE events (
 
 **Cost** (`auth_mode: api_key` only) is computed from a small, config-overridable price table keyed by model so the ledger stays accurate as prices change (don't hardcode prices in logic). On subscription/enterprise installs `cost_usd` is null and the token windows are the budget axis.
 
-## 3. Configuration reference (`axon.config.yaml`)
+## 3. Configuration reference (`config.yaml`)
 
-The single declarative surface. Validated with struct tags + a validator (`go-playground/validator`) in the `config` package; `axon config validate` checks it. Secrets are **not** here — they live in `.env`/keychain and are referenced by name. Example values shown; see `axon.config.example.yaml` for a complete annotated file.
+The single declarative surface. It lives at `~/.axon/config.yaml` by default (`$AXON_HOME/config.yaml`, so it follows an `AXON_HOME` override) and is resolved independently of the working directory; pass `--config <path>` to use a different file. Validated with struct tags + a validator (`go-playground/validator`) in the `config` package; `axon config validate` checks it. Secrets are **not** here — they live in `.env`/keychain and are referenced by name. Example values shown; see `axon.config.example.yaml` (shipped in the repo) for a complete annotated file to copy to `~/.axon/config.yaml`.
 
 ```yaml
 version: 1

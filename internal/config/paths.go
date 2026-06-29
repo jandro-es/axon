@@ -19,6 +19,13 @@ func AxonHome() string {
 	return ExpandPath(DefaultAxonHome)
 }
 
+// DefaultConfigPath is the absolute path the CLI reads when no --config flag is
+// given: <AXON_HOME>/config.yaml (so it follows AXON_HOME and the standard
+// per-user layout instead of depending on the working directory).
+func DefaultConfigPath() string {
+	return filepath.Join(AxonHome(), DefaultConfigFile)
+}
+
 // ExpandPath expands a leading ~ (or ~/) to the user's home directory and
 // returns a cleaned, absolute-where-possible path. A bare "~" maps to home; an
 // unexpandable ~ is returned unchanged rather than erroring, since config paths

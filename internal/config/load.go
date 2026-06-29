@@ -8,9 +8,9 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
-// DefaultConfigFile is the conventional config filename, looked up in the
-// working directory when no explicit path is given.
-const DefaultConfigFile = "axon.config.yaml"
+// DefaultConfigFile is the conventional config filename. It lives under the
+// AXON home directory (see DefaultConfigPath); pass --config to override.
+const DefaultConfigFile = "config.yaml"
 
 // validate is shared and concurrency-safe per the validator docs.
 var validate = validator.New()

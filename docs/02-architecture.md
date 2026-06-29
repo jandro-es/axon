@@ -120,7 +120,7 @@ Every path that calls Claude goes through the `agent` adapter, which (a) takes a
 
 ## 5. Security & policy model
 
-- **Secrets** in `.env` or OS keychain, never in `axon.config.yaml`, never committed, never logged, never sent to the model.
+- **Secrets** in `.env` or OS keychain, never in `config.yaml`, never committed, never logged, never sent to the model.
 - **Egress allowlist** per profile: ingestion may only fetch from allowed domains (work profile defaults restrictive). The Claude API and Ollama hosts are always allowed.
 - **Redaction** rules (regex/denylist) scrub matched content (secrets, client names) before anything leaves the machine for the Claude API.
 - **Destructive-op protection:** delete/move/overwrite go through wikilink-safe ops with dry-run + confirmation; hard delete is never automated.
@@ -128,7 +128,7 @@ Every path that calls Claude goes through the `agent` adapter, which (a) takes a
 
 ## 6. Profiles & reproducibility
 
-A profile is the unit of isolation. Resolution order for any setting: CLI flag → env (`AXON_*`) → `profiles/<name>` overlay → base `axon.config.yaml` → built-in default. Each profile has its own data dir (`$AXON_HOME/profiles/<name>/`: `db.sqlite`, `logs/`, `exports/`, `snapshots/`), its own secrets, its own `CLAUDE_CONFIG_DIR`/API key, its own policy block and automation set. Nothing is shared. See Components 04 and 10.
+A profile is the unit of isolation. Resolution order for any setting: CLI flag → env (`AXON_*`) → `profiles/<name>` overlay → base `config.yaml` → built-in default. Each profile has its own data dir (`$AXON_HOME/profiles/<name>/`: `db.sqlite`, `logs/`, `exports/`, `snapshots/`), its own secrets, its own `CLAUDE_CONFIG_DIR`/API key, its own policy block and automation set. Nothing is shared. See Components 04 and 10.
 
 ---
 

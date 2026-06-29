@@ -1,9 +1,12 @@
 # =============================================================================
 # axon.config.example.yaml
 # -----------------------------------------------------------------------------
-# Copy to `axon.config.yaml` and edit. This is the single declarative surface
-# for AXON's behaviour. Secrets do NOT live here — they live in `.env` (or the
-# OS keychain) and are referenced by name as `env:NAME` / `keychain:NAME`.
+# Copy to `~/.axon/config.yaml` and edit (`mkdir -p ~/.axon && cp
+# axon.config.example.yaml ~/.axon/config.yaml`). AXON reads that path by default
+# ($AXON_HOME/config.yaml); pass `--config <path>` to use a different file. This
+# is the single declarative surface for AXON's behaviour. Secrets do NOT live
+# here — they live in `.env` (or the OS keychain) and are referenced by name as
+# `env:NAME` / `keychain:NAME`.
 #
 # Validated by struct tags + a validator in the `config` package; run
 # `axon config validate` to check.

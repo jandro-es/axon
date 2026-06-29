@@ -35,17 +35,20 @@ embeddings. SQLite is derived and disposable. *(Diagrams are editable —
 
 ```bash
 git clone https://github.com/jandro-es/axon.git && cd axon
-cp axon.config.example.yaml axon.config.yaml   # set vault_path, profile, budgets (≤ 6 values)
-cp .env.example .env                           # CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`
+mkdir -p ~/.axon                                  # the AXON home dir ($AXON_HOME)
+cp axon.config.example.yaml ~/.axon/config.yaml   # set vault_path, profile, budgets (≤ 6 values)
+cp .env.example ~/.axon/.env                       # CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`
 
 (cd web && npm install && npm run build)       # build the dashboard SPA (Node, build-time only)
 go build -o axon ./cmd/axon                     # single self-contained binary (SPA embedded)
 
-./axon config validate                          # check the config
-./axon init                                     # scaffold vault + DB + .claude wiring + dashboards (idempotent)
+./axon config validate                          # check the config (~/.axon/config.yaml by default)
+./axon init --env ~/.axon/.env                  # scaffold vault + DB + .claude wiring + dashboards (idempotent)
 ./axon doctor                                   # prerequisites health check
-./axon start                                    # scheduler + dashboard at http://127.0.0.1:7777
+./axon start --env ~/.axon/.env                 # scheduler + dashboard at http://127.0.0.1:7777
 ```
+
+The config is read from `~/.axon/config.yaml` by default (`$AXON_HOME/config.yaml`), independent of the working directory; pass `--config <path>` to override. Secrets default to `.env` in the current directory — the commands above keep them at `~/.axon/.env` and point `--env` there.
 
 Prerequisites: the `claude` CLI (logged in for your `auth_mode`), and **Ollama** for local embeddings. `go build` works without the SPA build (it serves a fallback page until `web/dist` exists).
 

@@ -7,18 +7,25 @@
 
 ```bash
 git clone … && cd axon
-cp axon.config.example.yaml axon.config.yaml   # set vault_path, profile, budgets
-cp .env.example .env                           # set CLAUDE_CODE_OAUTH_TOKEN for the profile you run
-./scripts/install.sh                           # or install.ps1 on Windows
-axon init                                       # the bootstrap (idempotent, verbose)
-axon start                                      # daemon + dashboard
+mkdir -p ~/.axon                                  # the AXON home dir ($AXON_HOME)
+cp axon.config.example.yaml ~/.axon/config.yaml   # set vault_path, profile, budgets
+cp .env.example ~/.axon/.env                       # set CLAUDE_CODE_OAUTH_TOKEN for the profile you run
+./scripts/install.sh                               # or install.ps1 on Windows
+axon init --env ~/.axon/.env                       # the bootstrap (idempotent, verbose)
+axon start --env ~/.axon/.env                      # daemon + dashboard
 ```
+
+The config is read from `~/.axon/config.yaml` by default (`$AXON_HOME/config.yaml`,
+following an `AXON_HOME` override) — independent of the working directory. Pass
+`--config <path>` to use a different file. Secrets default to `.env` in the
+current directory; the lines above keep them beside the config and point `--env`
+at them.
 
 `./scripts/install.sh` handles **toolchain** (verify Go 1.22+; build the dashboard SPA in `web/` with Node/Vite then `go build ./cmd/axon` with the assets embedded; install the `axon` binary onto `PATH`; sanity-check Ollama + the `claude` CLI presence and login state; if using the cgo SQLite driver, verify a C toolchain — the pure-Go `ncruces` driver needs none). `axon init` handles **environment convergence** for the active profile. The split keeps OS-level package wrangling out of the cross-platform Go code. Because the daemon ships as a single static binary with the SPA embedded, an alternative install path is to download a prebuilt release binary and skip both build steps (no Go or Node needed).
 
 ## 2. `axon init` — steps (each prints status: ✓ done / ↻ already / ⚠ fixed / ✗ failed + hint)
 
-1. **Resolve profile & config.** Load `axon.config.yaml` + `.env`; resolve `active_profile`; validate against the config schema (struct tags + validator); print the resolved (secret-redacted) config summary.
+1. **Resolve profile & config.** Load the config (`~/.axon/config.yaml` by default, or `--config <path>`) + `.env`; resolve `active_profile`; validate against the config schema (struct tags + validator); print the resolved (secret-redacted) config summary, including the config path in use.
 2. **Prerequisite checks.** Go toolchain (if building from source); Ollama reachable; required embedding model present (offer to `ollama pull`); the `claude` CLI present **and authenticated for this `auth_mode`** (subscription/enterprise login, or a valid `CLAUDE_CODE_OAUTH_TOKEN` for headless); **warn loudly if `ANTHROPIC_API_KEY` is set** while `auth_mode` is subscription/enterprise (it would divert Claude Code to API billing); ports free; vault path writable. Each as pass/warn/fail with remediation. (Shared with `axon doctor`.)
 3. **Data dir.** Create `$AXON_HOME/profiles/<name>/` (`db.sqlite`, `logs/`, `exports/`, `snapshots/`, `claude/`). Skip if present.
 4. **Database.** Create/upgrade the SQLite DB; load `sqlite-vec`; create tables + `vec0`/FTS5; run migrations to current `schema_version`. Idempotent.

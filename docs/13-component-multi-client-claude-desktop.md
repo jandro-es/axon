@@ -40,7 +40,7 @@ Claude Desktop's config (preserving any servers already there):
   "mcpServers": {
     "axon": {
       "command": "/abs/path/to/axon",
-      "args": ["mcp", "--config", "/abs/axon.config.yaml", "--profile", "personal"],
+      "args": ["mcp", "--config", "/Users/you/.axon/config.yaml", "--profile", "personal"],
       "env": { "CLAUDE_CONFIG_DIR": "…", "AXON_HOME": "…" }
     }
   }

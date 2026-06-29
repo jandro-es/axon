@@ -118,15 +118,26 @@ claude setup-token    # prints a ~1-year CLAUDE_CODE_OAUTH_TOKEN — copy it int
 
 ## 4. Configuration
 
-All behaviour comes from two files in the project directory.
+All behaviour comes from two files: the **config** at `~/.axon/config.yaml` and
+the **secrets** file `.env`.
 
-### `axon.config.yaml`
+### `config.yaml`
 
-Copy the annotated example and edit a handful of values:
+AXON reads `~/.axon/config.yaml` by default (more precisely `$AXON_HOME/config.yaml`,
+so it follows an `AXON_HOME` override). It does **not** depend on your working
+directory — you can run `axon` from anywhere. Pass `--config <path>` to point at
+a different file.
+
+Copy the annotated example out of the cloned repo into that location and edit a
+handful of values:
 
 ```bash
-cp axon.config.example.yaml axon.config.yaml
+mkdir -p ~/.axon                               # the AXON home dir
+cp axon.config.example.yaml ~/.axon/config.yaml
 ```
+
+> Prefer a different location? Put the file anywhere and pass `--config <path>`
+> to every command (or set `AXON_HOME` to move the whole `~/.axon` tree).
 
 The **≤ 6 values** you typically set per profile:
 
@@ -165,8 +176,13 @@ Secrets never live in the YAML — they're referenced by name (`env:NAME`, or
 `keychain:NAME` for the OS keychain) and resolved at runtime (`env:` from `.env`
 or the real environment), never logged or sent to the model.
 
+`.env` is read from the current directory by default; pass `--env <path>` to
+read it from elsewhere. Keeping it next to the config (`~/.axon/.env`) is the
+tidy option — just pass `--env ~/.axon/.env`, and set the same path in the
+service unit so headless runs find it too.
+
 ```bash
-cp .env.example .env
+cp .env.example ~/.axon/.env
 # then edit:
 CLAUDE_CODE_OAUTH_TOKEN_PERSONAL=sk-ant-oat01-…   # from `claude setup-token`
 ```
@@ -181,9 +197,13 @@ default.** Pick the active profile with `--profile <name>` or `AXON_PROFILE=…`
 ## 5. First run & setup
 
 ```bash
-axon doctor     # check prerequisites (claude, ollama, ports, vault writable, stray API key)
-axon init       # provision everything — idempotent and verbose
+axon doctor                      # check prerequisites (claude, ollama, ports, vault writable, stray API key)
+axon init --env ~/.axon/.env     # provision everything — idempotent and verbose
 ```
+
+> Config is read from `~/.axon/config.yaml` automatically. The `--env` flag is
+> only needed if you keep secrets at `~/.axon/.env` (recommended) rather than a
+> `.env` in the current directory.
 
 `axon init` performs, printing ✓/↻/⚠/✗ for each step:
 
@@ -499,8 +519,9 @@ the vault is the source of truth, a full restore is: copy the vault back and run
 | `axon profiles [--json]` | Show profiles' isolated paths/policy (no secrets). |
 | `axon version` | Print the version. |
 
-Global flags: `--config <path>` (default `axon.config.yaml`), `--profile <name>`,
-`--env <path>` (default `.env`).
+Global flags: `--config <path>` (default `~/.axon/config.yaml`), `--profile <name>`,
+`--env <path>` (default `.env`, resolved from the current directory; secrets may
+also come from the real environment).
 
 ---
 
