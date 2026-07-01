@@ -55,14 +55,21 @@ func ParseLinks(body string) []Link {
 }
 
 // splitWikilink decomposes a wikilink's inner content into target, heading and
-// display. Order in Obsidian is target(#heading)(^block)(|display).
+// display. Order in Obsidian is target(#heading|#^block)(|display). A bare
+// "^block" separator (without "#") is tolerated too; the block marker is kept
+// in the heading part (prefixed "^") so rewrites preserve the reference —
+// buildInner re-emits it as the canonical "#^block" form.
 func splitWikilink(inner string) (target, heading, display string) {
 	if i := strings.Index(inner, "|"); i >= 0 {
 		display = strings.TrimSpace(inner[i+1:])
 		inner = inner[:i]
 	}
-	if i := strings.Index(inner, "#"); i >= 0 {
-		heading = strings.TrimSpace(inner[i+1:])
+	if i := strings.IndexAny(inner, "#^"); i >= 0 {
+		frag := strings.TrimSpace(inner[i+1:])
+		if inner[i] == '^' {
+			frag = "^" + frag // block reference: keep the ^ marker
+		}
+		heading = frag
 		inner = inner[:i]
 	}
 	target = strings.TrimSpace(inner)
@@ -77,13 +84,14 @@ func linkTargetKey(target string) string {
 
 // resolvesTo reports whether a wikilink target points at the note identified by
 // basenameNoExt / relpathNoExt. A path-form target (contains "/") matches the
-// relpath; a bare target matches the basename.
+// relpath; a bare target matches the basename. Comparison is case-insensitive,
+// matching Obsidian's link resolution ("[[beta]]" resolves to "Beta.md").
 func resolvesTo(target, basenameNoExt, relpathNoExt string) bool {
 	t := linkTargetKey(target)
 	if strings.Contains(t, "/") {
-		return t == relpathNoExt
+		return strings.EqualFold(t, relpathNoExt)
 	}
-	return t == basenameNoExt
+	return strings.EqualFold(t, basenameNoExt)
 }
 
 // RelNoExt returns a vault-relative path without its ".md" extension. It is the

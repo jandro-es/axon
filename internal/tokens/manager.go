@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -115,6 +116,12 @@ type Config struct {
 	Models   config.ModelsConfig
 	Limits   config.LimitsConfig
 	Prices   map[string]config.Price
+	// RedactionRules are the profile's policy regexes, applied to every prompt
+	// and system string at the chokepoint before it reaches the adapter —
+	// defence-in-depth on top of ingestion-time redaction, and the only cover
+	// for automation prompts built from raw vault notes (NFR-05/NFR-14:
+	// redaction is enforced in code, not by asking the model nicely).
+	RedactionRules []string
 	// Now optionally overrides the clock used for budget windows and ledger
 	// timestamps. Defaults to time.Now; set only by tests for determinism.
 	Now func() time.Time
@@ -128,6 +135,7 @@ type manager struct {
 	bus       *events.Bus
 	estimator Estimator
 	cfg       Config
+	redact    []*regexp.Regexp
 	now       func() time.Time
 }
 
@@ -145,8 +153,30 @@ func New(database *sql.DB, ag agent.Agent, searcher *search.Searcher, bus *event
 		bus:       bus,
 		estimator: newCachingEstimator(HeuristicEstimator{}),
 		cfg:       cfg,
+		redact:    compileRedaction(cfg.RedactionRules),
 		now:       now,
 	}
+}
+
+// compileRedaction compiles the profile's redaction regexes. Invalid patterns
+// are skipped here (config validation is the place that rejects them loudly);
+// a skipped pattern must not disable the valid ones.
+func compileRedaction(rules []string) []*regexp.Regexp {
+	var out []*regexp.Regexp
+	for _, r := range rules {
+		if re, err := regexp.Compile(r); err == nil {
+			out = append(out, re)
+		}
+	}
+	return out
+}
+
+// applyRedaction scrubs every configured pattern from s.
+func (m *manager) applyRedaction(s string) string {
+	for _, re := range m.redact {
+		s = re.ReplaceAllString(s, "[REDACTED]")
+	}
+	return s
 }
 
 // resolveModel maps a model key (classify|routine|synthesis) to a concrete model
@@ -290,11 +320,13 @@ func (m *manager) Run(ctx context.Context, call AgentCall) (AgentResult, error) 
 		return res, fmt.Errorf("token manager: no agent adapter configured")
 	}
 
+	// Redaction is enforced HERE, at the chokepoint, so no caller (automations
+	// building prompts from raw vault notes included) can forget it.
 	resp, err := m.agent.Run(ctx, agent.Request{
 		Operation: call.Operation,
 		Model:     auth.Model,
-		System:    call.System,
-		Prompt:    joinMessages(call.Messages),
+		System:    m.applyRedaction(call.System),
+		Prompt:    m.applyRedaction(joinMessages(call.Messages)),
 	})
 	if err != nil {
 		// A failed call may still have consumed real tokens upstream — an

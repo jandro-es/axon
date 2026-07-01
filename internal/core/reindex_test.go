@@ -107,6 +107,25 @@ func TestReindexIsRepeatableAndRebuildsFromScratch(t *testing.T) {
 	}
 }
 
+// TestReindexResolvesLinksCaseInsensitively mirrors Obsidian: [[beta]]
+// resolves to Beta.md, so it must not be counted as a broken wikilink.
+func TestReindexResolvesLinksCaseInsensitively(t *testing.T) {
+	ctx := context.Background()
+	v := tempVault(t, map[string]string{
+		"a.md":             "links [[beta]] and [[02-areas/BETA]].\n",
+		"02-Areas/Beta.md": "I am beta.\n",
+	})
+	d := migratedDB(t)
+
+	res, err := Reindex(ctx, v, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.BrokenWikilink != 0 {
+		t.Errorf("broken wikilinks = %d, want 0 (case-insensitive resolution)", res.BrokenWikilink)
+	}
+}
+
 // TestReindexRebuildsSearchFromMarkdown is the ADR-006 contract: delete the
 // database, reindex from the vault alone, and lexical search must work.
 func TestReindexRebuildsSearchFromMarkdown(t *testing.T) {

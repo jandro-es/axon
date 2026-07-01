@@ -107,6 +107,48 @@ func TestPreToolUseBlocksAndAllows(t *testing.T) {
 	}
 }
 
+// TestPreToolUseBlocksNativeWriteOverwrite: Claude Code's built-in Write tool
+// is a whole-file overwrite — exactly the operation vault_write refuses on
+// existing notes — so the hook must deny it deterministically for existing
+// vault notes while still allowing new-note creation and surgical Edits.
+func TestPreToolUseBlocksNativeWriteOverwrite(t *testing.T) {
+	deps, _ := testDeps(t)
+	if _, err := deps.Vault.Create("01-Projects/existing.md", "human prose here"); err != nil {
+		t.Fatal(err)
+	}
+	root := deps.Vault.Root()
+
+	tests := []struct {
+		name     string
+		input    Input
+		wantDeny bool
+	}{
+		{"Write over existing vault note (abs path)",
+			Input{ToolName: "Write", ToolInput: map[string]any{"file_path": filepath.Join(root, "01-Projects", "existing.md")}}, true},
+		{"Write over existing vault note (cwd-relative)",
+			Input{ToolName: "Write", CWD: root, ToolInput: map[string]any{"file_path": "01-Projects/existing.md"}}, true},
+		{"Write NEW vault note allowed",
+			Input{ToolName: "Write", ToolInput: map[string]any{"file_path": filepath.Join(root, "01-Projects", "brand-new.md")}}, false},
+		{"Edit existing vault note allowed (surgical)",
+			Input{ToolName: "Edit", ToolInput: map[string]any{"file_path": filepath.Join(root, "01-Projects", "existing.md")}}, false},
+		{"Write .md outside the vault allowed",
+			Input{ToolName: "Write", ToolInput: map[string]any{"file_path": filepath.Join(t.TempDir(), "outside.md")}}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw, _ := json.Marshal(tt.input)
+			res, err := Handle(context.Background(), PreToolUse, raw, deps)
+			if err != nil {
+				t.Fatal(err)
+			}
+			denied := strings.Contains(string(res.Stdout), `"permissionDecision":"deny"`)
+			if denied != tt.wantDeny {
+				t.Errorf("deny = %v, want %v (output: %s)", denied, tt.wantDeny, res.Stdout)
+			}
+		})
+	}
+}
+
 func TestPostToolUseAndStopAreAdvisory(t *testing.T) {
 	deps, _ := testDeps(t)
 	for _, ev := range []string{PostToolUse, Stop} {

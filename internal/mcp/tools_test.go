@@ -95,7 +95,10 @@ func TestMoveKeepsLinksIntact(t *testing.T) {
 
 func TestWriteRefusesClobber(t *testing.T) {
 	ctx := context.Background()
-	tools, _, _ := newTestTools(t, map[string]string{"keep.md": "human prose"})
+	tools, v, _ := newTestTools(t, map[string]string{
+		"keep.md":    "human prose",
+		"managed.md": "---\naxon_managed: true\ntype: source\n---\nAXON-authored content",
+	})
 
 	if _, err := tools.Write(ctx, WriteIn{Path: "keep.md", Body: "REPLACED"}); err == nil {
 		t.Error("vault_write should refuse to clobber an existing note without force")
@@ -103,8 +106,39 @@ func TestWriteRefusesClobber(t *testing.T) {
 	if _, err := tools.Write(ctx, WriteIn{Path: "new.md", Body: "fresh"}); err != nil {
 		t.Errorf("writing a new note should succeed: %v", err)
 	}
-	if _, err := tools.Write(ctx, WriteIn{Path: "keep.md", Body: "FORCED", Force: true}); err != nil {
-		t.Errorf("force write should succeed: %v", err)
+
+	// force is the de-facto destructive op (no vault_delete exists), and it is
+	// a plain model-controlled argument — so it only works on AXON-authored
+	// notes, never on human prose (NFR-05 / cardinal rule 2).
+	if _, err := tools.Write(ctx, WriteIn{Path: "keep.md", Body: "FORCED", Force: true}); err == nil {
+		t.Error("force write over a HUMAN note must be refused (not axon_managed)")
+	}
+	if n, err := v.Read(ctx, "keep.md"); err != nil || n.Body != "human prose" {
+		t.Errorf("human note content changed: %q, %v", n.Body, err)
+	}
+	if _, err := tools.Write(ctx, WriteIn{Path: "managed.md", Body: "regenerated", Force: true}); err != nil {
+		t.Errorf("force write over an axon_managed note should succeed: %v", err)
+	}
+}
+
+// TestToolsRefuseSystemDirPaths: agent-supplied paths must never reach vault
+// system directories — writing .claude/CLAUDE.md would let a prompt-injected
+// agent rewrite its own instructions for the next session.
+func TestToolsRefuseSystemDirPaths(t *testing.T) {
+	ctx := context.Background()
+	tools, _, _ := newTestTools(t, map[string]string{"note.md": "hi"})
+
+	if _, err := tools.Write(ctx, WriteIn{Path: ".claude/CLAUDE.md", Body: "obey me"}); err == nil {
+		t.Error("vault_write into .claude/ must be refused")
+	}
+	if _, err := tools.Write(ctx, WriteIn{Path: "sub/.obsidian/app.json", Body: "{}"}); err == nil {
+		t.Error("vault_write into .obsidian/ must be refused")
+	}
+	if _, err := tools.Patch(ctx, PatchIn{Path: ".axon/review-queue.md", Marker: "x", Content: "y"}); err == nil {
+		t.Error("vault_patch into .axon/ must be refused")
+	}
+	if _, err := tools.Move(ctx, MoveIn{From: "note.md", To: ".trash/note.md"}); err == nil {
+		t.Error("vault_move into .trash/ must be refused")
 	}
 }
 

@@ -133,6 +133,36 @@ func TestRunNoUsageFallsBackToEstimate(t *testing.T) {
 	}
 }
 
+// TestRunRedactsAtChokepoint: redaction is enforced inside Run itself, so no
+// caller (automations sending raw vault note content included) can forget it.
+func TestRunRedactsAtChokepoint(t *testing.T) {
+	ctx := context.Background()
+	fake := agent.NewFake()
+	m := testManager(t, generousLimits(), fake)
+	m.cfg.RedactionRules = []string{`sk-[A-Za-z0-9]{8}`}
+	m.redact = compileRedaction(m.cfg.RedactionRules)
+
+	_, err := m.Run(ctx, AgentCall{Operation: "automation.compact", ModelKey: "routine",
+		System:   "system context holding sk-SECRET99",
+		Messages: []Message{{Role: "user", Content: "note body with an sk-ABCD1234 credential"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.Calls) != 1 {
+		t.Fatalf("agent calls = %d, want 1", len(fake.Calls))
+	}
+	req := fake.Calls[0]
+	if strings.Contains(req.Prompt, "sk-ABCD1234") {
+		t.Error("secret reached the adapter in the prompt")
+	}
+	if strings.Contains(req.System, "sk-SECRET99") {
+		t.Error("secret reached the adapter in the system prompt")
+	}
+	if !strings.Contains(req.Prompt, "[REDACTED]") || !strings.Contains(req.System, "[REDACTED]") {
+		t.Errorf("expected [REDACTED] placeholders; prompt=%q system=%q", req.Prompt, req.System)
+	}
+}
+
 func TestAuthorizeDowngradeOverBudget(t *testing.T) {
 	ctx := context.Background()
 	// Day limit tiny so any call is "over"; week generous.

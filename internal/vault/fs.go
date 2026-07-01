@@ -19,6 +19,23 @@ var systemDirs = map[string]bool{
 	".trash":    true,
 }
 
+// IsSystemPath reports whether a vault-relative path has any segment inside a
+// system directory (.obsidian, .axon, .claude, .git, .trash), compared
+// case-insensitively. The MCP boundary uses this to refuse agent-supplied
+// writes into configuration/instruction directories — a prompt-injected agent
+// writing .claude/CLAUDE.md would otherwise rewrite its own rules for the next
+// session. AXON's internal writers (review queue, scaffolding) legitimately
+// use these directories and call the FS helpers directly.
+func IsSystemPath(rel string) bool {
+	clean := filepath.ToSlash(filepath.Clean(filepath.FromSlash(rel)))
+	for _, seg := range strings.Split(clean, "/") {
+		if systemDirs[strings.ToLower(seg)] {
+			return true
+		}
+	}
+	return false
+}
+
 // FS is a filesystem-backed Vault rooted at a directory of Markdown files. All
 // mutating operations are wikilink-safe and write atomically (temp + rename),
 // per the cardinal rule and NFR-06. It is safe for sequential use by the
@@ -53,7 +70,35 @@ func (v *FS) safeAbs(rel string) (string, error) {
 	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("vault path %q escapes the vault root", rel)
 	}
-	return filepath.Join(v.root, clean), nil
+	abs := filepath.Join(v.root, clean)
+	if err := v.checkNoSymlinkEscape(abs); err != nil {
+		return "", err
+	}
+	return abs, nil
+}
+
+// checkNoSymlinkEscape refuses paths whose nearest existing ancestor (or the
+// target itself) resolves, via symlinks, to somewhere outside the vault root.
+// The lexical ".." check above cannot see a symlink planted inside the vault
+// that points at /etc or the user's home.
+func (v *FS) checkNoSymlinkEscape(abs string) error {
+	rootReal, err := filepath.EvalSymlinks(v.root)
+	if err != nil {
+		return nil // vault root doesn't exist yet (pre-init); nothing to escape
+	}
+	for dir := abs; ; {
+		if real, err := filepath.EvalSymlinks(dir); err == nil {
+			if real != rootReal && !strings.HasPrefix(real, rootReal+string(filepath.Separator)) {
+				return fmt.Errorf("vault path %q resolves outside the vault root (symlink)", abs)
+			}
+			return nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return nil
+		}
+		dir = parent
+	}
 }
 
 // rel maps an OS path under root back to a slash-separated vault-relative path.

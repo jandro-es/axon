@@ -33,6 +33,9 @@ func TestSplitWikilink(t *testing.T) {
 		{"Note#Head", "Note", "Head", ""},
 		{"Note#Head|Alias", "Note", "Head", "Alias"},
 		{"dir/Note#Head|Alias", "dir/Note", "Head", "Alias"},
+		{"Note#^block1", "Note", "^block1", ""}, // Obsidian block reference
+		{"Note^block1", "Note", "^block1", ""},  // tolerated bare-caret form
+		{"Note#^block1|Alias", "Note", "^block1", "Alias"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
@@ -58,6 +61,13 @@ func TestResolvesTo(t *testing.T) {
 	if resolvesTo("Other", "Beta", "02-Areas/Beta") {
 		t.Error("non-matching basename must not resolve")
 	}
+	// Obsidian resolves links case-insensitively: [[beta]] finds Beta.md.
+	if !resolvesTo("beta", "Beta", "02-Areas/Beta") {
+		t.Error("case-insensitive basename should resolve (Obsidian semantics)")
+	}
+	if !resolvesTo("02-areas/beta", "Beta", "02-Areas/Beta") {
+		t.Error("case-insensitive path form should resolve (Obsidian semantics)")
+	}
 }
 
 func TestRewriteLinksForMove(t *testing.T) {
@@ -69,6 +79,21 @@ func TestRewriteLinksForMove(t *testing.T) {
 	}
 	want := "Links: [[03-Resources/Renamed]], [[03-Resources/Renamed|Display]], ![[03-Resources/Renamed]], [[03-Resources/Renamed#Heading]].\n" +
 		"Unrelated [[Gamma]] stays.\n"
+	if got != want {
+		t.Errorf("rewrite mismatch:\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestRewriteLinksForMoveCaseAndBlocks: case-variant links and block
+// references must be rewritten on move too, or they dangle silently.
+func TestRewriteLinksForMoveCaseAndBlocks(t *testing.T) {
+	body := "Case: [[beta]] and [[02-areas/BETA|d]]. Blocks: [[Beta#^quote1]] and [[Beta^quote2]].\n"
+	got, n := rewriteLinksForMove(body, "02-Areas/Beta.md", "03-Resources/Renamed.md")
+	if n != 4 {
+		t.Fatalf("rewrote %d links, want 4:\n%s", n, got)
+	}
+	want := "Case: [[03-Resources/Renamed]] and [[03-Resources/Renamed|d]]. " +
+		"Blocks: [[03-Resources/Renamed#^quote1]] and [[03-Resources/Renamed#^quote2]].\n"
 	if got != want {
 		t.Errorf("rewrite mismatch:\n got %q\nwant %q", got, want)
 	}

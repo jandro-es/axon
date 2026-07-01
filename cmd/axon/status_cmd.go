@@ -14,11 +14,12 @@ import (
 // managerConfig builds the token-manager config from a profile.
 func managerConfig(name string, p config.Profile, cfg *config.Config) tokens.Config {
 	return tokens.Config{
-		Profile:  name,
-		AuthMode: p.Claude.AuthMode,
-		Models:   p.Models,
-		Limits:   p.Limits,
-		Prices:   cfg.Prices,
+		Profile:        name,
+		AuthMode:       p.Claude.AuthMode,
+		Models:         p.Models,
+		Limits:         p.Limits,
+		Prices:         cfg.Prices,
+		RedactionRules: p.Policy.RedactionRules,
 	}
 }
 

@@ -116,10 +116,12 @@ func Reindex(ctx context.Context, v *vault.FS, sqlDB *sql.DB) (ReindexResult, er
 			}
 		}
 
-		byRel[vault.RelNoExt(n.row.Path)] = id
+		// Keys are lowercased: Obsidian resolves links case-insensitively, so
+		// [[beta]] must find Beta.md (resolveTarget lowercases lookups to match).
+		byRel[strings.ToLower(vault.RelNoExt(n.row.Path))] = id
 		// For ambiguous basenames, first occurrence wins (deterministic by
 		// sorted path order); bare links to a duplicated basename are rare.
-		if base := vault.BaseNoExt(n.row.Path); base != "" {
+		if base := strings.ToLower(vault.BaseNoExt(n.row.Path)); base != "" {
 			if _, exists := byBase[base]; !exists {
 				byBase[base] = id
 			}
@@ -181,9 +183,11 @@ func rechunkNote(ctx context.Context, tx db.DBTX, noteID int64, body string) (bo
 }
 
 // resolveTarget maps a wikilink target to a note id using the path/basename
-// resolution maps, mirroring how Obsidian resolves links.
+// resolution maps, mirroring how Obsidian resolves links (case-insensitively —
+// the maps are keyed lowercase).
 func resolveTarget(target string, byRel, byBase map[string]int64) (int64, bool) {
 	key, isPath := vault.TargetKey(target)
+	key = strings.ToLower(key)
 	if isPath {
 		id, ok := byRel[key]
 		return id, ok

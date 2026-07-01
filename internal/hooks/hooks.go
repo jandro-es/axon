@@ -177,7 +177,7 @@ var (
 // preToolUse blocks unsafe operations authoritatively (deny cannot be bypassed
 // by permission mode). It tightens only; safe operations pass through.
 func preToolUse(in Input, deps Deps) (Result, error) {
-	if reason := denyReason(in); reason != "" {
+	if reason := denyReason(in, deps); reason != "" {
 		out := map[string]any{
 			"hookSpecificOutput": map[string]any{
 				"hookEventName":            PreToolUse,
@@ -192,7 +192,7 @@ func preToolUse(in Input, deps Deps) (Result, error) {
 }
 
 // denyReason returns a non-empty reason if the tool call must be blocked.
-func denyReason(in Input) string {
+func denyReason(in Input, deps Deps) string {
 	switch in.ToolName {
 	case "Bash":
 		cmd, _ := in.ToolInput["command"].(string)
@@ -213,8 +213,40 @@ func denyReason(in Input) string {
 		if isProtectedPath(path) {
 			return "Blocked: writes into .obsidian/ or .git/ are not permitted; AXON manages the vault via its tools."
 		}
+		// The native Write tool is a WHOLE-FILE overwrite — exactly the operation
+		// vault_write refuses on existing notes. Deny it deterministically for
+		// existing vault notes (Edit stays allowed: it is a surgical replace that
+		// fails rather than clobbers when its anchor text is missing).
+		if in.ToolName == "Write" && isExistingVaultNote(path, in.CWD, deps) {
+			return "Blocked: Write would overwrite an existing vault note wholesale. Use vault_patch for managed-block edits, vault_write force=true for AXON-managed notes, or Edit for a surgical change."
+		}
 	}
 	return ""
+}
+
+// isExistingVaultNote reports whether path (absolute, or relative to cwd)
+// resolves to an existing .md file inside the profile's vault.
+func isExistingVaultNote(path, cwd string, deps Deps) bool {
+	if deps.Vault == nil || path == "" || !strings.EqualFold(filepath.Ext(path), ".md") {
+		return false
+	}
+	abs := path
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(cwd, abs)
+	}
+	abs = filepath.Clean(abs)
+	root := deps.Vault.Root()
+	if rootReal, err := filepath.EvalSymlinks(root); err == nil {
+		root = rootReal
+	}
+	if absReal, err := filepath.EvalSymlinks(abs); err == nil {
+		abs = absReal // existing file: compare resolved paths
+	}
+	if abs != root && !strings.HasPrefix(abs, root+string(filepath.Separator)) {
+		return false
+	}
+	info, err := os.Stat(abs)
+	return err == nil && !info.IsDir()
 }
 
 // protectedDirs are system directories AXON never lets the agent write into.

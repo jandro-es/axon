@@ -115,15 +115,53 @@ type WriteOut struct {
 
 // Write creates a new note (or overwrites with force). It refuses to clobber an
 // existing note unless force is set, steering edits toward Patch/Move so human
-// prose is never silently lost.
+// prose is never silently lost. Even with force, only AXON-authored notes
+// (frontmatter `axon_managed: true`) may be overwritten: with no vault.delete,
+// force-overwrite is the de-facto destructive op, and a prompt-injected agent
+// must not be able to erase human prose with a tool argument (NFR-05).
 func (t *Tools) Write(ctx context.Context, in WriteIn) (WriteOut, error) {
-	if t.deps.Vault.Exists(in.Path) && !in.Force {
-		return WriteOut{}, fmt.Errorf("note %q exists; use vault.patch for managed-block edits, or pass force=true to overwrite", in.Path)
+	if err := guardAgentPath(in.Path); err != nil {
+		return WriteOut{}, err
+	}
+	if t.deps.Vault.Exists(in.Path) {
+		if !in.Force {
+			return WriteOut{}, fmt.Errorf("note %q exists; use vault.patch for managed-block edits, or pass force=true to overwrite", in.Path)
+		}
+		if !t.isAxonManaged(ctx, in.Path) {
+			return WriteOut{}, fmt.Errorf("note %q is not AXON-managed; force-overwrite is only allowed on notes with `axon_managed: true` frontmatter — use vault_patch for managed-block edits, or vault_move to archive it", in.Path)
+		}
 	}
 	if err := t.deps.Vault.Write(ctx, in.Path, &vault.Note{Body: in.Body}); err != nil {
 		return WriteOut{}, err
 	}
 	return WriteOut{OK: true, Path: in.Path}, nil
+}
+
+// isAxonManaged reports whether a note's frontmatter marks it AXON-authored.
+func (t *Tools) isAxonManaged(ctx context.Context, path string) bool {
+	n, err := t.deps.Vault.Read(ctx, path)
+	if err != nil {
+		return false
+	}
+	switch v := n.Frontmatter["axon_managed"].(type) {
+	case bool:
+		return v
+	case string:
+		return strings.EqualFold(strings.TrimSpace(v), "true")
+	}
+	return false
+}
+
+// guardAgentPath refuses agent-supplied paths that target vault system
+// directories (.claude, .obsidian, .axon, .git, .trash): writes there change
+// AXON's or the agent's own configuration, not knowledge (NFR-05).
+func guardAgentPath(paths ...string) error {
+	for _, p := range paths {
+		if vault.IsSystemPath(p) {
+			return fmt.Errorf("path %q targets a vault system directory; AXON tools only operate on notes", p)
+		}
+	}
+	return nil
 }
 
 // --- patch ------------------------------------------------------------------
@@ -141,6 +179,9 @@ type PatchOut struct {
 // Patch edits only the content of an axon:<marker> managed block, never human
 // prose outside it.
 func (t *Tools) Patch(ctx context.Context, in PatchIn) (PatchOut, error) {
+	if err := guardAgentPath(in.Path); err != nil {
+		return PatchOut{}, err
+	}
 	if err := t.deps.Vault.Patch(ctx, in.Path, in.Marker, in.Content); err != nil {
 		return PatchOut{}, err
 	}
@@ -162,6 +203,9 @@ type MoveOut struct {
 // Move renames/moves a note and rewrites every inbound wikilink so none break.
 // This is the only sanctioned rename path.
 func (t *Tools) Move(ctx context.Context, in MoveIn) (MoveOut, error) {
+	if err := guardAgentPath(in.From, in.To); err != nil {
+		return MoveOut{}, err
+	}
 	// Capture inbound links before the move so we can report what was rewritten.
 	var updated []string
 	if id, err := db.GetNoteIDByPath(ctx, t.deps.DB, in.From); err == nil && id != nil {
