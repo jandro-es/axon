@@ -38,6 +38,47 @@ func TestFetchRefusesLoopbackAtDialTime(t *testing.T) {
 	}
 }
 
+// TestCheckRedirectRevalidatesPolicy exercises the security control on the
+// redirect path directly: every hop is re-checked against the ingest policy,
+// non-http(s) schemes are refused, and the hop count is bounded.
+func TestCheckRedirectRevalidatesPolicy(t *testing.T) {
+	strict := config.PolicyConfig{
+		IngestDomainsAllow: []string{"allowed.example.com"},
+		IngestDomainsDeny:  []string{"*"},
+	}
+	f := NewHTTPFetcher(strict)
+	check := f.client.CheckRedirect
+
+	mkReq := func(rawurl string) *http.Request {
+		req, err := http.NewRequest(http.MethodGet, rawurl, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return req
+	}
+	via := []*http.Request{mkReq("https://allowed.example.com/start")}
+
+	if err := check(mkReq("https://allowed.example.com/next"), via); err != nil {
+		t.Errorf("redirect to allowed host refused: %v", err)
+	}
+	if err := check(mkReq("https://evil.example.net/"), via); err == nil {
+		t.Error("redirect to a denied host must be refused (SSRF via redirect)")
+	}
+	if err := check(mkReq("https://169.254.169.254/latest/meta-data/"), via); err == nil {
+		t.Error("redirect to the metadata IP must be refused")
+	}
+	if err := check(mkReq("file:///etc/passwd"), via); err == nil {
+		t.Error("redirect to a non-http(s) scheme must be refused")
+	}
+	tenHops := make([]*http.Request, 10)
+	for i := range tenHops {
+		tenHops[i] = mkReq("https://allowed.example.com/hop")
+	}
+	if err := check(mkReq("https://allowed.example.com/final"), tenHops); err == nil {
+		t.Error("more than 10 redirects must be refused")
+	}
+}
+
 // TestFetchRefusesLocalhostHostname covers the hostname → internal IP path:
 // "localhost" passes any name allowlist containing it, but resolves to
 // loopback and must be blocked at dial time.

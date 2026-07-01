@@ -55,6 +55,67 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	}
 }
 
+// TestMigrateUpgradePathPreservesData: a database created at schema version 1
+// must upgrade through the remaining migrations without losing rows — the
+// scenario every existing installation hits on upgrade.
+func TestMigrateUpgradePathPreservesData(t *testing.T) {
+	sqlDB, err := Open(MemoryDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+
+	migs, err := loadMigrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(migs) < 2 {
+		t.Skip("only one migration exists; no upgrade path to test")
+	}
+
+	// Apply ONLY the first migration, then seed data an old installation
+	// would have.
+	if err := applyMigration(sqlDB, migs[0]); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := userVersion(sqlDB); v != migs[0].version {
+		t.Fatalf("seed version = %d, want %d", v, migs[0].version)
+	}
+	if _, err := sqlDB.Exec(`INSERT INTO notes (path, title, content_hash) VALUES ('old.md', 'Old', 'h1');`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sqlDB.Exec(
+		`INSERT INTO token_ledger (ts, profile, operation, model, input_tokens, output_tokens)
+		 VALUES ('2026-01-01T00:00:00Z', 'p', 'op', 'm', 10, 5);`); err != nil {
+		t.Fatal(err)
+	}
+
+	// Upgrade to latest.
+	v, err := Migrate(sqlDB)
+	if err != nil {
+		t.Fatalf("upgrade from v%d failed: %v", migs[0].version, err)
+	}
+	if v != migs[len(migs)-1].version {
+		t.Errorf("upgraded version = %d, want %d", v, migs[len(migs)-1].version)
+	}
+
+	// Seeded data survives the upgrade.
+	var notes, ledger int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM notes;`).Scan(&notes); err != nil || notes != 1 {
+		t.Errorf("notes after upgrade = %d (err %v), want 1", notes, err)
+	}
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM token_ledger;`).Scan(&ledger); err != nil || ledger != 1 {
+		t.Errorf("ledger rows after upgrade = %d (err %v), want 1", ledger, err)
+	}
+
+	// And the post-v1 schema objects exist (FTS index from 0002).
+	var name string
+	if err := sqlDB.QueryRow(
+		`SELECT name FROM sqlite_master WHERE name = 'fts_chunks';`).Scan(&name); err != nil {
+		t.Errorf("fts_chunks missing after upgrade: %v", err)
+	}
+}
+
 func TestOpenCreatesFileDatabase(t *testing.T) {
 	path := t.TempDir() + "/db.sqlite"
 	sqlDB, err := Open(path)

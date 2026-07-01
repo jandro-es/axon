@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -160,6 +161,47 @@ func TestRunRedactsAtChokepoint(t *testing.T) {
 	}
 	if !strings.Contains(req.Prompt, "[REDACTED]") || !strings.Contains(req.System, "[REDACTED]") {
 		t.Errorf("expected [REDACTED] placeholders; prompt=%q system=%q", req.Prompt, req.System)
+	}
+}
+
+// TestConcurrentRunsAccountEveryToken: the chokepoint must not lose or double
+// count spend under concurrency (SetMaxOpenConns(1) + per-call transactions
+// serialize the read-modify-write on budget_state — this proves it).
+func TestConcurrentRunsAccountEveryToken(t *testing.T) {
+	ctx := context.Background()
+	fake := agent.NewFake()
+	fake.RespondFn = func(r agent.Request) (*agent.Response, error) {
+		return &agent.Response{Text: "ok", Model: r.Model, Usage: agent.Usage{InputTokens: 10, OutputTokens: 5}}, nil
+	}
+	m := testManager(t, generousLimits(), fake)
+
+	const workers = 20
+	var wg sync.WaitGroup
+	errs := make(chan error, workers)
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := m.Run(ctx, AgentCall{Operation: "concurrent.op", ModelKey: "routine",
+				Messages: []Message{{Role: "user", Content: "work item"}}})
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if n, _ := db.CountLedger(ctx, m.db); n != workers {
+		t.Errorf("ledger rows = %d, want %d", n, workers)
+	}
+	st, _ := m.Status(ctx, "test")
+	want := int64(workers * 15)
+	if st.Day.Used != want || st.Week.Used != want {
+		t.Errorf("budgets = day %d week %d, want %d/%d (no lost updates)", st.Day.Used, st.Week.Used, want, want)
 	}
 }
 

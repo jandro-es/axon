@@ -114,4 +114,4 @@ else
   err "$MISSING_REQUIRED required dependenc$([ "$MISSING_REQUIRED" -eq 1 ] && echo y || echo ies) missing — install the ✗ item(s) above, then re-run"
 fi
 
-exit $([ "$MISSING_REQUIRED" -eq 0 ] && echo 0 || echo 1)
+if [ "$MISSING_REQUIRED" -eq 0 ]; then exit 0; else exit 1; fi

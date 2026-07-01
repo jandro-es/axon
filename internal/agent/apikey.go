@@ -38,7 +38,7 @@ func (a *APIKey) AuthMode() string { return "api_key" }
 // Run executes a single Messages API turn and returns the text + exact usage.
 func (a *APIKey) Run(ctx context.Context, req Request) (*Response, error) {
 	params := anthropic.MessageNewParams{
-		Model:     anthropic.Model(req.Model),
+		Model:     req.Model,
 		MaxTokens: a.maxTokens,
 		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(req.Prompt))},
 	}
@@ -57,7 +57,7 @@ func (a *APIKey) Run(ctx context.Context, req Request) (*Response, error) {
 	}
 	return &Response{
 		Text:  sb.String(),
-		Model: string(msg.Model),
+		Model: msg.Model,
 		Usage: Usage{
 			InputTokens:  int(msg.Usage.InputTokens),
 			OutputTokens: int(msg.Usage.OutputTokens),
@@ -73,7 +73,7 @@ func (a *APIKey) Run(ctx context.Context, req Request) (*Response, error) {
 // call fails.
 func (a *APIKey) CountTokens(ctx context.Context, model, system, prompt string) (int, error) {
 	params := anthropic.MessageCountTokensParams{
-		Model:    anthropic.Model(model),
+		Model:    model,
 		Messages: []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(prompt))},
 	}
 	if strings.TrimSpace(system) != "" {

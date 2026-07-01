@@ -12,17 +12,33 @@ const PALETTE = ['#2fe0cf', '#6f7cf2', '#b07cf0', '#f5b14b', '#fb6f8f', '#41d693
 const color = (i) => PALETTE[((i % PALETTE.length) + PALETTE.length) % PALETTE.length]
 
 /* ── data hooks ──────────────────────────────────────────────────────────── */
+// useFetch polls a JSON endpoint. Failures (network, non-2xx) are surfaced via
+// `error` instead of being swallowed — a dead daemon must look degraded, not
+// like healthy-but-empty. The last good data is kept while errored.
 function useFetch(url, interval = 5000) {
-  const [data, setData] = useState(null)
+  const [state, setState] = useState({ data: null, error: false })
   useEffect(() => {
     let alive = true
-    const load = () => fetch(url).then((r) => r.json()).then((d) => alive && setData(d)).catch(() => {})
+    const load = () =>
+      fetch(url)
+        .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+        .then((d) => alive && setState({ data: d, error: false }))
+        .catch(() => alive && setState((s) => ({ data: s.data, error: true })))
     load()
     const id = setInterval(load, interval)
     return () => { alive = false; clearInterval(id) }
   }, [url, interval])
-  return data
+  return state
 }
+
+// SSE_KINDS must mirror the named event kinds the daemon actually emits
+// (events are sent with `event: <kind>`, so unregistered kinds never fire).
+const SSE_KINDS = [
+  'automation.run', 'automation.skip', 'automation.fail',
+  'ingest.done', 'ingest.skip', 'ingest.enrich',
+  'ingest.embed.fail', 'ingest.embed.skip', 'ingest.review_queue.fail',
+  'token.ledger', 'token.deny', 'token.defer', 'token.downgrade', 'token.error',
+]
 
 function useSSE() {
   const [events, setEvents] = useState([])
@@ -35,8 +51,7 @@ function useSSE() {
       try { setEvents((prev) => [JSON.parse(e.data), ...prev].slice(0, 400)) } catch {}
     }
     es.onmessage = push
-    ;['ingest.done', 'automation.run', 'automation.skip', 'automation.fail', 'token.ledger', 'token.deny', 'budget']
-      .forEach((k) => es.addEventListener(k, push))
+    SSE_KINDS.forEach((k) => es.addEventListener(k, push))
     return () => es.close()
   }, [])
   return { events, connected }
@@ -496,11 +511,18 @@ function GraphCard({ graph, span }) {
 }
 
 /* ── activity feed ───────────────────────────────────────────────────────── */
+// evtKey identifies an event across the two timestamp encodings it can arrive
+// with (SSE serialises Go time.Time with sub-second precision + offset; DB rows
+// store RFC3339 UTC) by normalising to epoch seconds — string comparison of the
+// raw ts values can never match and every live event would duplicate once the
+// history poll returns it.
+const evtKey = (e) => `${e.kind}|${e.message}|${Math.floor(Date.parse(e.ts) / 1000)}`
+
 function ActivityCard({ live, initial, span }) {
   const [level, setLevel] = useState('all')
   const merged = useMemo(() => {
-    const seen = new Set(live.map((e) => e.message + e.ts))
-    const base = (initial || []).filter((e) => !seen.has(e.message + e.ts))
+    const seen = new Set(live.map(evtKey))
+    const base = (initial || []).filter((e) => !seen.has(evtKey(e)))
     return [...live, ...base].slice(0, 300)
   }, [live, initial])
   const counts = useMemo(() => {
@@ -540,17 +562,18 @@ const TABS = [
 
 export default function App() {
   const [tab, setTab] = useState('overview')
-  const health = useFetch('/health', 10000)
-  const usage = useFetch('/api/usage', 4000)
-  const tokens = useFetch('/api/tokens', 8000)
-  const runs = useFetch('/api/runs', 6000)
-  const vault = useFetch('/api/vault', 8000)
-  const ingestion = useFetch('/api/ingestion', 8000)
-  const graph = useFetch('/api/graph', 15000)
-  const activity = useFetch('/api/activity', 15000)
+  const { data: health, error: healthErr } = useFetch('/health', 10000)
+  const { data: usage, error: usageErr } = useFetch('/api/usage', 4000)
+  const { data: tokens } = useFetch('/api/tokens', 8000)
+  const { data: runs } = useFetch('/api/runs', 6000)
+  const { data: vault } = useFetch('/api/vault', 8000)
+  const { data: ingestion } = useFetch('/api/ingestion', 8000)
+  const { data: graph } = useFetch('/api/graph', 15000)
+  const { data: activity } = useFetch('/api/activity', 15000)
   const { events, connected } = useSSE()
 
   const healthy = health?.status === 'ok'
+  const apiDown = healthErr || usageErr
   const byModel = useMemo(() => pieBy(tokens, (b) => b.model), [tokens])
   const byOp = useMemo(() => pieBy(tokens, (b) => shortOp(b.operation)), [tokens])
 
@@ -564,6 +587,7 @@ export default function App() {
             <span className="brand-sub">second-brain console</span>
           </div>
           <div className="topbar-spacer" />
+          {apiDown && <span className="chip warn"><i className="dot" />daemon unreachable</span>}
           <span className={`chip ${healthy ? 'ok' : 'warn'}`}><i className="dot" />{health?.profile || '—'}</span>
           <span className={`chip ${health?.db ? 'ok' : 'warn'}`}><i className="dot" />db {health?.db ? 'ok' : '—'}</span>
           <span className={`chip ${connected ? 'live' : 'off'}`}><i className="dot" />{connected ? 'live' : 'offline'}</span>

@@ -5,9 +5,18 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   build-test:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # macOS is a first-class target (launchd service, keychain secrets,
+        # case-insensitive filesystem) — build and test there too.
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -27,18 +36,49 @@ jobs:
       - name: go vet (fresh clone, no SPA build)
         run: go vet ./...
 
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: web/package-lock.json
 
       - name: Build dashboard SPA
         run: cd web && npm ci && npm run build
 
+      - name: npm audit (high+)
+        run: cd web && npm audit --audit-level=high
+
       - name: Build
         run: go build ./...
 
       - name: Test (race)
         run: go test -race ./...
+
+      # Info-level findings (SC1091 source-following, the deliberate
+      # `cmd && ok || warn` reporting pattern) are accepted; warnings+ fail.
+      - name: shellcheck
+        if: runner.os == 'Linux'
+        run: shellcheck --severity=warning scripts/*.sh
+
+  govulncheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # govulncheck compiles the module; give it the embedded SPA placeholder
+      # (web/dist/.gitkeep is committed, so no npm step is needed).
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
