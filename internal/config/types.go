@@ -41,8 +41,30 @@ type Profile struct {
 	// an absent block resolves to sensible defaults so existing configs keep
 	// working unchanged.
 	Memory MemoryConfig `yaml:"memory"`
+	// Ingestion tunes URL fetching beyond the egress policy — per-domain auth
+	// headers for sources behind SSO (Confluence, internal wikis). Optional.
+	Ingestion IngestionConfig `yaml:"ingestion"`
 	// Interop wires optional external/community MCP backends (FR-54). Optional.
 	Interop InteropConfig `yaml:"interop"`
+}
+
+// IngestionConfig configures URL-fetch behaviour for the ingestion pipeline.
+type IngestionConfig struct {
+	// Auth attaches a header to fetches whose host matches an entry's domain
+	// (or a subdomain of it) — and NEVER to any other host, including redirect
+	// targets. This is how pages behind SSO (Confluence, internal wikis) become
+	// ingestable: a PAT/API token in a header, not a browser session.
+	Auth []IngestAuth `yaml:"auth" validate:"dive"`
+}
+
+// IngestAuth is one per-domain credential for ingestion fetches. Value may be
+// a secret reference (env:VAR, keychain:...) resolved at fetch time; it is
+// never logged or persisted in events.
+type IngestAuth struct {
+	Domain string `yaml:"domain" validate:"required"`
+	// Header defaults to "Authorization" when empty.
+	Header string `yaml:"header"`
+	Value  string `yaml:"value" validate:"required"`
 }
 
 // InteropConfig configures optional third-party MCP servers AXON can register

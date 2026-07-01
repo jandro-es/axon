@@ -23,9 +23,20 @@ type Extracted struct {
 	Markdown string
 }
 
+// minExtractedChars is the floor below which an extraction is considered
+// "found nothing" — pages whose real content is smaller than a tweet are
+// almost always an app shell or an error page, not an article.
+const minExtractedChars = 80
+
 // ExtractHTML runs readability over raw HTML to isolate the main article, then
 // converts that to clean Markdown (strips nav/ads/scripts; keeps headings,
 // lists, code, links). pageURL helps readability resolve relative links.
+//
+// Readability is tuned for article-shaped pages and can come back (near) empty
+// on wiki/app layouts (Confluence, Notion exports…). When that happens but the
+// HTML clearly has content, the whole document is converted instead — noisier,
+// but complete beats empty. If there is still nothing, ExtractHTML errors so
+// the pipeline never writes a junk note silently.
 func ExtractHTML(raw []byte, pageURL string) (Extracted, error) {
 	var parsed *url.URL
 	if pageURL != "" {
@@ -42,10 +53,23 @@ func ExtractHTML(raw []byte, pageURL string) (Extracted, error) {
 		return Extracted{}, fmt.Errorf("html->markdown: %w", err)
 	}
 	md = normalizeMarkdown(md)
-	if strings.TrimSpace(md) == "" {
-		// Fall back to readability's plain text if conversion yielded nothing
-		// (e.g. unusual markup); never produce an empty note silently.
-		md = normalizeMarkdown(article.TextContent)
+	if len(md) < minExtractedChars {
+		// Fall back to readability's plain text first (unusual markup)…
+		if txt := normalizeMarkdown(article.TextContent); len(txt) > len(md) {
+			md = txt
+		}
+	}
+	if len(md) < minExtractedChars {
+		// …then to converting the ENTIRE document, which rescues wiki-style
+		// layouts readability rejects.
+		if whole, werr := htmltomarkdown.ConvertString(string(raw)); werr == nil {
+			if whole = normalizeMarkdown(whole); len(whole) > len(md) {
+				md = whole
+			}
+		}
+	}
+	if len(md) < minExtractedChars {
+		return Extracted{}, fmt.Errorf("no extractable content at %s (%d chars) — the page is likely rendered by JavaScript or behind a login; for SSO'd sources configure ingestion.auth (Confluence pages then use the REST API automatically)", pageURL, len(md))
 	}
 	ex := Extracted{
 		Title:    strings.TrimSpace(article.Title),

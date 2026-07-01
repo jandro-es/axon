@@ -82,6 +82,13 @@ profiles:
       top_k: 8                                # chunks fetched per query (hybrid lexical + semantic)
       max_context_tokens: 12_000              # hard ceiling on retrieved context assembled per call
 
+    # ingestion:                              # per-domain credentials for SSO'd sources (Confluence, wikis)
+    #   auth:
+    #     - domain: acme.atlassian.net        # applies to this domain (+ subdomains) ONLY — never follows redirects elsewhere
+    #       header: Authorization             # default; any header name works (e.g. X-Api-Key)
+    #       value: "env:CONFLUENCE_AUTH"      # secret ref; e.g. "Bearer <PAT>" (DC) or "Basic <base64 email:api-token>" (Cloud)
+    #  Confluence page URLs are fetched via the REST API automatically once authenticated.
+
     policy:
       data_residency: local-only
       egress_allowlist: ["localhost", "*"]    # "*" = permissive (fine for personal); Claude Code handles its own egress

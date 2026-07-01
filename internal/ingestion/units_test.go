@@ -50,6 +50,28 @@ func TestCheckIngestPolicy(t *testing.T) {
 	}
 }
 
+// TestExtractHTMLFallsBackToWholeDocument: wiki-style layouts that readability
+// rejects still yield their content via full-document conversion, and truly
+// empty pages error instead of producing junk notes.
+func TestExtractHTMLFallsBackToWholeDocument(t *testing.T) {
+	content := strings.Repeat("Meaningful wiki table content that must survive extraction. ", 10)
+	raw := `<html><head><title>Wiki Page</title></head><body>` +
+		`<table><tr><td>` + content + `</td></tr></table></body></html>`
+	ex, err := ExtractHTML([]byte(raw), "https://wiki.example.com/page")
+	if err != nil {
+		t.Fatalf("extraction failed on wiki-style layout: %v", err)
+	}
+	if !strings.Contains(ex.Markdown, "Meaningful wiki table content") {
+		t.Errorf("content lost: %.120s", ex.Markdown)
+	}
+
+	// A content-free shell errors with an actionable hint.
+	_, err = ExtractHTML([]byte(`<html><body><div id="app"></div></body></html>`), "https://spa.example.com")
+	if err == nil || !strings.Contains(err.Error(), "no extractable content") {
+		t.Errorf("empty shell should error with a hint, got: %v", err)
+	}
+}
+
 // TestNeutralizeDelimiters: untrusted content must not be able to close the
 // <<< >>> data fence and smuggle instructions after it (NFR-05).
 func TestNeutralizeDelimiters(t *testing.T) {

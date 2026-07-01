@@ -2,11 +2,15 @@ package ingestion
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	neturl "net/url"
 	"os"
+	"regexp"
+	"strings"
 	"syscall"
 	"time"
 
@@ -28,12 +32,48 @@ type HTTPFetcher struct {
 	client *http.Client
 }
 
+// fetchRetries and fetchBackoff bound the retry loop for transient failures
+// (network blips, 429, 5xx). Small on purpose: ingestion is interactive.
+const fetchRetries = 2
+const fetchBackoff = 700 * time.Millisecond
+
+// authHeaderTransport attaches configured per-domain auth headers. It runs on
+// EVERY request the client makes — including each redirect hop — and matches
+// the hop's own host against the rule domain, so a credential can never leak
+// to a different site via redirect (NFR-05).
+type authHeaderTransport struct {
+	base  http.RoundTripper
+	rules []config.IngestAuth
+}
+
+func (t *authHeaderTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	host := req.URL.Hostname()
+	for _, rule := range t.rules {
+		if !matchesDomain(rule.Domain, host) {
+			continue
+		}
+		value, err := config.ResolveSecret(rule.Value)
+		if err != nil || value == "" {
+			return nil, fmt.Errorf("ingestion auth for domain %q: credential not resolvable (%v) — check the secret reference in ingestion.auth", rule.Domain, err)
+		}
+		header := rule.Header
+		if header == "" {
+			header = "Authorization"
+		}
+		req = req.Clone(req.Context())
+		req.Header.Set(header, value)
+	}
+	return t.base.RoundTrip(req)
+}
+
 // NewHTTPFetcher returns a fetcher that enforces the profile's ingest egress
 // policy on every redirect hop (not just the initial request) and refuses, at
 // dial time, connections to loopback/private/link-local addresses — so a
 // hostname that *resolves* to an internal IP (DNS rebinding) is blocked even
-// when it passes the name-based policy.
-func NewHTTPFetcher(policy config.PolicyConfig) *HTTPFetcher {
+// when it passes the name-based policy. Optional auth rules attach per-domain
+// credentials (SSO'd sources like Confluence); each rule applies only to its
+// own domain, on every hop.
+func NewHTTPFetcher(policy config.PolicyConfig, auth ...config.IngestAuth) *HTTPFetcher {
 	dialer := &net.Dialer{
 		Timeout: 10 * time.Second,
 		// Control runs after DNS resolution, once per connection attempt, with
@@ -53,17 +93,21 @@ func NewHTTPFetcher(policy config.PolicyConfig) *HTTPFetcher {
 			return nil
 		},
 	}
+	var transport http.RoundTripper = &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           dialer.DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          10,
+		IdleConnTimeout:       30 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: time.Second,
+	}
+	if len(auth) > 0 {
+		transport = &authHeaderTransport{base: transport, rules: auth}
+	}
 	client := &http.Client{
-		Timeout: 30 * time.Second,
-		Transport: &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
-			DialContext:           dialer.DialContext,
-			ForceAttemptHTTP2:     true,
-			MaxIdleConns:          10,
-			IdleConnTimeout:       30 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: time.Second,
-		},
+		Timeout:   30 * time.Second,
+		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
 				return fmt.Errorf("stopped after 10 redirects")
@@ -80,31 +124,186 @@ func NewHTTPFetcher(policy config.PolicyConfig) *HTTPFetcher {
 	return &HTTPFetcher{client: client}
 }
 
-// Fetch GETs url and returns the (size-capped) body. Treated strictly as data.
+// Fetch retrieves url and returns the (size-capped) body, treated strictly as
+// data. Confluence page URLs are fetched via the Confluence REST API first
+// (clean storage HTML, no JS shell), falling back to the plain page. Transient
+// failures (network, 429, 5xx) are retried a couple of times; auth walls and
+// login redirects produce actionable errors instead of junk notes.
 func (f *HTTPFetcher) Fetch(ctx context.Context, url string) (*Document, error) {
+	if apiURL, ok := confluenceAPIURL(url); ok {
+		if doc, err := f.fetchConfluenceAPI(ctx, apiURL, url); err == nil {
+			return doc, nil
+		}
+		// API refused or unavailable (anonymous instance, odd URL): fall back
+		// to the regular page fetch below.
+	}
+
+	var lastErr error
+	for attempt := 0; attempt <= fetchRetries; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(time.Duration(attempt) * fetchBackoff):
+			}
+		}
+		doc, retryable, err := f.fetchOnce(ctx, url)
+		if err == nil {
+			return doc, nil
+		}
+		lastErr = err
+		if !retryable {
+			break
+		}
+	}
+	return nil, lastErr
+}
+
+// fetchOnce is a single GET; the bool reports whether the failure is transient.
+func (f *HTTPFetcher) fetchOnce(ctx context.Context, url string) (*Document, bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.5")
+	req.Header.Set("Accept-Language", "en")
 	resp, err := f.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("fetch %q: %w", url, err)
+		return nil, true, fmt.Errorf("fetch %q: %w", url, err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("fetch %q: status %d", url, resp.StatusCode)
+
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+		return nil, false, fmt.Errorf("fetch %q: status %d — the page requires authentication; add an ingestion.auth entry for this domain (e.g. a Confluence PAT: header Authorization, value \"Bearer <token>\" or \"Basic <base64 email:api-token>\")", url, resp.StatusCode)
+	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
+		return nil, true, fmt.Errorf("fetch %q: status %d", url, resp.StatusCode)
+	case resp.StatusCode < 200 || resp.StatusCode >= 300:
+		return nil, false, fmt.Errorf("fetch %q: status %d", url, resp.StatusCode)
 	}
+
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxFetchBytes))
 	if err != nil {
-		return nil, fmt.Errorf("read %q: %w", url, err)
+		return nil, true, fmt.Errorf("read %q: %w", url, err)
 	}
+
+	// A 200 that is actually a login page (SSO redirect chains end that way)
+	// must fail loudly, not become a junk "Log in" note.
+	finalURL := url
+	if resp.Request != nil && resp.Request.URL != nil {
+		finalURL = resp.Request.URL.String()
+	}
+	if reason := loginPageReason(finalURL, resp.Header.Get("Content-Type"), body); reason != "" {
+		return nil, false, fmt.Errorf("fetch %q: %s — add an ingestion.auth entry for this domain (browser sessions are not reused)", url, reason)
+	}
+
 	return &Document{
 		URL:         url,
 		ContentType: resp.Header.Get("Content-Type"),
 		Body:        body,
 		FetchedAt:   time.Now().UTC(),
+	}, false, nil
+}
+
+// loginPageRe spots sign-in shells: a password field or an SSO/login form URL.
+var (
+	loginURLRe  = regexp.MustCompile(`(?i)/(login|signin|sign-in|sso|saml|authorize|oauth2?)([/?.]|$)`)
+	loginBodyRe = regexp.MustCompile(`(?i)(type=["']password["']|log in to continue|sign in to continue|id=["']login|name=["']os_password["'])`)
+)
+
+// loginPageReason returns a non-empty explanation when the fetched document is
+// a login/SSO page rather than the requested content.
+func loginPageReason(finalURL, contentType string, body []byte) string {
+	if loginURLRe.MatchString(finalURL) {
+		return "redirected to a sign-in page (" + finalURL + ")"
+	}
+	if strings.Contains(strings.ToLower(contentType), "html") && loginBodyRe.Match(body[:min(len(body), 64<<10)]) {
+		return "received a sign-in page instead of the content"
+	}
+	return ""
+}
+
+// confluencePagesRe matches Confluence page URLs that carry a numeric content
+// id: /spaces/<KEY>/pages/<id>[/<slug>] (Cloud and recent Server/DC).
+var confluencePagesRe = regexp.MustCompile(`^(.*?)/spaces/[^/]+/pages/(\d+)(?:/|$)`)
+
+// confluenceAPIURL maps a Confluence page URL to its REST API content URL, or
+// reports false when the URL doesn't carry a page id. The API returns the
+// page's clean storage HTML — immune to the JS app shell that makes the
+// rendered page extract as empty.
+func confluenceAPIURL(raw string) (string, bool) {
+	u, err := neturl.Parse(raw)
+	if err != nil || u.Host == "" {
+		return "", false
+	}
+	if m := confluencePagesRe.FindStringSubmatch(u.Path); m != nil {
+		return u.Scheme + "://" + u.Host + m[1] + "/rest/api/content/" + m[2] + "?expand=body.storage,space", true
+	}
+	// Server/DC form: /pages/viewpage.action?pageId=<id>
+	if strings.HasSuffix(u.Path, "/pages/viewpage.action") {
+		id := u.Query().Get("pageId")
+		if id != "" && !strings.ContainsFunc(id, func(r rune) bool { return r < '0' || r > '9' }) {
+			prefix := strings.TrimSuffix(u.Path, "/pages/viewpage.action")
+			return u.Scheme + "://" + u.Host + prefix + "/rest/api/content/" + id + "?expand=body.storage,space", true
+		}
+	}
+	return "", false
+}
+
+// fetchConfluenceAPI GETs a Confluence REST content URL and synthesizes an
+// HTML document from the page's storage body, so extraction sees real content
+// with a real title. Same client, so policy, SSRF guards and per-domain auth
+// all apply unchanged.
+func (f *HTTPFetcher) fetchConfluenceAPI(ctx context.Context, apiURL, pageURL string) (*Document, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Accept", "application/json")
+	resp, err := f.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("confluence api %q: status %d", apiURL, resp.StatusCode)
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxFetchBytes))
+	if err != nil {
+		return nil, err
+	}
+	var page struct {
+		Title string `json:"title"`
+		Body  struct {
+			Storage struct {
+				Value string `json:"value"`
+			} `json:"storage"`
+		} `json:"body"`
+		Space struct {
+			Name string `json:"name"`
+		} `json:"space"`
+	}
+	if err := json.Unmarshal(raw, &page); err != nil {
+		return nil, fmt.Errorf("confluence api %q: decode: %w", apiURL, err)
+	}
+	if strings.TrimSpace(page.Body.Storage.Value) == "" {
+		return nil, fmt.Errorf("confluence api %q: empty storage body", apiURL)
+	}
+	html := "<html><head><title>" + htmlEscape(page.Title) + "</title></head><body><h1>" +
+		htmlEscape(page.Title) + "</h1>" + page.Body.Storage.Value + "</body></html>"
+	return &Document{
+		URL:         pageURL,
+		ContentType: "text/html; charset=utf-8",
+		Body:        []byte(html),
+		FetchedAt:   time.Now().UTC(),
 	}, nil
+}
+
+func htmlEscape(s string) string {
+	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
+	return r.Replace(s)
 }
 
 // ReadFile reads a local file as an ingestion Document, capped at maxFetchBytes.

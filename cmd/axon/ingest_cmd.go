@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
+	"strings"
 
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 
+	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/ingestion"
 	"github.com/jandro-es/axon/internal/tokens"
 	"github.com/jandro-es/axon/internal/ui"
@@ -16,13 +19,18 @@ import (
 
 func newIngestCmd(gf *globalFlags) *cobra.Command {
 	var dryRun, noApplyLinks, asJSON, enrich bool
+	var headers []string
 	cmd := &cobra.Command{
 		Use:   "ingest <url|path>",
 		Short: "Ingest a URL or local text/Markdown file into the knowledge base",
 		Long: "Fetch (policy-gated), extract, clean, redact, hash, summarise, write a linked\n" +
 			"note in 03-Resources/Knowledge, chunk, embed via Ollama and index for hybrid\n" +
 			"search. Idempotent on content hash. Summarisation is deterministic (no Claude\n" +
-			"call, zero tokens) unless --enrich routes it through Claude via the token manager.",
+			"call, zero tokens) unless --enrich routes it through Claude via the token manager.\n\n" +
+			"Sources behind SSO (Confluence, internal wikis): configure per-domain credentials\n" +
+			"under ingestion.auth in config.yaml, or pass a one-off --header 'Authorization:\n" +
+			"Bearer <token>' (applied only to the URL's own domain). Confluence page URLs are\n" +
+			"fetched through the Confluence REST API automatically when authenticated.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			deps, err := loadProfileDeps(gf, true)
@@ -30,6 +38,11 @@ func newIngestCmd(gf *globalFlags) *cobra.Command {
 				return err
 			}
 			defer deps.close()
+
+			authRules, err := ingestAuthRules(deps.profile.Ingestion.Auth, headers, args[0])
+			if err != nil {
+				return err
+			}
 
 			// Enrichment is deterministic (zero tokens) by default; --enrich routes
 			// it through the token-manager chokepoint so it is budgeted and ledgered.
@@ -45,7 +58,7 @@ func newIngestCmd(gf *globalFlags) *cobra.Command {
 				DB:       deps.db,
 				Embedder: deps.embedder,
 				Enricher: enricher,
-				Fetcher:  ingestion.NewHTTPFetcher(deps.profile.Policy),
+				Fetcher:  ingestion.NewHTTPFetcher(deps.profile.Policy, authRules...),
 				Policy:   deps.profile.Policy,
 				Profile:  deps.name,
 			}
@@ -79,7 +92,32 @@ func newIngestCmd(gf *globalFlags) *cobra.Command {
 	cmd.Flags().BoolVar(&noApplyLinks, "no-apply-links", false, "do not apply suggested links (default: queued for review)")
 	cmd.Flags().BoolVar(&enrich, "enrich", false, "enrich metadata with Claude (via the token manager) instead of deterministically")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "emit the result as JSON")
+	cmd.Flags().StringArrayVar(&headers, "header", nil,
+		"one-off auth header 'Name: value' scoped to the URL's own domain (repeatable); persistent credentials belong in ingestion.auth")
 	return cmd
+}
+
+// ingestAuthRules merges the profile's configured ingestion.auth entries with
+// one-off --header flags. Flag headers are scoped to the target URL's own host
+// so an ad-hoc credential can never follow a redirect to another site.
+func ingestAuthRules(configured []config.IngestAuth, headers []string, target string) ([]config.IngestAuth, error) {
+	rules := append([]config.IngestAuth(nil), configured...)
+	if len(headers) == 0 {
+		return rules, nil
+	}
+	u, err := url.Parse(target)
+	if err != nil || u.Hostname() == "" {
+		return nil, fmt.Errorf("--header requires a URL target (got %q)", target)
+	}
+	for _, h := range headers {
+		name, value, ok := strings.Cut(h, ":")
+		name, value = strings.TrimSpace(name), strings.TrimSpace(value)
+		if !ok || name == "" || value == "" {
+			return nil, fmt.Errorf("--header %q must be 'Name: value'", h)
+		}
+		rules = append(rules, config.IngestAuth{Domain: u.Hostname(), Header: name, Value: value})
+	}
+	return rules, nil
 }
 
 func printIngestResult(out io.Writer, res ingestion.IngestResult) {

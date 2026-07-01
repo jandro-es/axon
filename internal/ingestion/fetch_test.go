@@ -79,6 +79,163 @@ func TestCheckRedirectRevalidatesPolicy(t *testing.T) {
 	}
 }
 
+// plainFetcher builds an HTTPFetcher whose client skips the production
+// dial-time loopback block, so tests can exercise fetch behaviour (auth,
+// retries, login detection) against local httptest servers.
+func plainFetcher(rules ...config.IngestAuth) *HTTPFetcher {
+	var transport = http.DefaultTransport
+	if len(rules) > 0 {
+		transport = &authHeaderTransport{base: http.DefaultTransport, rules: rules}
+	}
+	return &HTTPFetcher{client: &http.Client{Transport: transport}}
+}
+
+// TestAuthHeaderScopedToDomain: the configured credential reaches its own
+// domain and never any other host (NFR-05 — no cross-site credential leak).
+func TestAuthHeaderScopedToDomain(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("Authorization")
+		_, _ = w.Write([]byte("<html><body><p>" + strings.Repeat("real content here. ", 20) + "</p></body></html>"))
+	}))
+	defer srv.Close()
+	host := strings.TrimPrefix(srv.URL, "http://")
+	hostname, _, _ := strings.Cut(host, ":")
+
+	// Rule matches the server's host → header attached.
+	f := plainFetcher(config.IngestAuth{Domain: hostname, Value: "Bearer sekrit-123"})
+	if _, err := f.Fetch(context.Background(), srv.URL); err != nil {
+		t.Fatal(err)
+	}
+	if got != "Bearer sekrit-123" {
+		t.Errorf("matching domain: Authorization = %q, want the configured value", got)
+	}
+
+	// Rule for a DIFFERENT domain → header absent.
+	got = ""
+	f = plainFetcher(config.IngestAuth{Domain: "confluence.example.com", Value: "Bearer sekrit-123"})
+	if _, err := f.Fetch(context.Background(), srv.URL); err != nil {
+		t.Fatal(err)
+	}
+	if got != "" {
+		t.Errorf("non-matching domain still received the credential: %q", got)
+	}
+}
+
+// TestFetchRetriesTransientAndSurfacesAuthErrors: 5xx retries then succeeds;
+// 401 fails immediately with an actionable ingestion.auth hint.
+func TestFetchRetriesTransientAndSurfacesAuthErrors(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls <= 2 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write([]byte("<html><body><p>" + strings.Repeat("finally worked. ", 20) + "</p></body></html>"))
+	}))
+	defer srv.Close()
+
+	f := plainFetcher()
+	if _, err := f.Fetch(context.Background(), srv.URL); err != nil {
+		t.Fatalf("expected success after transient 503s, got %v (calls=%d)", err, calls)
+	}
+	if calls != 3 {
+		t.Errorf("calls = %d, want 3 (two 503s then success)", calls)
+	}
+
+	var authCalls int
+	authSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authCalls++
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer authSrv.Close()
+	_, err := f.Fetch(context.Background(), authSrv.URL)
+	if err == nil || !strings.Contains(err.Error(), "ingestion.auth") {
+		t.Errorf("401 error should point at ingestion.auth, got: %v", err)
+	}
+	if authCalls != 1 {
+		t.Errorf("401 was retried (%d calls); auth failures are not transient", authCalls)
+	}
+}
+
+// TestFetchDetectsLoginPage: a 200 that is actually a sign-in shell must fail
+// loudly instead of becoming a junk note.
+func TestFetchDetectsLoginPage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<html><body><form><input type="password" name="pw"/></form>Log in to continue</body></html>`))
+	}))
+	defer srv.Close()
+
+	_, err := plainFetcher().Fetch(context.Background(), srv.URL)
+	if err == nil || !strings.Contains(err.Error(), "sign-in page") {
+		t.Errorf("login shell not detected, err = %v", err)
+	}
+}
+
+// TestConfluenceAPIURL maps page URLs to REST content URLs (Cloud + DC forms).
+func TestConfluenceAPIURL(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+		ok   bool
+	}{
+		{"https://acme.atlassian.net/wiki/spaces/ENG/pages/123456/My+Page",
+			"https://acme.atlassian.net/wiki/rest/api/content/123456?expand=body.storage,space", true},
+		{"https://acme.atlassian.net/wiki/spaces/ENG/pages/123456",
+			"https://acme.atlassian.net/wiki/rest/api/content/123456?expand=body.storage,space", true},
+		{"https://confluence.corp.example/pages/viewpage.action?pageId=98765",
+			"https://confluence.corp.example/rest/api/content/98765?expand=body.storage,space", true},
+		{"https://confluence.corp.example/confluence/pages/viewpage.action?pageId=5",
+			"https://confluence.corp.example/confluence/rest/api/content/5?expand=body.storage,space", true},
+		{"https://example.com/blog/some-article", "", false},
+		{"https://acme.atlassian.net/wiki/spaces/ENG/overview", "", false},
+	}
+	for _, tt := range tests {
+		got, ok := confluenceAPIURL(tt.in)
+		if ok != tt.ok || got != tt.want {
+			t.Errorf("confluenceAPIURL(%q) = (%q, %v), want (%q, %v)", tt.in, got, ok, tt.want, tt.ok)
+		}
+	}
+}
+
+// TestFetchConfluenceViaAPI: a Confluence page URL is served from the REST
+// API's storage HTML (title + real content), not the JS app shell.
+func TestFetchConfluenceViaAPI(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/wiki/rest/api/content/42", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"title":"Design Doc","body":{"storage":{"value":"<p>` +
+			strings.Repeat("The actual page content. ", 20) + `</p>"}},"space":{"name":"ENG"}}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<html><body><div id="app">JavaScript required</div></body></html>`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	pageURL := srv.URL + "/wiki/spaces/ENG/pages/42/Design+Doc"
+	doc, err := plainFetcher().Fetch(context.Background(), pageURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(doc.Body), "The actual page content") {
+		t.Errorf("API storage body not used: %.120s", doc.Body)
+	}
+	if !strings.Contains(string(doc.Body), "<title>Design Doc</title>") {
+		t.Errorf("API title not carried into the document: %.120s", doc.Body)
+	}
+
+	ex, err := ExtractHTML(doc.Body, pageURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ex.Title != "Design Doc" || !strings.Contains(ex.Markdown, "The actual page content") {
+		t.Errorf("extraction from API document failed: title=%q md=%.80s", ex.Title, ex.Markdown)
+	}
+}
+
 // TestFetchRefusesLocalhostHostname covers the hostname → internal IP path:
 // "localhost" passes any name allowlist containing it, but resolves to
 // loopback and must be blocked at dial time.

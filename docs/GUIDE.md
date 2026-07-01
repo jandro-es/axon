@@ -329,6 +329,34 @@ axon ingest https://example.com/article --dry-run # show the intended note + tok
 - Ingestion of **local files** is allowed from the CLI (you typed it) but refused
   on the agent-driven MCP path, so a prompt-injected agent can't read your
   `~/.ssh` into the vault.
+- **Transient failures retry** (429/5xx, network blips — twice with backoff);
+  a 401/403 or a page that turns out to be a **login screen fails loudly** with
+  a hint instead of writing a junk note.
+
+### Sources behind SSO (Confluence, internal wikis)
+
+The daemon cannot reuse your browser session — give it its own credential,
+scoped to that domain only (it is never sent to any other host, including
+redirect targets):
+
+```yaml
+ingestion:
+  auth:
+    - domain: acme.atlassian.net
+      header: Authorization            # default
+      value: "env:CONFLUENCE_AUTH"     # secret ref — never inline tokens in config.yaml
+```
+
+with `.env` holding e.g. `CONFLUENCE_AUTH="Basic <base64 of email:api-token>"`
+(Confluence Cloud) or `CONFLUENCE_AUTH="Bearer <personal-access-token>"`
+(Server/DC). For a one-off, `axon ingest <url> --header 'Authorization: Bearer …'`
+applies the header to that URL's own domain only.
+
+**Confluence page URLs get a further upgrade:** once authenticated, AXON
+fetches the page through the Confluence REST API (clean storage HTML) instead
+of the JavaScript app shell — which is why unauthenticated Confluence ingests
+used to come back empty. Wiki-style pages that the article extractor rejects
+also fall back to full-page conversion rather than yielding nothing.
 
 Search fuses **FTS5/bm25** (lexical) with **brute-force cosine** over embeddings
 (semantic), ranked by reciprocal-rank fusion:
