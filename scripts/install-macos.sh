@@ -23,6 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(dirname "$SCRIPT_DIR")"
 # shellcheck source=scripts/_common.sh
 . "$SCRIPT_DIR/_common.sh"
+enable_err_trap
 
 PREFIX="${PREFIX:-/usr/local}"
 AXON_HOME="${AXON_HOME:-$HOME/.axon}"
@@ -56,21 +57,30 @@ AX=( "$BIN" --config "$CONFIG" --env "$ENVFILE" )
 require_macos
 printf '%sAXON macOS installer%s  (prefix=%s, home=%s)\n' "$_C_BOLD" "$_C_RESET" "$PREFIX" "$AXON_HOME"
 
+# If AXON is already installed, this re-run is a convergence; point the user at
+# the dedicated updater (which also restarts the daemon and reports the delta).
+if [ "$SKIP_BUILD" -eq 0 ] && [ -x "$BIN" ] && [ -f "$CONFIG" ]; then
+  info "AXON $(axon_installed_version "$PREFIX") already installed — re-running is safe (idempotent)."
+  info "to update an existing install, 'make update' gives a cleaner delta + daemon restart."
+fi
+
 # ── 1. Prerequisites ────────────────────────────────────────────────────────
+set_ctx "checking prerequisites"
 step "Checking prerequisites"
-have go   || die "Go toolchain not found — install Go 1.22+ (https://go.dev/dl or 'brew install go')."
-ok "go $(go version | awk '{print $3}' | sed 's/go//')"
+# preflight.sh reports every build + runtime dependency with OS-specific install
+# instructions, and exits non-zero only when a REQUIRED dep (Go) is missing.
+bash "$SCRIPT_DIR/preflight.sh" --all \
+  || die "a required dependency is missing (see above) — install it and re-run 'make setup'"
 
-if have node && have npm; then ok "node $(node --version)"
-else warn "Node/npm not found — building the binary without the dashboard SPA (a fallback page is served). Install with 'brew install node' for the full dashboard."; fi
-
-have claude && ok "claude CLI present" \
-  || warn "claude CLI not found — needed for automations + interactive use. Install Claude Code, then 'claude login' && 'claude setup-token'."
-
-if [ "$DO_OLLAMA" -eq 1 ]; then
-  if have ollama; then ok "ollama present"
-  elif have brew;  then info "installing Ollama via Homebrew…"; brew install ollama && ok "ollama installed" || warn "Ollama install failed — install it manually (https://ollama.com); not required until embeddings run"
-  else warn "ollama not found and Homebrew unavailable — install Ollama manually (https://ollama.com) and re-run."; fi
+# Convenience: offer to install Ollama via Homebrew if it's missing.
+if [ "$DO_OLLAMA" -eq 1 ] && ! have ollama; then
+  if have brew && confirm "Install Ollama now via Homebrew?"; then
+    info "installing Ollama…"
+    brew install ollama && ok "ollama installed" \
+      || warn "Ollama install failed — install it manually ($(install_hint ollama)); not required until embeddings run"
+  else
+    warn "Ollama not installed — add it later with: $(install_hint ollama)"
+  fi
 fi
 have brew || warn "Homebrew not found — Ollama auto-start uses 'brew services'. Without it you'll start Ollama yourself."
 
