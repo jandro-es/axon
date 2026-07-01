@@ -5,12 +5,15 @@
 
 ## 1. The flow
 
-**macOS (one command):**
+**macOS / Linux (one command):**
 
 ```bash
 git clone … && cd axon
-make setup        # == scripts/install-macos.sh — build, install, scaffold ~/.axon,
-                  # Ollama + daemon at login (idempotent). Undo: make uninstall-macos
+make doctor       # check dependencies (prints how to install any that are missing)
+make setup        # OS-aware installer (macOS launchd / Linux systemd --user):
+                  # build, install, scaffold ~/.axon, Ollama + daemon at login (idempotent)
+make update       # later: update an existing install (binary, DB, dashboard, daemon)
+                  # Undo: make uninstall  (ARGS="--purge" also deletes ~/.axon)
 ```
 
 **Any platform (manual):**
@@ -32,7 +35,9 @@ following an `AXON_HOME` override) — independent of the working directory. Pas
 current directory; the lines above keep them beside the config and point `--env`
 at them.
 
-`scripts/install-macos.sh` handles **toolchain + OS wiring** (verify Go 1.22+; build the dashboard SPA in `web/` with Node/Vite then `go build ./cmd/axon` with the assets embedded; install the `axon` binary into `/usr/local/bin`; install/start Ollama via `brew services` and pull the embedding model; install + load a launchd LaunchAgent so the daemon starts at login). `axon init` handles **environment convergence** for the active profile. The split keeps OS-level package wrangling out of the cross-platform Go code. Because the daemon ships as a single static binary with the SPA embedded, an alternative install path is to download a prebuilt release binary and skip both build steps (no Go or Node needed). The companion `scripts/uninstall-macos.sh` reverses everything (binary + launchd agent; `--purge` also removes `$AXON_HOME`), and **never touches the vault**. Linux/Windows auto-start uses `axon service install` (systemd `--user` / Task Scheduler) instead.
+The install scripts handle **toolchain + OS wiring** (a shared `scripts/preflight.sh` verifies Go 1.22+, Node, and the runtime deps, printing package-manager-specific install commands for anything missing; build the dashboard SPA in `web/` with Node/Vite then `go build ./cmd/axon` with the assets embedded; install the `axon` binary into `/usr/local/bin`; on macOS install/start Ollama via `brew services` and pull the embedding model; install + load the auto-start service). `axon init` handles **environment convergence** for the active profile. The split keeps OS-level package wrangling out of the cross-platform Go code. Because the daemon ships as a single static binary with the SPA embedded, an alternative install path is to download a prebuilt release binary (`make release` cross-compiles them) and skip both build steps (no Go or Node needed). The companion uninstall scripts reverse everything (binary + service unit; `--purge` also removes `$AXON_HOME`), and **never touch the vault**. macOS uses launchd; Linux uses `systemd --user`; Windows uses `axon service install` (Task Scheduler).
+
+**Updates.** `make update` (macOS/Linux) updates an existing installation in place: it rebuilds, swaps the binary and reports the version delta, re-runs `axon init` to converge the profile (DB migrations, vault scaffold, Claude Code wiring, dashboards), regenerates the service unit and restarts the daemon, and lists any newly shipped config settings — while preserving the config, secrets, and SQLite DB. Every build is version-stamped and checkable with `axon version`.
 
 ## 2. `axon init` — steps (each prints status: ✓ done / ↻ already / ⚠ fixed / ✗ failed + hint)
 

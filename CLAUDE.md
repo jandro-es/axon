@@ -36,7 +36,7 @@ internal/      # all application packages (private to the module)
   dashboard/   # dashboard HTTP + SSE handlers (Go) that serve the SPA and stream events
 web/           # dashboard SPA — Vite + React + Recharts; built to web/dist, embedded via embed.FS
 plugin/        # Claude Code plugin: skills/, agents/, hooks/, .mcp.json + CLAUDE.md templates
-scripts/       # install-macos.sh / uninstall-macos.sh (+ _common.sh): macOS build, install, launchd/Ollama wiring
+scripts/       # preflight + install/update/uninstall for macOS (launchd) & Linux (systemd), + _common.sh: build, install, service/Ollama wiring
 templates/     # vault scaffolding (folder READMEs, note templates, Dataview dashboards)
 ```
 

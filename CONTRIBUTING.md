@@ -10,13 +10,26 @@ the daemon meaningfully — the **Claude Code CLI** and **Ollama**.
 
 ```bash
 git clone https://github.com/jandro-es/axon.git && cd axon
-make            # builds the dashboard SPA + the binary
+make            # self-documenting help (lists every target by category)
+make doctor     # check build + runtime deps (prints how to install any that are missing)
+make build      # build the dashboard SPA + the version-stamped binary
 make test       # run the test suite
 make race       # run with the race detector
 ```
 
 `go build ./...` works without the SPA build (the dashboard serves a fallback
 page until `web/dist` is built).
+
+### Versioning
+
+Every build is version-stamped and checkable with `axon version` (or
+`axon --version`). `make build`/`make release` inject the `git describe` version,
+commit, and build date via `-ldflags`; a plain `go build`/`go install` falls back
+to Go's embedded VCS info (see `cmd/axon/version.go`), so no build is an anonymous
+`dev`. Cut distributable binaries with `make release` (cross-compiled macOS/Linux
+× amd64/arm64 into `dist/`). Releases follow [SemVer](https://semver.org) and are
+recorded in [CHANGELOG.md](CHANGELOG.md) — add an entry under `Unreleased` with
+your change.
 
 ## Project layout
 

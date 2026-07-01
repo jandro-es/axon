@@ -54,7 +54,8 @@ make setup PREFIX=$HOME/.local       # user-local install (no sudo)
 
 Then set your `vault_path` (and, for headless automations, a
 `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token`) in `~/.axon/`. Verify with
-`axon doctor` and `axon status`.
+`axon version` (which build you're running), `axon doctor` (prerequisites), and
+`axon status` (daemon + budget).
 
 ### Windows / other
 

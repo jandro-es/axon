@@ -4,6 +4,53 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/) (pre-1.0: minor versions may break).
 
+## [Unreleased]
+
+Developer-experience, observability, and installation improvements. No changes to
+the two cardinal rules or the vault contract.
+
+### Added
+
+- **Build versioning you can check** — `axon version` reports the version,
+  commit, build date, and Go/OS/arch, with `--short` for scripts; `axon --version`
+  works too. Every build is stamped: `make build`/`make release` inject the exact
+  `git describe` version, commit, and date via `-ldflags`, and a plain
+  `go build`/`go install` falls back to Go's embedded VCS commit — so no build is
+  ever an anonymous `0.0.0-dev`.
+- **`axon automations` [--json]** — list every automation with its enabled state
+  (config + policy), purpose, schedule, and last run (status, when, tokens, and
+  the skip/error reason).
+- **`axon health` [--json]** — a 0–100 vault health score with a letter grade and
+  per-dimension breakdown: index & link integrity, automation reliability, and
+  knowledge freshness. Read-only; no model call.
+- **`axon ingest --enrich`** — opt into Claude-backed metadata enrichment routed
+  through the token-manager chokepoint; the ingest result now reports how the
+  metadata was produced and the tokens it cost (deterministic heuristic remains
+  the default, at zero tokens).
+- **Professional install/update system** — a self-documenting `Makefile`
+  (`make` lists everything): `doctor`, `install`, `setup`, `update`, `reload`,
+  `uninstall`, and `release` (cross-compiled macOS/Linux × amd64/arm64 binaries).
+  A cross-platform dependency **preflight** (`scripts/preflight.sh`, `make doctor`)
+  checks the build + runtime toolchain and prints the exact install command for
+  your package manager. New Linux (`systemd --user`) install/update/uninstall
+  scripts sit alongside the macOS ones, and an `update` flow rebuilds, swaps the
+  binary (reporting the version delta), converges the profile (`axon init` — DB
+  migrations, scaffold, wiring, dashboards), restarts the daemon, and lists newly
+  shipped config settings. See [INSTALL.md](INSTALL.md).
+
+### Changed
+
+- **Clearer console output** — a shared `internal/ui` styler gives commands
+  consistent colour + status glyphs, auto-disabled for pipes/non-TTY and honouring
+  `NO_COLOR`/`FORCE_COLOR`. Errors now render as a clear block with an actionable
+  fix hint (e.g. a missing config points you at `axon init`).
+- **Descriptive budget-guard messaging** — when the token guard pauses a
+  non-essential automation, the skip reason now names the window and threshold
+  (e.g. "budget guard active — daily 82% ≥ 80% …") instead of a bare "budget",
+  and `axon status` shows the same reason.
+- `make uninstall` replaces `make uninstall-macos` (now OS-aware); `make setup`
+  works on Linux as well as macOS.
+
 ## [0.10.0] — 2026-06-28
 
 Completed the remaining deferred requirements, so every M/S requirement in the
@@ -142,6 +189,7 @@ The initial feature-complete build, implemented in phases against
   `config get/set`. *(PDF ingestion, the api_key adapter and `config get/set`
   were implemented in 0.10.0.)*
 
+[Unreleased]: https://github.com/jandro-es/axon/compare/v0.10.0...HEAD
 [0.10.0]: https://github.com/jandro-es/axon/releases/tag/v0.10.0
 [0.9.0]: https://github.com/jandro-es/axon/releases/tag/v0.9.0
 [0.8.0]: https://github.com/jandro-es/axon/releases/tag/v0.8.0

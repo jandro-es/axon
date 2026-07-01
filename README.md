@@ -29,15 +29,22 @@ Clone it, set a handful of values, and stand it up with one command — twice ov
 1. **No Claude call bypasses the token manager.** Every path to Claude goes through one chokepoint: pre-flight estimate → budget check → run → ledger. The only Claude adapter is `claude -p` on your subscription/enterprise login.
 2. **No vault mutation that isn't wikilink-safe.** Renames rewrite inbound links (`vault.move`); content edits land in `axon:*` managed blocks (`vault.patch`) and never clobber your prose; new notes via `vault.write`. There is **no** `vault.delete`, and the vault FS is sandboxed against path traversal.
 
-## Install (macOS, one command)
+## Install (macOS / Linux, one command)
 
 ```bash
 git clone https://github.com/jandro-es/axon.git && cd axon
+make doctor          # check dependencies (and how to install any that are missing)
 make setup           # build, install /usr/local/bin/axon, scaffold ~/.axon,
                      # start Ollama + the AXON daemon at login (idempotent)
 ```
 
-`make setup` (a wrapper over [`scripts/install-macos.sh`](scripts/install-macos.sh)) checks prerequisites, builds the binary + dashboard, installs everything, and — on the first run — opens `~/.axon/config.yaml` so you can set your `vault_path`. Re-run it any time after editing the config; it converges instead of clobbering. Undo everything with `make uninstall-macos` (add `ARGS="--purge"` to also delete `~/.axon`). Flags: `--no-service`, `--no-ollama`, `--prefix DIR`, `--profile NAME`.
+`make setup` dispatches to the installer for your OS ([macOS](scripts/install-macos.sh) launchd / [Linux](scripts/install-linux.sh) `systemd --user`): it runs the dependency **preflight**, builds the binary + dashboard, installs everything, and — on the first run — opens `~/.axon/config.yaml` so you can set your `vault_path`. Re-run it any time; it converges instead of clobbering.
+
+- **Update an existing install:** `make update` — rebuilds, replaces the binary (reporting the version delta), applies DB migrations + refreshes the wiring/dashboards via `axon init`, restarts the daemon, and lists any newly shipped config settings. Your config, secrets, and DB are preserved.
+- **Uninstall:** `make uninstall` (add `ARGS="--purge"` to also delete `~/.axon`). Your vault is never touched.
+- Pass installer flags via `ARGS`, e.g. `make setup ARGS="--no-ollama"`. Other flags: `--no-service`, `--prefix DIR`, `--profile NAME`.
+
+Run `make` with no arguments for the full, self-documenting target list. See [INSTALL.md](INSTALL.md) for the complete guide (Windows included).
 
 ## Build & run (manual / Linux)
 
@@ -50,6 +57,7 @@ cp .env.example ~/.axon/.env                       # CLAUDE_CODE_OAUTH_TOKEN fro
 (cd web && npm install && npm run build)       # build the dashboard SPA (Node, build-time only)
 go build -o axon ./cmd/axon                     # single self-contained binary (SPA embedded)
 
+./axon version                                  # version, commit, build date, Go/OS/arch
 ./axon config validate                          # check the config
 ./axon init   --env ~/.axon/.env                # scaffold vault + DB + .claude wiring + dashboards
 ./axon doctor                                   # prerequisites health check
@@ -58,20 +66,25 @@ go build -o axon ./cmd/axon                     # single self-contained binary (
 
 The config is read from `~/.axon/config.yaml` by default (`$AXON_HOME/config.yaml`), independent of the working directory; pass `--config <path>` to override. On Linux, `axon service install` emits a systemd `--user` unit for auto-start. `go build` works without the SPA build (a fallback page is served until `web/dist` exists).
 
+Every build is version-stamped and checkable with `axon version` (or `axon --version`). `make build`/`make release` stamp the exact `git describe` version, commit, and build date; a plain `go build`/`go install` falls back to Go's embedded VCS commit, so no build is ever an anonymous `dev`.
+
 **Prerequisites:** the `claude` CLI (logged in for your `auth_mode`) and **Ollama** for local embeddings.
 
 ## Commands
 
 | Command | What it does |
 |---------|--------------|
+| `axon version [--short]` | Print the version, commit, build date, and Go/OS/arch (`axon --version` also works). Every build is stamped. |
 | `axon init` | Provision the profile: data dir, DB, embedding check, vault scaffold, `.claude/` wiring (CLAUDE.md, `.mcp.json`, hooks, plugin), dashboards, first index. Idempotent. |
 | `axon doctor` | Prerequisite checks: config, stray `ANTHROPIC_API_KEY`, `claude`/`ollama`, vault writable, port free, residency. |
 | `axon config validate \| get \| set` | Validate, read, or comment-preservingly edit `config.yaml`. |
 | `axon reindex [--embeddings]` | Rebuild the notes mirror + link graph from the vault; `--embeddings` re-embeds. |
-| `axon ingest <url\|path> [--dry-run]` | Policy-gated fetch → clean → redact → summarise → write → chunk → embed → index. |
+| `axon ingest <url\|path> [--dry-run] [--enrich]` | Policy-gated fetch → clean → redact → summarise → write → chunk → embed → index. `--enrich` summarises with Claude (via the token manager) and reports the tokens spent. |
 | `axon search <query> [--top-k]` | Hybrid lexical (FTS5) + semantic (vector) search. |
 | `axon onboard` | Interactive wizard that builds your personal identity layer (no model call). |
-| `axon status [--json]` | Remaining day/week token budget + guard state. |
+| `axon status [--json]` | Remaining day/week token budget + guard state (with the reason it's paused). |
+| `axon automations [--json]` | List every automation: enabled state, purpose, schedule, and last run (status, when, tokens, skip/error reason). |
+| `axon health [--json]` | Score the vault's health (0–100 + grade) across index/link integrity, automation reliability, and knowledge freshness. |
 | `axon run <automation> [--dry-run]` | Run one automation through the engine (same path as the scheduler). |
 | `axon start [--no-dashboard]` | The daemon: scheduler + live SSE dashboard. |
 | `axon mcp [install]` | The AXON MCP server (stdio); `install --client code\|desktop` wires a Claude client. |

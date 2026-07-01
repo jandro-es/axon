@@ -80,34 +80,45 @@ ollama pull nomic-embed-text
 
 ## 3. Installation
 
-### Quick install (macOS)
+### Quick install (macOS / Linux)
 
-One command builds everything, installs it, and wires up auto-start:
+First check your toolchain, then let one command build, install, and wire up
+auto-start:
 
 ```bash
 git clone https://github.com/jandro-es/axon.git && cd axon
-make setup          # == scripts/install-macos.sh
+make doctor         # check build + runtime deps (prints how to install any that are missing)
+make setup          # dispatches to the macOS (launchd) or Linux (systemd --user) installer
 ```
 
-It is idempotent and verbose, and does the following:
+`make setup` is idempotent and verbose, and does the following:
 
-1. **Checks prerequisites** — Go, Node (optional, for the dashboard SPA), the `claude` CLI, and Ollama (installs Ollama via Homebrew if missing).
+1. **Runs the dependency preflight** — Go (required), Node (optional, for the dashboard SPA), the `claude` CLI, and Ollama; anything missing is reported with the exact install command for your package manager. On macOS it offers to install Ollama via Homebrew.
 2. **Builds** the dashboard SPA + the `axon` binary and installs it to `/usr/local/bin/axon` (override with `--prefix DIR`; uses `sudo` only if the target isn't writable).
 3. **Scaffolds** `~/.axon/config.yaml` and `~/.axon/.env` (chmod 600) from the shipped examples. On the **first** run it offers to open the config so you can set your `vault_path`; re-run `make setup` after editing.
-4. **Starts Ollama at login** via `brew services` and pulls your embedding model.
+4. **Prepares Ollama** — starts it at login (macOS `brew services`) and pulls your embedding model.
 5. **Runs `axon init`** to provision the profile (data dir, DB, vault scaffold, `.claude` wiring, first index).
-6. **Installs a launchd agent** (`~/Library/LaunchAgents/com.axon.<profile>.plist`) so the AXON daemon starts at login and restarts on crash, then verifies the dashboard answers.
+6. **Installs an auto-start service** — a launchd agent on macOS (`~/Library/LaunchAgents/com.axon.<profile>.plist`) or a `systemd --user` unit on Linux — so the daemon starts at login and restarts on crash, then verifies the dashboard answers.
 
-Useful flags: `--no-service` (skip auto-start), `--no-ollama` (manage Ollama yourself), `--profile NAME`, `--prefix DIR`, `--skip-build`.
+Useful flags (via `ARGS`, e.g. `make setup ARGS="--no-ollama"`): `--no-service` (skip auto-start), `--no-ollama` (manage Ollama yourself), `--profile NAME`, `--prefix DIR`, `--skip-build`.
+
+**Update** an existing install after pulling new code:
+
+```bash
+make update          # rebuild, swap the binary (with the version delta), re-run
+                     # axon init (DB migrations + wiring + dashboards), restart the daemon
+```
+
+It preserves your config, secrets, and SQLite DB, and lists any config settings the new version ships that you don't have yet (never applied silently).
 
 **Uninstall** everything with:
 
 ```bash
-make uninstall-macos                 # stop + remove the daemon and binary; keep ~/.axon
-make uninstall-macos ARGS="--purge"  # also delete ~/.axon (config, secrets, DB) — your vault is never touched
+make uninstall                 # stop + remove the daemon and binary; keep ~/.axon
+make uninstall ARGS="--purge"  # also delete ~/.axon (config, secrets, DB) — your vault is never touched
 ```
 
-> On **Linux**, use the manual build below plus `axon init` and `axon service install` (which emits a systemd `--user` unit). The steps are identical; only the auto-start mechanism differs.
+Run `make` with no arguments for the full, self-documenting target list, and see [INSTALL.md](../INSTALL.md) for the complete cross-platform guide (Windows included).
 
 ### Build from source
 
@@ -542,9 +553,11 @@ the vault is the source of truth, a full restore is: copy the vault back and run
 | `axon doctor` | Prerequisite checks with remediation hints. |
 | `axon init` | Idempotently provision the profile (steps in §5). |
 | `axon reindex [--embeddings]` | Rebuild notes mirror + link graph from the vault. |
-| `axon ingest <url\|path> [--dry-run] [--json]` | Run the ingestion pipeline. |
+| `axon ingest <url\|path> [--dry-run] [--enrich] [--json]` | Run the ingestion pipeline; `--enrich` summarises with Claude (via the token manager) and reports tokens spent. |
 | `axon search <query> [--top-k N] [--json]` | Hybrid lexical + semantic search. |
-| `axon status [--json]` | Remaining day/week token budget + guard state. |
+| `axon status [--json]` | Remaining day/week token budget + guard state (and why it's paused). |
+| `axon automations [--json]` | List automations: enabled state, purpose, schedule, and last run. |
+| `axon health [--json]` | Vault health score (0–100 + grade) across integrity, reliability, freshness. |
 | `axon run <automation> [--dry-run] [--json]` | Run one automation through the engine. |
 | `axon start [--no-dashboard] [--once]` | The daemon: scheduler + dashboard. |
 | `axon mcp` | MCP server over stdio (launched by Claude Code). |
@@ -552,7 +565,7 @@ the vault is the source of truth, a full restore is: copy the vault back and run
 | `axon service <install\|uninstall\|print>` | OS service unit management. |
 | `axon export [--out dir]` | Portable snapshot bundle. |
 | `axon profiles [--json]` | Show profiles' isolated paths/policy (no secrets). |
-| `axon version` | Print the version. |
+| `axon version [--short]` | Print the version, commit, build date, and Go/OS/arch (`axon --version` also works). |
 
 Global flags: `--config <path>` (default `~/.axon/config.yaml`), `--profile <name>`,
 `--env <path>` (default `.env`, resolved from the current directory; secrets may

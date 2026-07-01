@@ -16,13 +16,17 @@ type globalFlags struct {
 func newRootCmd() *cobra.Command {
 	gf := &globalFlags{}
 
+	shortVersion, _, _ := buildVersion()
 	root := &cobra.Command{
 		Use:           "axon",
 		Short:         "AXON — a local-first AI operating system for an Obsidian vault",
 		Long:          "AXON turns an Obsidian vault into a self-maintaining second brain.\nThe full command set is implemented; run `axon <command> --help` for details.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Enables `axon --version` (a quick alternative to `axon version`).
+		Version: shortVersion,
 	}
+	root.SetVersionTemplate("axon {{.Version}}\n")
 
 	pf := root.PersistentFlags()
 	pf.StringVarP(&gf.configPath, "config", "c", config.DefaultConfigPath(), "path to the config file (default ~/.axon/config.yaml)")
