@@ -85,7 +85,7 @@ profiles:
     policy:
       data_residency: local-only
       egress_allowlist: ["localhost", "*"]    # "*" = permissive (fine for personal); Claude Code handles its own egress
-      ingest_domains_allow: ["*"]             # ingest from anywhere
+      ingest_domains_allow: ["*"]             # ingest from anywhere PUBLIC — loopback/private/link-local IPs are always refused (SSRF guard), even with "*"
       ingest_domains_deny: []
       redaction_rules: []                     # regex patterns scrubbed from content BEFORE it reaches Claude
       allowed_automations: ["*"]              # allow-list gate; "*" = all permitted

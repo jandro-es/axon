@@ -17,6 +17,16 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || (echo 'gofmt needed:'; gofmt -l .; exit 1)
+
+      # Runs BEFORE the SPA build on purpose: vet compiles the module against
+      # the committed tree, so a clone that can't build (e.g. a deleted
+      # web/dist/.gitkeep breaking go:embed) fails here instead of being
+      # masked by npm having just recreated web/dist.
+      - name: go vet (fresh clone, no SPA build)
+        run: go vet ./...
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -26,12 +36,6 @@ jobs:
 
       - name: Build dashboard SPA
         run: cd web && npm ci && npm run build
-
-      - name: gofmt
-        run: test -z "$(gofmt -l .)" || (echo 'gofmt needed:'; gofmt -l .; exit 1)
-
-      - name: go vet
-        run: go vet ./...
 
       - name: Build
         run: go build ./...

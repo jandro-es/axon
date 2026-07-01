@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
+	"syscall"
 	"time"
 
 	"github.com/jandro-es/axon/internal/config"
@@ -27,10 +29,41 @@ type HTTPFetcher struct {
 }
 
 // NewHTTPFetcher returns a fetcher that enforces the profile's ingest egress
-// policy on every redirect hop (not just the initial request).
+// policy on every redirect hop (not just the initial request) and refuses, at
+// dial time, connections to loopback/private/link-local addresses — so a
+// hostname that *resolves* to an internal IP (DNS rebinding) is blocked even
+// when it passes the name-based policy.
 func NewHTTPFetcher(policy config.PolicyConfig) *HTTPFetcher {
+	dialer := &net.Dialer{
+		Timeout: 10 * time.Second,
+		// Control runs after DNS resolution, once per connection attempt, with
+		// the concrete "ip:port" — the only place the resolved IP is knowable.
+		Control: func(network, address string, _ syscall.RawConn) error {
+			host, _, err := net.SplitHostPort(address)
+			if err != nil {
+				return fmt.Errorf("refusing dial to unparseable address %q: %w", address, err)
+			}
+			ip := net.ParseIP(host)
+			if ip == nil {
+				return fmt.Errorf("refusing dial to non-IP address %q", host)
+			}
+			if reason := BlockedIPReason(ip); reason != "" {
+				return &PolicyError{Host: host, Reason: reason}
+			}
+			return nil
+		},
+	}
 	client := &http.Client{
 		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			Proxy:                 http.ProxyFromEnvironment,
+			DialContext:           dialer.DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          10,
+			IdleConnTimeout:       30 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: time.Second,
+		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
 				return fmt.Errorf("stopped after 10 redirects")

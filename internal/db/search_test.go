@@ -105,6 +105,69 @@ func TestFtsQuerySanitises(t *testing.T) {
 	}
 }
 
+func TestDeleteNoteCleansFTSAndSearchSurvives(t *testing.T) {
+	ctx := context.Background()
+	d := newMigratedDB(t)
+
+	seedChunk(t, d, "dead.md", "ephemeral quantum widget content", nil)
+	seedChunk(t, d, "alive.md", "durable quantum widget content", nil)
+
+	deadID, err := GetNoteIDByPath(ctx, d, "dead.md")
+	if err != nil || deadID == nil {
+		t.Fatalf("note id for dead.md: %v %v", deadID, err)
+	}
+	if err := DeleteNote(ctx, d, *deadID); err != nil {
+		t.Fatal(err)
+	}
+
+	// The FTS mirror must not retain rows for the deleted note's chunks.
+	var orphans int
+	if err := d.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM fts_chunks WHERE chunk_id NOT IN (SELECT id FROM chunks);`).Scan(&orphans); err != nil {
+		t.Fatal(err)
+	}
+	if orphans != 0 {
+		t.Errorf("orphaned fts_chunks rows after DeleteNote = %d, want 0", orphans)
+	}
+
+	// Search matching the deleted content must not error and must only return
+	// the surviving note.
+	hits, err := HybridSearch(ctx, d, SearchOpts{Query: "quantum widget", TopK: 5})
+	if err != nil {
+		t.Fatalf("search after DeleteNote errored: %v", err)
+	}
+	for _, h := range hits {
+		if h.Path == "dead.md" {
+			t.Errorf("deleted note still surfaced in search: %+v", h)
+		}
+	}
+	if len(hits) != 1 {
+		t.Errorf("hits = %d, want 1 (alive.md only): %+v", len(hits), hits)
+	}
+}
+
+func TestHybridSearchSkipsOrphanedIndexEntries(t *testing.T) {
+	ctx := context.Background()
+	d := newMigratedDB(t)
+
+	cid := seedChunk(t, d, "gone.md", "orphaned searchable text", nil)
+	seedChunk(t, d, "kept.md", "orphaned but kept text", nil)
+
+	// Simulate historical corruption: chunk deleted, FTS row left behind
+	// (pre-fix DeleteNote behavior, or a crash between the two deletes).
+	if _, err := d.ExecContext(ctx, `DELETE FROM chunks WHERE id = ?;`, cid); err != nil {
+		t.Fatal(err)
+	}
+
+	hits, err := HybridSearch(ctx, d, SearchOpts{Query: "orphaned text", TopK: 5})
+	if err != nil {
+		t.Fatalf("search over orphaned FTS row errored: %v", err)
+	}
+	if len(hits) != 1 || hits[0].Path != "kept.md" {
+		t.Errorf("hits = %+v, want exactly kept.md", hits)
+	}
+}
+
 func TestEncodeDecodeVector(t *testing.T) {
 	in := []float32{1.5, -2.25, 0, 3.125}
 	out, err := DecodeVector(EncodeVector(in))

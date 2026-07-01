@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -77,6 +78,11 @@ func HybridSearch(ctx context.Context, q DBTX, opts SearchOpts) ([]ChunkHit, err
 	hits := make([]ChunkHit, 0, len(ids))
 	for _, id := range ids {
 		h, err := hydrateChunk(ctx, q, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			// An index entry outlived its chunk (orphaned FTS row). Skip it
+			// rather than failing the whole search.
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}

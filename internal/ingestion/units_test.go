@@ -28,6 +28,17 @@ func TestCheckIngestPolicy(t *testing.T) {
 		{"work denies bare external", work, "news.ycombinator.com", true},
 		{"empty host", personal, "", true},
 		{"link-local metadata IP refused even when permissive", personal, "169.254.169.254", true},
+		{"loopback IPv4 refused even when permissive", personal, "127.0.0.1", true},
+		{"loopback IPv6 refused even when permissive", personal, "::1", true},
+		{"RFC1918 10/8 refused even when permissive", personal, "10.0.0.8", true},
+		{"RFC1918 172.16/12 refused even when permissive", personal, "172.16.5.5", true},
+		{"RFC1918 192.168/16 refused even when permissive", personal, "192.168.1.20", true},
+		{"IPv6 ULA refused even when permissive", personal, "fd00::1", true},
+		{"unspecified refused even when permissive", personal, "0.0.0.0", true},
+		{"private IP refused even when explicitly allowlisted", config.PolicyConfig{
+			IngestDomainsAllow: []string{"192.168.1.20"},
+		}, "192.168.1.20", true},
+		{"public IP allowed when permissive", personal, "93.184.216.34", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

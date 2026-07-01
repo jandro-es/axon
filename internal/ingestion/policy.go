@@ -32,11 +32,14 @@ func CheckIngestPolicy(p config.PolicyConfig, host string) error {
 	if host == "" {
 		return &PolicyError{Host: host, Reason: "empty host"}
 	}
-	// Always refuse link-local literal IPs (cloud metadata 169.254.169.254,
-	// fe80::/10) regardless of the allowlist — never a legitimate ingest target,
-	// and the classic SSRF pivot.
-	if ip := net.ParseIP(host); ip != nil && ip.IsLinkLocalUnicast() {
-		return &PolicyError{Host: host, Reason: "link-local address refused (SSRF guard)"}
+	// Always refuse literal IPs in non-public ranges regardless of the
+	// allowlist — never a legitimate ingest target, and the classic SSRF pivot.
+	// Hostnames resolving to such IPs (DNS rebinding) are caught again at dial
+	// time by BlockedIPReason via the fetcher's dialer Control hook.
+	if ip := net.ParseIP(host); ip != nil {
+		if reason := BlockedIPReason(ip); reason != "" {
+			return &PolicyError{Host: host, Reason: reason}
+		}
 	}
 	explicitAllow := matchesAnyExact(p.IngestDomainsAllow, host)
 
@@ -57,6 +60,27 @@ func CheckIngestPolicy(p config.PolicyConfig, host string) error {
 		}
 	}
 	return nil
+}
+
+// BlockedIPReason returns a non-empty reason when ip must never be an ingest
+// target: loopback, link-local (cloud metadata 169.254.169.254 / fe80::/10),
+// private ranges (RFC1918, ULA fc00::/7), unspecified, or multicast. This is
+// enforced unconditionally — even a "*" allowlist must not let a
+// prompt-injected agent pivot the daemon onto internal services (NFR-05).
+func BlockedIPReason(ip net.IP) string {
+	switch {
+	case ip.IsLoopback():
+		return "loopback address refused (SSRF guard)"
+	case ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast():
+		return "link-local address refused (SSRF guard)"
+	case ip.IsPrivate():
+		return "private-range address refused (SSRF guard)"
+	case ip.IsUnspecified():
+		return "unspecified address refused (SSRF guard)"
+	case ip.IsMulticast():
+		return "multicast address refused (SSRF guard)"
+	}
+	return ""
 }
 
 // matchesDomain reports whether host equals pattern or is a subdomain of it.

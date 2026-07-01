@@ -21,7 +21,7 @@ make uninstall  # remove the daemon + binary (keeps ~/.axon)
 
 | Tool | Required | Purpose |
 | --- | --- | --- |
-| **Go 1.22+** | yes (to build) | compiles the binary |
+| **Go 1.26+** | yes (to build) | compiles the binary (matches the `go` directive in `go.mod`) |
 | **Node + npm** | optional | builds the dashboard SPA (a fallback page is served without it) |
 | **claude CLI** | recommended | automations + interactive use ([Claude Code](https://claude.com/claude-code)) |
 | **Ollama** | recommended | local embeddings + hybrid search |

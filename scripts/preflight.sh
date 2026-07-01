@@ -22,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 SCOPE="all"
 QUIET=0
-GO_MIN="1.22"
+GO_MIN="1.26"
 
 while [ $# -gt 0 ]; do
   case "$1" in

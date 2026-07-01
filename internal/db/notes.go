@@ -60,8 +60,34 @@ func NotePathIDs(ctx context.Context, q Queryer2) (map[string]int64, error) {
 	return out, rows.Err()
 }
 
-// DeleteNote removes a note by id (cascading its chunks/vectors/links).
-func DeleteNote(ctx context.Context, q Execer, id int64) error {
+// DeleteNote removes a note by id (cascading its chunks/vectors/links). The
+// FTS5 mirror has no foreign key, so the chunks' fts_chunks rows are deleted
+// explicitly first — leaving them behind breaks HybridSearch with dangling
+// chunk ids.
+func DeleteNote(ctx context.Context, q DBTX, id int64) error {
+	rows, err := q.QueryContext(ctx, `SELECT id FROM chunks WHERE note_id = ?;`, id)
+	if err != nil {
+		return fmt.Errorf("list chunks for note %d: %w", id, err)
+	}
+	var chunkIDs []int64
+	for rows.Next() {
+		var cid int64
+		if err := rows.Scan(&cid); err != nil {
+			rows.Close()
+			return err
+		}
+		chunkIDs = append(chunkIDs, cid)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	for _, cid := range chunkIDs {
+		if _, err := q.ExecContext(ctx, `DELETE FROM fts_chunks WHERE chunk_id = ?;`, cid); err != nil {
+			return fmt.Errorf("delete fts row %d: %w", cid, err)
+		}
+	}
 	if _, err := q.ExecContext(ctx, "DELETE FROM notes WHERE id = ?;", id); err != nil {
 		return fmt.Errorf("delete note %d: %w", id, err)
 	}

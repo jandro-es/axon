@@ -87,6 +87,10 @@ func DeleteChunksForSource(ctx context.Context, q DBTX, sourceID int64) error {
 		}
 		ids = append(ids, id)
 	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("list chunks for source %d: %w", sourceID, err)
+	}
 	rows.Close()
 	for _, id := range ids {
 		if _, err := q.ExecContext(ctx, `DELETE FROM fts_chunks WHERE chunk_id = ?;`, id); err != nil {
