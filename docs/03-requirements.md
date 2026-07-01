@@ -2,21 +2,18 @@
 
 Requirements are the build contract. Each is testable. Priority: **M** (must, v1), **S** (should, v1 if time), **C** (could, post-v1). IDs are stable references for the roadmap and acceptance gates.
 
-> **Status:** every **M** and **S** requirement is implemented except the
-> known partials listed here (implemented set incl. PDF ingestion FR-21,
-> `config get/set` + `stop` FR-04, the `metrics_query` tool FR-50, the
-> `api_key` exact-`count_tokens` adapter FR-40/41, and the Obsidian MCP
-> interop FR-54). **Known partials:** FR-01 (init probes the embedding model
-> but does not pull it — the install scripts pull), FR-05 (doctor checks
-> `claude` presence, not per-profile authentication), FR-42 (`daily_cost_usd`
-> is configured and recorded but not yet enforced as a cap), FR-44
-> (compaction's `tokens_saved_est` is reported in the run summary, not
-> persisted; raw source is not archived), FR-52 (the PostToolUse hook is a
-> deliberate no-op — usage is ledgered at the chokepoint instead), FR-60
-> (cache-token split and vault-growth-over-time series not yet charted),
-> FR-61 (similarity edges + toggle in the graph view pending — wikilink/embed
-> edges only). The remaining **C** items (FR-26 capture-by-Inbox, FR-64 chart
-> CSV/JSON export; NFR-13 is done) are explicitly post-v1.
+> **Status:** every **M** and **S** requirement is implemented (incl. PDF
+> ingestion FR-21, `config get/set` + `stop` FR-04, the `metrics_query` tool
+> FR-50, the `api_key` exact-`count_tokens` adapter FR-40/41, the Obsidian
+> MCP interop FR-54, init model pull + dim assertion FR-01, per-profile auth
+> checks in doctor FR-05, the `daily_cost_usd` hard cap FR-42, compaction
+> archiving + persisted `tokens_saved_est` FR-44, the cache-token split and
+> vault-growth series FR-60, and graph similarity edges with a toggle FR-61).
+> One deliberate design deviation: FR-52's PostToolUse hook is a documented
+> no-op — every Claude round-trip is already ledgered at the token-manager
+> chokepoint, so a per-tool hook would double-count (see docs/08 §2). The
+> remaining **C** items (FR-26 capture-by-Inbox, FR-64 chart CSV/JSON export;
+> NFR-13 is done) are explicitly post-v1.
 
 ## Functional requirements
 

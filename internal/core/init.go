@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 	"github.com/jandro-es/axon/internal/claudeassets"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
+	"github.com/jandro-es/axon/internal/embeddings"
 	"github.com/jandro-es/axon/internal/identity"
 	"github.com/jandro-es/axon/internal/scaffold"
 	"github.com/jandro-es/axon/internal/ui"
@@ -271,27 +273,66 @@ func vaultScaffoldStep(paths config.ResolvedPaths) (StepResult, *vault.FS) {
 	return StepResult{"scaffold", StepAlready, "vault layout present, nothing added"}, vfs
 }
 
-// probeEmbeddingModel does a short, non-fatal reachability check against Ollama.
-// In Phase 1 embeddings are not yet used, so any failure is a warning: it never
-// blocks init. The real pull + dimension assertion lands with the Ollama
-// provider in Phase 2.
+// probeEmbeddingModel converges the embedding model (FR-01): if Ollama is
+// reachable but the model is missing, it is pulled here (one-time, local
+// download); once present, a probe embedding asserts the live dimension
+// matches the configured dim. An unreachable Ollama stays a warning — init
+// never blocks on embeddings (search degrades to lexical-only).
 func probeEmbeddingModel(ctx context.Context, e config.EmbeddingsConfig) StepResult {
 	if e.Provider != "ollama" {
-		return StepResult{"embeddings", StepWarn, fmt.Sprintf("provider %q not checked in Phase 1", e.Provider)}
+		return StepResult{"embeddings", StepWarn, fmt.Sprintf("provider %q not checked", e.Provider)}
 	}
 	host := e.Host
 	if host == "" {
-		host = "http://localhost:11434"
+		host = embeddings.DefaultOllamaHost
 	}
+	host = strings.TrimRight(host, "/")
+
+	if !ollamaModelPresent(ctx, host, e.Model) {
+		// Reachability first, so "not running" and "not pulled" stay distinct.
+		if !ollamaReachable(ctx, host) {
+			return StepResult{"embeddings", StepWarn, fmt.Sprintf("Ollama not reachable at %s — start it with `ollama serve`, then re-run `axon init` (search is lexical-only until then)", host)}
+		}
+		if err := ollamaPull(ctx, host, e.Model); err != nil {
+			return StepResult{"embeddings", StepWarn, fmt.Sprintf("could not pull model %q: %v — run `ollama pull %s` manually", e.Model, err, e.Model)}
+		}
+	}
+
+	// Model available: assert the live output dimension against config.
+	if err := embeddings.NewOllama(host, e.Model, e.Dim).Healthcheck(ctx); err != nil {
+		return StepResult{"embeddings", StepWarn, fmt.Sprintf("model %q present but probe failed: %v", e.Model, err)}
+	}
+	return StepResult{"embeddings", StepDone, fmt.Sprintf("model %q ready (dim %d verified)", e.Model, e.Dim)}
+}
+
+// ollamaReachable reports whether the Ollama API answers at host.
+func ollamaReachable(ctx context.Context, host string) bool {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(host, "/")+"/api/tags", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, host+"/api/tags", nil)
 	if err != nil {
-		return StepResult{"embeddings", StepWarn, err.Error()}
+		return false
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return StepResult{"embeddings", StepWarn, fmt.Sprintf("Ollama not reachable at %s — start it with `ollama serve` (not required until Phase 2)", host)}
+		return false
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
+}
+
+// ollamaModelPresent reports whether model (or a tagged variant) is in the
+// local Ollama library.
+func ollamaModelPresent(ctx context.Context, host, model string) bool {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, host+"/api/tags", nil)
+	if err != nil {
+		return false
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false
 	}
 	defer resp.Body.Close()
 	var payload struct {
@@ -300,14 +341,45 @@ func probeEmbeddingModel(ctx context.Context, e config.EmbeddingsConfig) StepRes
 		} `json:"models"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return StepResult{"embeddings", StepWarn, "could not read Ollama model list"}
+		return false
 	}
 	for _, m := range payload.Models {
-		if m.Name == e.Model || strings.HasPrefix(m.Name, e.Model+":") {
-			return StepResult{"embeddings", StepDone, fmt.Sprintf("model %q present (dim assertion deferred to Phase 2)", e.Model)}
+		if m.Name == model || strings.HasPrefix(m.Name, model+":") {
+			return true
 		}
 	}
-	return StepResult{"embeddings", StepWarn, fmt.Sprintf("model %q not pulled — run `ollama pull %s` (needed in Phase 2)", e.Model, e.Model)}
+	return false
+}
+
+// ollamaPull downloads model via Ollama's /api/pull (FR-01). Bounded at ten
+// minutes — embedding models are small (hundreds of MB), and a stuck download
+// must not hang init forever.
+func ollamaPull(ctx context.Context, host, model string) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	body, _ := json.Marshal(map[string]any{"model": model, "stream": false})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, host+"/api/pull", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{}).Do(req) // no client timeout: ctx bounds the pull
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
+	}
+	var out struct {
+		Status string `json:"status"`
+		Error  string `json:"error"`
+	}
+	if err := json.Unmarshal(raw, &out); err == nil && out.Error != "" {
+		return fmt.Errorf("%s", out.Error)
+	}
+	return nil
 }
 
 func anyChanged(steps []StepResult) bool {

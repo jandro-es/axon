@@ -90,4 +90,11 @@ func printWindow(cmd *cobra.Command, label string, w tokens.Window) {
 	}
 	fmt.Fprintf(out, "  %s: %d / %d tokens used (%s), %d remaining\n",
 		label, w.Used, w.Limit, pct, remaining)
+	// Dollar tracking appears only in api_key mode (FR-42): capped on the day
+	// window, informational on the week window.
+	if w.CostCap > 0 {
+		fmt.Fprintf(out, "        cost $%.2f / $%.2f (%.1f%% of daily cap)\n", w.CostUsed, w.CostCap, w.CostPct)
+	} else if w.CostUsed > 0 {
+		fmt.Fprintf(out, "        cost $%.2f\n", w.CostUsed)
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -58,13 +59,16 @@ func RecentEvents(ctx context.Context, q Queryer2, limit int) ([]EventRow, error
 	return out, rows.Err()
 }
 
-// TokenBucket is token usage grouped by day, operation and model.
+// TokenBucket is token usage grouped by day, operation and model, including
+// the cache-token split (FR-60).
 type TokenBucket struct {
-	Day       string `json:"day"`
-	Operation string `json:"operation"`
-	Model     string `json:"model"`
-	Input     int64  `json:"input"`
-	Output    int64  `json:"output"`
+	Day        string `json:"day"`
+	Operation  string `json:"operation"`
+	Model      string `json:"model"`
+	Input      int64  `json:"input"`
+	Output     int64  `json:"output"`
+	CacheRead  int64  `json:"cache_read"`
+	CacheWrite int64  `json:"cache_write"`
 }
 
 // TokenSeries returns token usage bucketed by day/operation/model since sinceTS,
@@ -72,7 +76,8 @@ type TokenBucket struct {
 func TokenSeries(ctx context.Context, q Queryer2, sinceTS string) ([]TokenBucket, error) {
 	rows, err := q.QueryContext(ctx,
 		`SELECT substr(ts,1,10) AS day, operation, model,
-		        COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0)
+		        COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0),
+		        COALESCE(SUM(cache_read),0), COALESCE(SUM(cache_write),0)
 		   FROM token_ledger WHERE ts >= ?
 		   GROUP BY day, operation, model ORDER BY day;`, sinceTS)
 	if err != nil {
@@ -82,7 +87,7 @@ func TokenSeries(ctx context.Context, q Queryer2, sinceTS string) ([]TokenBucket
 	var out []TokenBucket
 	for rows.Next() {
 		var b TokenBucket
-		if err := rows.Scan(&b.Day, &b.Operation, &b.Model, &b.Input, &b.Output); err != nil {
+		if err := rows.Scan(&b.Day, &b.Operation, &b.Model, &b.Input, &b.Output, &b.CacheRead, &b.CacheWrite); err != nil {
 			return nil, err
 		}
 		out = append(out, b)
@@ -200,10 +205,13 @@ type GraphNode struct {
 	Words int    `json:"words"`
 }
 
-// GraphEdge is a resolved wikilink edge between two notes.
+// GraphEdge is an edge between two notes: a resolved wikilink/embed
+// (kind "link") or a vector-similarity neighbour (kind "similar", FR-61).
 type GraphEdge struct {
-	Source int64 `json:"source"`
-	Target int64 `json:"target"`
+	Source int64   `json:"source"`
+	Target int64   `json:"target"`
+	Kind   string  `json:"kind"`
+	Sim    float64 `json:"sim,omitempty"` // cosine similarity (similar edges only)
 }
 
 // Graph is the knowledge-graph payload.
@@ -212,9 +220,19 @@ type Graph struct {
 	Edges []GraphEdge `json:"edges"`
 }
 
-// GraphData returns nodes (notes) and resolved wikilink edges, capped at limit
+// Similarity-edge bounds (FR-61): an edge needs at least simThreshold cosine
+// similarity, each note keeps at most simTopK neighbours, and the O(n²) sweep
+// is skipped beyond simMaxNotes noted-with-vectors (personal-vault scale).
+const (
+	simThreshold = 0.75
+	simTopK      = 3
+	simMaxNotes  = 1500
+)
+
+// GraphData returns nodes (notes) and resolved wikilink edges — plus, when
+// includeSimilar is set, vector-similarity edges (FR-61) — capped at limit
 // nodes. Filtering by folder/tag is applied client-side.
-func GraphData(ctx context.Context, q Queryer2, limit int) (Graph, error) {
+func GraphData(ctx context.Context, q Queryer2, limit int, includeSimilar bool) (Graph, error) {
 	if limit <= 0 {
 		limit = 1000
 	}
@@ -247,7 +265,7 @@ func GraphData(ctx context.Context, q Queryer2, limit int) (Graph, error) {
 	}
 	defer erows.Close()
 	for erows.Next() {
-		var e GraphEdge
+		e := GraphEdge{Kind: "link"}
 		if err := erows.Scan(&e.Source, &e.Target); err != nil {
 			return g, err
 		}
@@ -255,5 +273,157 @@ func GraphData(ctx context.Context, q Queryer2, limit int) (Graph, error) {
 			g.Edges = append(g.Edges, e)
 		}
 	}
-	return g, erows.Err()
+	if err := erows.Err(); err != nil {
+		return g, err
+	}
+
+	if includeSimilar {
+		sim, err := similarityEdges(ctx, q, present)
+		if err != nil {
+			return g, err
+		}
+		g.Edges = append(g.Edges, sim...)
+	}
+	return g, nil
+}
+
+// similarityEdges computes note-level vector-similarity edges: a note's vector
+// is the mean of its chunks' embeddings; notes whose cosine similarity is at
+// least simThreshold are connected, keeping the simTopK strongest neighbours
+// per note. Brute-force O(n²) over note vectors — fine at personal-vault scale
+// (see docs/05 §7 / ADR-010); skipped entirely above simMaxNotes.
+func similarityEdges(ctx context.Context, q Queryer2, present map[int64]bool) ([]GraphEdge, error) {
+	rows, err := q.QueryContext(ctx,
+		`SELECT c.note_id, v.embedding FROM vec_chunks v
+		   JOIN chunks c ON c.id = v.chunk_id
+		  WHERE c.note_id IS NOT NULL;`)
+	if err != nil {
+		return nil, fmt.Errorf("similarity vectors: %w", err)
+	}
+	defer rows.Close()
+
+	sums := map[int64][]float64{}
+	counts := map[int64]int{}
+	for rows.Next() {
+		var noteID int64
+		var blob []byte
+		if err := rows.Scan(&noteID, &blob); err != nil {
+			return nil, err
+		}
+		if !present[noteID] {
+			continue
+		}
+		vec, err := DecodeVector(blob)
+		if err != nil {
+			continue // skip undecodable vectors; similarity is best-effort
+		}
+		sum := sums[noteID]
+		if sum == nil {
+			sum = make([]float64, len(vec))
+			sums[noteID] = sum
+		}
+		if len(sum) != len(vec) {
+			continue // mixed dims (model change mid-reembed); skip mismatches
+		}
+		for i, f := range vec {
+			sum[i] += float64(f)
+		}
+		counts[noteID]++
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(sums) < 2 || len(sums) > simMaxNotes {
+		return nil, nil
+	}
+
+	ids := make([]int64, 0, len(sums))
+	means := make(map[int64][]float32, len(sums))
+	for id, sum := range sums {
+		mean := make([]float32, len(sum))
+		for i, f := range sum {
+			mean[i] = float32(f / float64(counts[id]))
+		}
+		ids = append(ids, id)
+		means[id] = mean
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+
+	type scored struct {
+		a, b int64
+		sim  float64
+	}
+	var candidates []scored
+	for i := 0; i < len(ids); i++ {
+		for j := i + 1; j < len(ids); j++ {
+			a, b := ids[i], ids[j]
+			if len(means[a]) != len(means[b]) {
+				continue
+			}
+			if s := cosine(means[a], means[b]); s >= simThreshold {
+				candidates = append(candidates, scored{a, b, s})
+			}
+		}
+	}
+	// Strongest first; keep an edge while either endpoint still has neighbour
+	// capacity, so every note gets at most ~simTopK similarity edges.
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].sim != candidates[j].sim {
+			return candidates[i].sim > candidates[j].sim
+		}
+		if candidates[i].a != candidates[j].a {
+			return candidates[i].a < candidates[j].a
+		}
+		return candidates[i].b < candidates[j].b
+	})
+	degree := map[int64]int{}
+	var out []GraphEdge
+	for _, c := range candidates {
+		if degree[c.a] >= simTopK && degree[c.b] >= simTopK {
+			continue
+		}
+		degree[c.a]++
+		degree[c.b]++
+		out = append(out, GraphEdge{Source: c.a, Target: c.b, Kind: "similar", Sim: c.sim})
+	}
+	return out, nil
+}
+
+// GrowthPoint is one cumulative vault-size sample (FR-60).
+type GrowthPoint struct {
+	Day   string `json:"day"`
+	Notes int    `json:"notes"`
+	Words int    `json:"words"`
+}
+
+// VaultGrowth returns cumulative note and word counts by note-creation date —
+// the vault-growth-over-time series (FR-60). It is derived from the current
+// notes table (each note attributed to its `created` date, falling back to
+// last_indexed), not snapshotted, so it stays rebuildable from Markdown alone
+// (ADR-006); notes with no usable date are omitted.
+func VaultGrowth(ctx context.Context, q Queryer2) ([]GrowthPoint, error) {
+	rows, err := q.QueryContext(ctx,
+		`SELECT substr(COALESCE(NULLIF(created,''), last_indexed, ''),1,10) AS day,
+		        COUNT(*), COALESCE(SUM(word_count),0)
+		   FROM notes GROUP BY day ORDER BY day;`)
+	if err != nil {
+		return nil, fmt.Errorf("vault growth: %w", err)
+	}
+	defer rows.Close()
+	var out []GrowthPoint
+	cumNotes, cumWords := 0, 0
+	for rows.Next() {
+		var day string
+		var notes, words int
+		if err := rows.Scan(&day, &notes, &words); err != nil {
+			return nil, err
+		}
+		if day == "" {
+			continue
+		}
+		cumNotes += notes
+		cumWords += words
+		out = append(out, GrowthPoint{Day: day, Notes: cumNotes, Words: cumWords})
+	}
+	return out, rows.Err()
 }

@@ -1,5 +1,11 @@
 # Production-Readiness Task List
 
+> **Closed out.** All 23 findings below are `done`, and the feature partials
+> that item 21 named (FR-01, FR-05, FR-42, FR-44, FR-60, FR-61) have since
+> been implemented too — see the docs/03 status banner for the current
+> requirements state. FR-52's PostToolUse no-op remains a documented design
+> decision (docs/08 §2).
+
 Findings from the full-project review (2026-07-01, Claude Fable 5: five parallel audits — cardinal
 rules, Go core, docs traceability, tests/CI/security, dashboard). Update the **Status** column as
 items are fixed: `todo` → `in progress` → `done` (with commit) or `wontfix` (with reason).

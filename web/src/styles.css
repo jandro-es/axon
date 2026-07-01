@@ -229,6 +229,13 @@ body {
   border-radius: 8px; padding: 6px 10px; font: 500 12px var(--mono); cursor: pointer;
 }
 .filters select:focus-visible { outline: 2px solid var(--signal-2); outline-offset: 1px; }
+.filters .toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--panel-2); color: var(--ink); border: 1px solid var(--line-hi);
+  border-radius: 8px; padding: 6px 10px; font: 500 12px var(--mono); cursor: pointer;
+}
+.filters .toggle input { accent-color: var(--signal-2); cursor: pointer; }
+.filters .toggle:focus-within { outline: 2px solid var(--signal-2); outline-offset: 1px; }
 .seg { display: inline-flex; background: var(--panel-2); border: 1px solid var(--line-hi); border-radius: 8px; overflow: hidden; }
 .seg button { background: none; border: 0; color: var(--ink-faint); padding: 6px 11px; font: 500 11.5px var(--mono); cursor: pointer; }
 .seg button.on { color: var(--ink); background: var(--panel-hi); }

@@ -298,6 +298,77 @@ func TestEssentialBypassesBudget(t *testing.T) {
 	}
 }
 
+// TestDailyCostCapEnforced (FR-42): in api_key mode the daily_cost_usd cap is
+// a hard pre-flight gate, with the same downgrade/deny ladder as tokens.
+func TestDailyCostCapEnforced(t *testing.T) {
+	ctx := context.Background()
+	fake := agent.NewFake()
+	fake.Mode = "api_key"
+	fake.RespondFn = func(r agent.Request) (*agent.Response, error) {
+		return &agent.Response{Text: "ok", Model: r.Model, Usage: agent.Usage{InputTokens: 1000, OutputTokens: 100}}, nil
+	}
+	m := testManager(t, generousLimits(), fake)
+	m.cfg.AuthMode = "api_key"
+	m.cfg.Limits.DailyCostUSD = 0.10
+	m.cfg.Prices = map[string]config.Price{
+		"opus":   {Input: 0.0001, Output: 0.0005}, // synthesis: pricey
+		"sonnet": {Input: 0.00001, Output: 0.00005},
+		"haiku":  {Input: 0.000001, Output: 0.000005},
+	}
+
+	// Burn most of the cap: 1000 in * 0.0001 + 100 out * 0.0005 = $0.15 > cap.
+	if _, err := m.Run(ctx, AgentCall{Operation: "op", ModelKey: "synthesis",
+		Messages: []Message{{Role: "user", Content: "expensive work"}}}); err != nil {
+		t.Fatal(err)
+	}
+	st, err := m.Status(ctx, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Day.CostUsed <= 0 || st.Day.CostCap != 0.10 {
+		t.Fatalf("status cost = used %.4f cap %.2f, want used > 0 / cap 0.10", st.Day.CostUsed, st.Day.CostCap)
+	}
+
+	// Next synthesis call is over the cap → downgraded (cheaper tier exists).
+	auth, err := m.Authorize(ctx, AgentCall{Operation: "op", ModelKey: "synthesis",
+		Messages: []Message{{Role: "user", Content: "more work"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if auth.Decision != DecisionDowngrade {
+		t.Errorf("decision = %q (%s), want downgrade over the cost cap", auth.Decision, auth.Reason)
+	}
+
+	// At the cheapest tier with the cap exhausted → deny; nothing executes.
+	auth, err = m.Authorize(ctx, AgentCall{Operation: "op", ModelKey: "classify",
+		Messages: []Message{{Role: "user", Content: "cheap work"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if auth.Decision != DecisionDeny {
+		t.Errorf("decision = %q (%s), want deny with the cap exhausted", auth.Decision, auth.Reason)
+	}
+
+	// Essential still proceeds (surfaced), mirroring the token windows.
+	auth, err = m.Authorize(ctx, AgentCall{Operation: "op", ModelKey: "classify", Essential: true,
+		Messages: []Message{{Role: "user", Content: "essential"}}})
+	if err != nil || auth.Decision != DecisionProceed {
+		t.Errorf("essential decision = %q, %v — want proceed", auth.Decision, err)
+	}
+}
+
+// TestCostCapIgnoredOutsideAPIKeyMode: subscription mode never gates on cost.
+func TestCostCapIgnoredOutsideAPIKeyMode(t *testing.T) {
+	ctx := context.Background()
+	m := testManager(t, generousLimits(), agent.NewFake())
+	m.cfg.Limits.DailyCostUSD = 0.000001 // absurdly low; must not matter
+	auth, err := m.Authorize(ctx, AgentCall{Operation: "op", ModelKey: "routine",
+		Messages: []Message{{Role: "user", Content: "hello"}}})
+	if err != nil || auth.Decision != DecisionProceed {
+		t.Errorf("subscription-mode decision = %q, %v — want proceed (cost cap is api_key only)", auth.Decision, err)
+	}
+}
+
 func TestStatusGuardPause(t *testing.T) {
 	ctx := context.Background()
 	limits := config.LimitsConfig{DailyTokens: 100, WeeklyTokens: 1000, GuardPauseAtPct: 80}

@@ -72,6 +72,12 @@ type Window struct {
 	Used  int64
 	Limit int64
 	Pct   float64
+	// CostUsed/CostCap track dollars (api_key mode; zero otherwise). Only the
+	// day window carries a cap (limits.daily_cost_usd, FR-42); the week window
+	// still reports its accrued cost for display.
+	CostUsed float64
+	CostCap  float64
+	CostPct  float64
 }
 
 // BudgetStatus is the read-only view powering `axon status`, the tokens.status
@@ -263,6 +269,38 @@ func (m *manager) Authorize(ctx context.Context, call AgentCall) (Authorization,
 	if err != nil {
 		return auth, err
 	}
+
+	// Dollar cap (api_key mode only, FR-42): the day window accrues cost_used
+	// with every ledgered call; enforce limits.daily_cost_usd against it, using
+	// the priced input estimate as the pre-flight increment (output cost is
+	// unknown pre-call — the cap is re-checked with real numbers next call).
+	if day.CostCap > 0 {
+		estCost := 0.0
+		if p, ok := m.cfg.Prices[model]; ok {
+			estCost = float64(est) * p.Input
+		}
+		if day.CostUsed+estCost > day.CostCap {
+			if call.Essential {
+				auth.Reason = "over daily cost cap but essential; proceeding (surfaced)"
+				return auth, nil
+			}
+			if dk := downgradeKey(call.ModelKey); dk != "" {
+				auth.Decision = DecisionDowngrade
+				auth.Model = m.resolveModel(dk)
+				auth.Reason = fmt.Sprintf("over daily cost cap ($%.2f/$%.2f); downgraded %s -> %s", day.CostUsed, day.CostCap, call.ModelKey, dk)
+				return auth, nil
+			}
+			if day.CostUsed >= day.CostCap {
+				auth.Decision = DecisionDeny
+				auth.Reason = fmt.Sprintf("daily cost cap exhausted ($%.2f/$%.2f)", day.CostUsed, day.CostCap)
+				return auth, nil
+			}
+			auth.Decision = DecisionDefer
+			auth.Reason = fmt.Sprintf("would exceed daily cost cap ($%.2f/$%.2f)", day.CostUsed, day.CostCap)
+			return auth, nil
+		}
+	}
+
 	overDay := day.Limit > 0 && day.Used+int64(est) > day.Limit
 	overWeek := week.Limit > 0 && week.Used+int64(est) > week.Limit
 	if !overDay && !overWeek {
@@ -474,6 +512,12 @@ func (m *manager) Status(ctx context.Context, profile string) (BudgetStatus, err
 		st.GuardPaused = true
 		st.GuardReason = guardReason(guard, day, week)
 	}
+	// The dollar cap participates in the guard too (api_key mode, FR-42).
+	if guard > 0 && day.CostCap > 0 && day.CostPct >= float64(guard) && !st.GuardPaused {
+		st.GuardPaused = true
+		st.GuardReason = fmt.Sprintf("budget guard active — daily cost $%.2f is %.0f%% of the $%.2f cap (≥ %d%% pause threshold); non-essential automations pause until the window rolls over",
+			day.CostUsed, day.CostPct, day.CostCap, guard)
+	}
 	return st, nil
 }
 
@@ -503,6 +547,14 @@ func (m *manager) windows(ctx context.Context) (Window, Window, error) {
 	}
 	day := makeWindow(dayBW.TokensUsed, m.cfg.Limits.DailyTokens.Int())
 	week := makeWindow(weekBW.TokensUsed, m.cfg.Limits.WeeklyTokens.Int())
+	if m.cfg.AuthMode == "api_key" {
+		day.CostUsed = dayBW.CostUsed
+		week.CostUsed = weekBW.CostUsed
+		if cap := m.cfg.Limits.DailyCostUSD; cap > 0 {
+			day.CostCap = cap
+			day.CostPct = day.CostUsed / cap * 100
+		}
+	}
 	return day, week, nil
 }
 

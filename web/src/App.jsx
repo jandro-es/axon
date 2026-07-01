@@ -74,12 +74,15 @@ function fmtDur(a, b) {
 }
 
 /* ── aggregations ────────────────────────────────────────────────────────── */
-// tokensDaily collapses the per-day/operation/model buckets into a day series.
+// tokensDaily collapses the per-day/operation/model buckets into a day series
+// (with the cache split, FR-60).
 function tokensDaily(tokens) {
   const by = {}
   for (const b of tokens || []) {
-    const d = (by[b.day] = by[b.day] || { day: b.day, input: 0, output: 0, total: 0 })
-    d.input += b.input || 0; d.output += b.output || 0; d.total += (b.input || 0) + (b.output || 0)
+    const d = (by[b.day] = by[b.day] || { day: b.day, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 })
+    d.input += b.input || 0; d.output += b.output || 0
+    d.cacheRead += b.cache_read || 0; d.cacheWrite += b.cache_write || 0
+    d.total += (b.input || 0) + (b.output || 0)
   }
   return Object.values(by).sort((a, b) => a.day.localeCompare(b.day))
 }
@@ -184,6 +187,12 @@ function BudgetCard({ usage, span }) {
         <div className="gauge-info">
           <div className="legend-row"><span className="k"><i className="swatch" style={{ background: gaugeColor(u.day_pct, u.guard_paused) }} />Day</span><span className="v">{num(u.day_used)} / {num(u.day_limit)}</span></div>
           <div className="legend-row"><span className="k"><i className="swatch" style={{ background: gaugeColor(u.week_pct, u.guard_paused) }} />Week</span><span className="v">{num(u.week_used)} / {num(u.week_limit)}</span></div>
+          {(u.day_cost_cap > 0 || u.day_cost_used > 0) && (
+            <div className="legend-row">
+              <span className="k"><i className="swatch" style={{ background: gaugeColor(u.day_cost_pct, u.guard_paused) }} />Cost today</span>
+              <span className="v">${(u.day_cost_used || 0).toFixed(2)}{u.day_cost_cap > 0 ? ` / $${u.day_cost_cap.toFixed(2)}` : ''}</span>
+            </div>
+          )}
           <div className="legend-row">
             <span className="k">budget-guard</span>
             <span className="v" style={{ color: u.guard_paused ? SEMA.err : SEMA.ok }}>{u.guard_paused ? 'PAUSED' : 'ok'}</span>
@@ -206,6 +215,8 @@ function TokenTrend({ tokens, span, title = 'Token spend' }) {
             <defs>
               <linearGradient id="gIn" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={SIGNAL.indigo} stopOpacity={0.55} /><stop offset="100%" stopColor={SIGNAL.indigo} stopOpacity={0.02} /></linearGradient>
               <linearGradient id="gOut" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={SIGNAL.teal} stopOpacity={0.6} /><stop offset="100%" stopColor={SIGNAL.teal} stopOpacity={0.02} /></linearGradient>
+              <linearGradient id="gCr" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={SIGNAL.violet} stopOpacity={0.5} /><stop offset="100%" stopColor={SIGNAL.violet} stopOpacity={0.02} /></linearGradient>
+              <linearGradient id="gCw" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={SEMA.warn} stopOpacity={0.45} /><stop offset="100%" stopColor={SEMA.warn} stopOpacity={0.02} /></linearGradient>
             </defs>
             <CartesianGrid vertical={false} />
             <XAxis dataKey="day" tickFormatter={shortDay} fontSize={11} tickLine={false} axisLine={false} minTickGap={24} />
@@ -213,6 +224,8 @@ function TokenTrend({ tokens, span, title = 'Token spend' }) {
             <Tooltip content={<CustomTooltip />} labelFormatter={shortDay} />
             <Area type="monotone" dataKey="input" name="input" stackId="1" stroke={SIGNAL.indigo} strokeWidth={1.5} fill="url(#gIn)" />
             <Area type="monotone" dataKey="output" name="output" stackId="1" stroke={SIGNAL.teal} strokeWidth={1.5} fill="url(#gOut)" />
+            <Area type="monotone" dataKey="cacheRead" name="cache read" stackId="1" stroke={SIGNAL.violet} strokeWidth={1} fill="url(#gCr)" />
+            <Area type="monotone" dataKey="cacheWrite" name="cache write" stackId="1" stroke={SEMA.warn} strokeWidth={1} fill="url(#gCw)" />
           </AreaChart>
         </ResponsiveContainer>
       )}
@@ -344,7 +357,7 @@ function RunStats({ runs, span }) {
 
 /* ── knowledge / ingestion ───────────────────────────────────────────────── */
 function VaultTiles({ vault, ingestion, span }) {
-  const v = vault || {}, ing = ingestion || {}
+  const v = vault?.stats || {}, ing = ingestion || {}
   return (
     <Card title="Vault" span={span}>
       <div className="tiles">
@@ -355,6 +368,32 @@ function VaultTiles({ vault, ingestion, span }) {
         <Tile label="Inbox" value={num(v.inbox_backlog)} />
         <Tile label="Embed queue" value={num(ing.embedding_queue)} />
       </div>
+    </Card>
+  )
+}
+
+// GrowthCard charts cumulative vault size over time (FR-60), derived from
+// note-creation dates server-side.
+function GrowthCard({ vault, span }) {
+  const growth = vault?.growth || []
+  return (
+    <Card title="Vault growth" meta={growth.length ? `${growth.length} days` : ''} span={span}>
+      {growth.length < 2 ? <Empty>Growth appears once notes span more than one day.</Empty> : (
+        <ResponsiveContainer width="100%" height={220}>
+          <AreaChart data={growth} margin={{ top: 6, right: 6, bottom: 0, left: -8 }}>
+            <defs>
+              <linearGradient id="gNotes" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={SIGNAL.teal} stopOpacity={0.5} /><stop offset="100%" stopColor={SIGNAL.teal} stopOpacity={0.02} /></linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="day" tickFormatter={shortDay} fontSize={11} tickLine={false} axisLine={false} minTickGap={24} />
+            <YAxis yAxisId="n" tickFormatter={kfmt} fontSize={11} tickLine={false} axisLine={false} width={38} />
+            <YAxis yAxisId="w" orientation="right" tickFormatter={kfmt} fontSize={11} tickLine={false} axisLine={false} width={44} />
+            <Tooltip content={<CustomTooltip />} labelFormatter={shortDay} />
+            <Area yAxisId="n" type="stepAfter" dataKey="notes" name="notes" stroke={SIGNAL.teal} strokeWidth={1.6} fill="url(#gNotes)" />
+            <Area yAxisId="w" type="stepAfter" dataKey="words" name="words" stroke={SIGNAL.indigo} strokeWidth={1.2} fill="none" />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
     </Card>
   )
 }
@@ -411,7 +450,7 @@ function FoldersCard({ graph, span }) {
 }
 
 /* ── knowledge graph (the signature) ─────────────────────────────────────── */
-function GraphCard({ graph, span }) {
+function GraphCard({ graph, simEdges, onToggleSim, span }) {
   const [folder, setFolder] = useState('')
   const [tag, setTag] = useState('')
   const [hover, setHover] = useState(null)
@@ -449,17 +488,24 @@ function GraphCard({ graph, span }) {
   const neighbors = hover != null ? (view.adj[hover] || new Set()) : null
   const dim = (id) => hover != null && id !== hover && !(neighbors && neighbors.has(id))
 
+  const linkCount = view.edges.filter((e) => e.kind !== 'similar').length
+  const simCount = view.edges.length - linkCount
+
   return (
-    <Card title="Knowledge graph" meta={`${view.nodes.length} notes · ${view.edges.length} links`} span={span}>
+    <Card title="Knowledge graph" meta={`${view.nodes.length} notes · ${linkCount} links${simEdges ? ` · ${simCount} similar` : ''}`} span={span}>
       <div className="filters">
-        <select value={folder} onChange={(e) => setFolder(e.target.value)}>
+        <select value={folder} onChange={(e) => setFolder(e.target.value)} aria-label="filter by folder">
           <option value="">all folders</option>
           {folders.map((f) => <option key={f} value={f}>{f}</option>)}
         </select>
-        <select value={tag} onChange={(e) => setTag(e.target.value)}>
+        <select value={tag} onChange={(e) => setTag(e.target.value)} aria-label="filter by tag">
           <option value="">all tags</option>
           {tags.map((t) => <option key={t} value={t}>#{t}</option>)}
         </select>
+        <label className="toggle">
+          <input type="checkbox" checked={!!simEdges} onChange={(e) => onToggleSim?.(e.target.checked)} />
+          <span>similarity edges</span>
+        </label>
       </div>
       <div className="graph-wrap">
         <svg viewBox="0 0 600 464" role="img" aria-label="knowledge graph">
@@ -472,9 +518,14 @@ function GraphCard({ graph, span }) {
             const a = view.pos[e.source], b = view.pos[e.target]
             if (!a || !b) return null
             const lit = hover != null && (e.source === hover || e.target === hover)
+            const similar = e.kind === 'similar'
             return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-              stroke={lit ? SIGNAL.teal : '#26304a'} strokeWidth={lit ? 1.4 : 0.7}
-              strokeOpacity={hover == null ? 0.5 : lit ? 0.85 : 0.08} />
+              stroke={lit ? (similar ? SIGNAL.violet : SIGNAL.teal) : similar ? '#584a78' : '#26304a'}
+              strokeWidth={lit ? 1.4 : 0.7}
+              strokeDasharray={similar ? '3 3' : undefined}
+              strokeOpacity={hover == null ? 0.5 : lit ? 0.85 : 0.08}>
+              {similar && <title>{`similarity ${(e.sim || 0).toFixed(2)}`}</title>}
+            </line>
           })}
           {view.nodes.map((n) => {
             const r = 3.2 + Math.min(7, (n.words || 0) / 220) + (n.id === hover ? 2 : 0)
@@ -568,7 +619,8 @@ export default function App() {
   const { data: runs } = useFetch('/api/runs', 6000)
   const { data: vault } = useFetch('/api/vault', 8000)
   const { data: ingestion } = useFetch('/api/ingestion', 8000)
-  const { data: graph } = useFetch('/api/graph', 15000)
+  const [simEdges, setSimEdges] = useState(false)
+  const { data: graph } = useFetch(simEdges ? '/api/graph?similar=1' : '/api/graph', 15000)
   const { data: activity } = useFetch('/api/activity', 15000)
   const { events, connected } = useSSE()
 
@@ -622,6 +674,8 @@ export default function App() {
                 <Tile label="Total" value={kfmt(sumField(tokens, 'input') + sumField(tokens, 'output'))} accent />
                 <Tile label="Input" value={kfmt(sumField(tokens, 'input'))} />
                 <Tile label="Output" value={kfmt(sumField(tokens, 'output'))} />
+                <Tile label="Cache read" value={kfmt(sumField(tokens, 'cache_read'))} />
+                <Tile label="Cache write" value={kfmt(sumField(tokens, 'cache_write'))} />
               </div>
             </Card>
             <TokensByOpModel tokens={tokens} span="span-12" />
@@ -634,11 +688,12 @@ export default function App() {
 
           {tab === 'knowledge' && <>
             <VaultTiles vault={vault} ingestion={ingestion} span="span-12" />
-            <IngestTrend ingestion={ingestion} span="span-7" />
+            <GrowthCard vault={vault} span="span-7" />
             <FoldersCard graph={graph} span="span-5" />
+            <IngestTrend ingestion={ingestion} span="span-12" />
           </>}
 
-          {tab === 'graph' && <GraphCard graph={graph} span="span-12" />}
+          {tab === 'graph' && <GraphCard graph={graph} simEdges={simEdges} onToggleSim={setSimEdges} span="span-12" />}
 
           {tab === 'activity' && <ActivityCard live={events} initial={activity} span="span-12" />}
         </main>

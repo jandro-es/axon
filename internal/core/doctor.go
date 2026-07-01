@@ -91,6 +91,7 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 	if cfg != nil {
 		if p, ok := cfg.Profiles[activeProfile]; ok {
 			paths := p.Paths()
+			checks = append(checks, claudeAuthCheck(p, paths))
 			checks = append(checks, vaultWritableCheck(paths.VaultPath))
 			checks = append(checks, portFreeCheck(p.Dashboard.Host, p.Dashboard.Port))
 			checks = append(checks, residencyCheck(p))
@@ -228,6 +229,43 @@ func residencyCheck(p config.Profile) Check {
 
 // apiKeyCheck implements the cardinal-rule guard: warn if ANTHROPIC_API_KEY is
 // set while the active profile uses subscription/enterprise auth.
+// claudeAuthCheck verifies the profile can actually reach Claude in its
+// auth_mode (FR-05) — deterministically and without spending tokens. api_key
+// needs a resolvable key; subscription/enterprise needs a resolvable
+// CLAUDE_CODE_OAUTH_TOKEN for headless automations and/or a `claude login`
+// session in the profile's CLAUDE_CONFIG_DIR for interactive use.
+func claudeAuthCheck(p config.Profile, paths config.ResolvedPaths) Check {
+	const name = "claude-auth"
+	if p.Claude.AuthMode == "api_key" {
+		if _, set := lookupEnv("ANTHROPIC_API_KEY"); set {
+			return Check{name, StatusOK, "auth_mode api_key: ANTHROPIC_API_KEY set"}
+		}
+		if key, err := config.ResolveSecret(p.Claude.OAuthToken); err == nil && key != "" {
+			return Check{name, StatusOK, "auth_mode api_key: key resolvable from the configured secret ref"}
+		}
+		return Check{name, StatusFail, "auth_mode api_key but no ANTHROPIC_API_KEY and no resolvable secret ref — the agent adapter cannot authenticate"}
+	}
+
+	token, terr := config.ResolveSecret(p.Claude.OAuthToken)
+	hasToken := terr == nil && token != ""
+	hasSession := false
+	if paths.ConfigDir != "" {
+		if _, err := os.Stat(filepath.Join(paths.ConfigDir, ".credentials.json")); err == nil {
+			hasSession = true
+		}
+	}
+	switch {
+	case hasToken && hasSession:
+		return Check{name, StatusOK, "OAuth token resolvable (headless) and login session present (interactive)"}
+	case hasToken:
+		return Check{name, StatusOK, "OAuth token resolvable — headless automations ready; run `claude login` in the vault for interactive sessions"}
+	case hasSession:
+		return Check{name, StatusWarn, "login session found but no CLAUDE_CODE_OAUTH_TOKEN resolvable — scheduled headless automations will fail; run `claude setup-token`"}
+	default:
+		return Check{name, StatusWarn, fmt.Sprintf("no OAuth token resolvable and no session file in %s (macOS may hold the session in the Keychain) — run `claude login` and `claude setup-token`", paths.ConfigDir)}
+	}
+}
+
 func apiKeyCheck(cfg *config.Config, activeProfile string) Check {
 	const name = "anthropic-api-key"
 	_, keySet := lookupEnv("ANTHROPIC_API_KEY")

@@ -10,6 +10,7 @@ import (
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/ingestion"
 	"github.com/jandro-es/axon/internal/tokens"
+	"github.com/jandro-es/axon/internal/vault"
 )
 
 // runModel executes a model call through the token manager, or — under dry-run —
@@ -264,19 +265,29 @@ func (c Compaction) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 		if deferred {
 			return RunResult{Summary: "compaction deferred (budget)", EstimatedTokens: totalEst}, nil
 		}
-		savedEst += on.WordCount // rough: future retrieval avoids the full note
+		savedTok := ingestion.EstimateTokens(n.Body) // future retrieval reads the summary, not the full note
+		savedEst += savedTok
 		if rc.DryRun {
-			changes = append(changes, fmt.Sprintf("%s (%d words) → would write axon:summary (~%d tokens)", on.Path, on.WordCount, est))
+			changes = append(changes, fmt.Sprintf("%s (%d words) → would write axon:summary (~%d tokens saved)", on.Path, on.WordCount, savedTok))
 			continue
+		}
+		// Archive the pre-compaction body first (FR-44): the distilled summary
+		// must never be the only surviving copy of the original.
+		stamp := rc.now().UTC().Format("20060102-150405")
+		archivePath := fmt.Sprintf(".axon/archive/%s-%s-%s.md", vault.BaseNoExt(on.Path), hashShort(on.Path), stamp)
+		if _, err := rc.Vault.Create(archivePath, fmt.Sprintf("archived from %s by compaction at %s\n\n%s", on.Path, stamp, n.Body)); err != nil {
+			return RunResult{}, fmt.Errorf("archive %s before compaction: %w", on.Path, err)
 		}
 		if err := rc.Vault.Patch(ctx, on.Path, "summary", strings.TrimSpace(text)); err != nil {
 			return RunResult{}, err
 		}
-		changes = append(changes, fmt.Sprintf("%s: axon:summary written", on.Path))
+		// The change line is persisted in runs.changes, so tokens_saved_est
+		// survives per note (FR-44), not just in the transient summary.
+		changes = append(changes, fmt.Sprintf("%s: axon:summary written (~%d tokens saved; original archived to %s)", on.Path, savedTok, archivePath))
 	}
-	summary := fmt.Sprintf("compacted %d note(s), ~%d words of future context saved", len(changes), savedEst)
+	summary := fmt.Sprintf("compacted %d note(s), ~%d tokens of future context saved", len(changes), savedEst)
 	if rc.DryRun {
-		summary = fmt.Sprintf("would compact %d note(s)", len(notes))
+		summary = fmt.Sprintf("would compact %d note(s), ~%d tokens of future context saved", len(notes), savedEst)
 	}
 	return RunResult{Summary: summary, Changes: changes, EstimatedTokens: totalEst}, nil
 }

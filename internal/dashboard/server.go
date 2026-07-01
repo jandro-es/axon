@@ -146,15 +146,19 @@ func (s *Server) dataUsage(ctx context.Context, _ *http.Request) (any, error) {
 	}
 	// Mirror exactly what `axon status` reports.
 	return map[string]any{
-		"profile":      st.Profile,
-		"day_used":     st.Day.Used,
-		"day_limit":    st.Day.Limit,
-		"day_pct":      st.Day.Pct,
-		"week_used":    st.Week.Used,
-		"week_limit":   st.Week.Limit,
-		"week_pct":     st.Week.Pct,
-		"guard_pct":    st.GuardPct,
-		"guard_paused": st.GuardPaused,
+		"profile":       st.Profile,
+		"day_used":      st.Day.Used,
+		"day_limit":     st.Day.Limit,
+		"day_pct":       st.Day.Pct,
+		"week_used":     st.Week.Used,
+		"week_limit":    st.Week.Limit,
+		"week_pct":      st.Week.Pct,
+		"guard_pct":     st.GuardPct,
+		"guard_paused":  st.GuardPaused,
+		"guard_reason":  st.GuardReason,
+		"day_cost_used": st.Day.CostUsed,
+		"day_cost_cap":  st.Day.CostCap,
+		"day_cost_pct":  st.Day.CostPct,
 	}, nil
 }
 
@@ -175,11 +179,20 @@ func (s *Server) dataIngestion(ctx context.Context, _ *http.Request) (any, error
 }
 
 func (s *Server) dataVault(ctx context.Context, _ *http.Request) (any, error) {
-	return db.Stats(ctx, s.cfg.DB)
+	stats, err := db.Stats(ctx, s.cfg.DB)
+	if err != nil {
+		return nil, err
+	}
+	growth, err := db.VaultGrowth(ctx, s.cfg.DB)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"stats": stats, "growth": growth}, nil
 }
 
 func (s *Server) dataGraph(ctx context.Context, r *http.Request) (any, error) {
-	return db.GraphData(ctx, s.cfg.DB, queryInt(r, "limit", 1000))
+	includeSimilar := r.URL.Query().Get("similar") == "1"
+	return db.GraphData(ctx, s.cfg.DB, queryInt(r, "limit", 1000), includeSimilar)
 }
 
 func (s *Server) dataActivity(ctx context.Context, r *http.Request) (any, error) {
