@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/jandro-es/axon/internal/search"
+	"github.com/jandro-es/axon/internal/ui"
 )
 
 func newSearchCmd(gf *globalFlags) *cobra.Command {
@@ -37,12 +38,17 @@ func newSearchCmd(gf *globalFlags) *cobra.Command {
 				enc.SetIndent("", "  ")
 				return enc.Encode(hits)
 			}
+			sty := ui.For(out)
 			if len(hits) == 0 {
-				fmt.Fprintf(out, "no results for %q\n", query)
+				fmt.Fprintf(out, "%s %s\n", sty.Yellow(ui.IconSearch), sty.Dim(fmt.Sprintf("no results for %q", query)))
 				return nil
 			}
+			fmt.Fprintf(out, "%s %s\n", ui.IconSearch, sty.Dim(fmt.Sprintf("%d result(s) for %q", len(hits), query)))
 			for i, h := range hits {
-				fmt.Fprintf(out, "%d. %s  (score %.4f  lex %.2f  vec %.3f)\n", i+1, h.Path, h.Score, h.Lexical, h.Vector)
+				fmt.Fprintf(out, "%s %s  %s\n",
+					sty.Dim(fmt.Sprintf("%d.", i+1)),
+					sty.Bold(sty.Cyan(h.Path)),
+					sty.Dim(fmt.Sprintf("(score %.4f  lex %.2f  vec %.3f)", h.Score, h.Lexical, h.Vector)))
 				fmt.Fprintf(out, "   %s\n", h.Snippet)
 			}
 			return nil

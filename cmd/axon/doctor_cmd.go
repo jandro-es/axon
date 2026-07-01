@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/core"
+	"github.com/jandro-es/axon/internal/ui"
 )
 
 func newDoctorCmd(gf *globalFlags) *cobra.Command {
@@ -31,32 +31,40 @@ func newDoctorCmd(gf *globalFlags) *cobra.Command {
 			report := core.Doctor(cfg, activeProfile)
 
 			out := cmd.OutOrStdout()
-			fmt.Fprintln(out, "axon doctor")
-			fmt.Fprintln(out, strings.Repeat("─", 40))
+			st := ui.For(out)
+			fmt.Fprintln(out, st.Header(ui.IconDoctor, "axon doctor"))
+			fmt.Fprintln(out, st.Divider(40))
 			if cfgErr != nil {
-				fmt.Fprintf(out, "  note: %v\n", cfgErr)
+				fmt.Fprintf(out, "  %s %s\n", st.Yellow(ui.IconWarn), st.Dim(fmt.Sprintf("config: %v", cfgErr)))
 			}
 			for _, c := range report.Checks {
-				fmt.Fprintf(out, "  %s  %-20s %s\n", glyph(c.Status), c.Name, c.Detail)
+				detail := c.Detail
+				switch c.Status {
+				case core.StatusWarn:
+					detail = st.Yellow(detail)
+				case core.StatusFail:
+					detail = st.Red(detail)
+				}
+				fmt.Fprintf(out, "  %s  %-20s %s\n", glyph(st, c.Status), c.Name, detail)
 			}
-			fmt.Fprintln(out, strings.Repeat("─", 40))
+			fmt.Fprintln(out, st.Divider(40))
 			if report.HasFailure() {
-				fmt.Fprintln(out, "status: FAIL")
-				return fmt.Errorf("doctor found blocking issues")
+				fmt.Fprintf(out, "%s %s\n", st.Red(ui.IconError), st.Bold(st.Red("status: FAIL")))
+				return fmt.Errorf("doctor found blocking issues — see the failing check(s) above")
 			}
-			fmt.Fprintln(out, "status: OK")
+			fmt.Fprintf(out, "%s %s\n", st.Green(ui.IconOK), st.Bold(st.Green("status: OK")))
 			return nil
 		},
 	}
 }
 
-func glyph(s core.CheckStatus) string {
+func glyph(st ui.Styler, s core.CheckStatus) string {
 	switch s {
 	case core.StatusOK:
-		return "✔"
+		return st.Green(ui.IconOK)
 	case core.StatusWarn:
-		return "⚠"
+		return st.Yellow(ui.IconWarn)
 	default:
-		return "✘"
+		return st.Red(ui.IconError)
 	}
 }

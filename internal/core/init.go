@@ -17,6 +17,7 @@ import (
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/identity"
 	"github.com/jandro-es/axon/internal/scaffold"
+	"github.com/jandro-es/axon/internal/ui"
 	"github.com/jandro-es/axon/internal/vault"
 )
 
@@ -77,18 +78,19 @@ func Init(ctx context.Context, opts InitOptions) (InitReport, error) {
 	if out == nil {
 		out = io.Discard
 	}
+	st := ui.For(out)
 	paths := opts.Profile.Paths()
 
 	add := func(s StepResult) {
 		rep.Steps = append(rep.Steps, s)
-		fmt.Fprintf(out, "  %s %-22s %s\n", glyphFor(s.Status), s.Name, s.Detail)
+		fmt.Fprintln(out, renderStep(st, s))
 		if s.Status == StepFailed {
 			rep.OK = false
 		}
 	}
 
-	fmt.Fprintf(out, "axon init — profile %q\n", opts.ProfileName)
-	fmt.Fprintln(out, strings.Repeat("─", 60))
+	fmt.Fprintf(out, "%s\n", st.Header(ui.IconWrench, fmt.Sprintf("axon init — profile %q", opts.ProfileName)))
+	fmt.Fprintln(out, st.Divider(60))
 
 	// Step 1 — Resolve profile & config (already loaded/validated by caller).
 	add(StepResult{"config", StepDone, configSummary(opts.Profile, paths)})
@@ -106,7 +108,7 @@ func Init(ctx context.Context, opts InitOptions) (InitReport, error) {
 	add(dbStep)
 	if sqlDB == nil {
 		rep.OK = false
-		finish(out, rep)
+		finish(out, st, rep)
 		return rep, fmt.Errorf("init: database step failed")
 	}
 	defer sqlDB.Close()
@@ -123,7 +125,7 @@ func Init(ctx context.Context, opts InitOptions) (InitReport, error) {
 	add(scaffoldStep)
 	if vfs == nil {
 		rep.OK = false
-		finish(out, rep)
+		finish(out, st, rep)
 		return rep, fmt.Errorf("init: vault scaffold failed")
 	}
 
@@ -139,7 +141,7 @@ func Init(ctx context.Context, opts InitOptions) (InitReport, error) {
 	if err != nil {
 		add(StepResult{"index", StepFailed, err.Error()})
 		rep.OK = false
-		finish(out, rep)
+		finish(out, st, rep)
 		return rep, err
 	}
 	rep.Reindex = idx
@@ -156,7 +158,7 @@ func Init(ctx context.Context, opts InitOptions) (InitReport, error) {
 
 	// Step 10 — Summary.
 	rep.Changed = anyChanged(rep.Steps)
-	finish(out, rep)
+	finish(out, st, rep)
 	return rep, nil
 }
 
@@ -321,29 +323,45 @@ func anyChanged(steps []StepResult) bool {
 	return false
 }
 
-func finish(out io.Writer, rep InitReport) {
-	fmt.Fprintln(out, strings.Repeat("─", 60))
+func finish(out io.Writer, st ui.Styler, rep InitReport) {
+	fmt.Fprintln(out, st.Divider(60))
 	switch {
 	case !rep.OK:
-		fmt.Fprintln(out, "init: FAILED — see ✗ above")
+		fmt.Fprintln(out, st.Red(ui.IconError+" init failed — see the "+ui.IconError+" step(s) above"))
 	case rep.Changed:
-		fmt.Fprintln(out, "init: done — environment converged")
+		fmt.Fprintln(out, st.Green(ui.IconSpark+" init complete — environment converged"))
 	default:
-		fmt.Fprintln(out, "init: no changes — already converged")
+		fmt.Fprintln(out, st.Green(ui.IconOK+" init complete — no changes, already converged"))
 	}
-	fmt.Fprintln(out, "next: `axon start` to run the scheduler + dashboard; open Claude Code in the vault for interactive use")
+	fmt.Fprintf(out, "%s %s\n", st.Cyan(ui.IconArrow),
+		st.Dim("next: `axon start` to run the scheduler + dashboard; open Claude Code in the vault for interactive use"))
 }
 
-func glyphFor(s StepStatus) string {
+// renderStep formats one init step as a coloured, aligned line. The status glyph
+// is coloured and the name is left-padded to a fixed width — the padding is
+// applied before colouring so ANSI bytes never throw the columns off.
+func renderStep(st ui.Styler, s StepResult) string {
+	name := fmt.Sprintf("%-22s", s.Name)
+	detail := s.Detail
+	switch s.Status {
+	case StepFailed:
+		detail = st.Red(detail)
+	case StepWarn:
+		detail = st.Yellow(detail)
+	}
+	return fmt.Sprintf("  %s %s %s", glyphFor(st, s.Status), name, detail)
+}
+
+func glyphFor(st ui.Styler, s StepStatus) string {
 	switch s {
 	case StepDone:
-		return "✓"
+		return st.Green(ui.IconOK)
 	case StepAlready:
-		return "↻"
+		return st.Cyan(ui.IconAlready)
 	case StepWarn:
-		return "⚠"
+		return st.Yellow(ui.IconWarn)
 	default:
-		return "✗"
+		return st.Red(ui.IconError)
 	}
 }
 

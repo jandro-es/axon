@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/jandro-es/axon/internal/config"
+	"github.com/jandro-es/axon/internal/ui"
 )
 
 func newConfigCmd(gf *globalFlags) *cobra.Command {
@@ -146,7 +147,8 @@ func newConfigSetCmd(gf *globalFlags) *cobra.Command {
 				enc.SetIndent("", "  ")
 				return enc.Encode(map[string]any{"key": key, "value": value, "ok": true})
 			}
-			fmt.Fprintf(out, "set %s = %s\n", key, value)
+			st := ui.For(out)
+			fmt.Fprintf(out, "%s set %s = %s\n", st.Green(ui.IconOK), st.Bold(key), st.Cyan(value))
 			return nil
 		},
 	}
@@ -226,9 +228,11 @@ func newConfigValidateCmd(gf *globalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(),
-				"OK: %s is valid (%d profile(s); active profile %q)\n",
-				gf.configPath, len(cfg.Profiles), name)
+			out := cmd.OutOrStdout()
+			st := ui.For(out)
+			fmt.Fprintf(out, "%s %s\n",
+				st.Green(ui.IconOK),
+				st.Green(fmt.Sprintf("OK: %s is valid (%d profile(s); active profile %q)", gf.configPath, len(cfg.Profiles), name)))
 			return nil
 		},
 	}

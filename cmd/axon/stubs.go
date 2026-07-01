@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/jandro-es/axon/internal/ui"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
@@ -15,7 +17,9 @@ func newVersionCmd() *cobra.Command {
 		Short: "Print the axon version",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, _ []string) {
-			fmt.Fprintf(cmd.OutOrStdout(), "axon %s\n", version)
+			out := cmd.OutOrStdout()
+			st := ui.For(out)
+			fmt.Fprintf(out, "%s %s %s\n", ui.IconRocket, st.Bold("axon"), st.Cyan(version))
 		},
 	}
 }

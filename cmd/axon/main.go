@@ -4,13 +4,14 @@
 package main
 
 import (
-	"fmt"
 	"os"
+
+	"github.com/jandro-es/axon/internal/ui"
 )
 
 func main() {
 	if err := newRootCmd().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "axon: "+err.Error())
+		ui.FprintError(os.Stderr, err)
 		os.Exit(1)
 	}
 }

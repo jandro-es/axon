@@ -8,6 +8,7 @@ import (
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/core"
 	"github.com/jandro-es/axon/internal/db"
+	"github.com/jandro-es/axon/internal/ui"
 	"github.com/jandro-es/axon/internal/vault"
 )
 
@@ -32,6 +33,7 @@ func newReindexCmd(gf *globalFlags) *cobra.Command {
 			paths := profile.Paths()
 
 			out := cmd.OutOrStdout()
+			st := ui.For(out)
 
 			sqlDB, err := db.Open(paths.DBPath)
 			if err != nil {
@@ -47,8 +49,11 @@ func newReindexCmd(gf *globalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(out, "reindex (profile %q): %d notes, %d links, %d unresolved wikilinks\n",
-				name, res.Notes, res.Links, res.BrokenWikilink)
+			fmt.Fprintf(out, "%s reindex (profile %q): %s notes, %s links, %s\n",
+				st.Green(ui.IconOK), name,
+				st.Bold(fmt.Sprintf("%d", res.Notes)),
+				st.Bold(fmt.Sprintf("%d", res.Links)),
+				st.Dim(fmt.Sprintf("%d unresolved wikilinks", res.BrokenWikilink)))
 
 			if embeddings {
 				embedder := embeddingsProvider(profile)
@@ -56,7 +61,7 @@ func newReindexCmd(gf *globalFlags) *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("re-embed: %w (is Ollama running?)", err)
 				}
-				fmt.Fprintf(out, "re-embedded %d/%d chunks via %s\n", re.Embedded, re.Total, profile.Embeddings.Model)
+				fmt.Fprintf(out, "%s re-embedded %d/%d chunks via %s\n", st.Green(ui.IconOK), re.Embedded, re.Total, st.Cyan(profile.Embeddings.Model))
 			}
 			return nil
 		},

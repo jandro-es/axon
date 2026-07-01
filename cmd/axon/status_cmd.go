@@ -8,6 +8,7 @@ import (
 
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/tokens"
+	"github.com/jandro-es/axon/internal/ui"
 )
 
 // managerConfig builds the token-manager config from a profile.
@@ -47,14 +48,17 @@ func newStatusCmd(gf *globalFlags) *cobra.Command {
 				enc.SetIndent("", "  ")
 				return enc.Encode(st)
 			}
-			fmt.Fprintf(out, "axon status — profile %q (auth: %s)\n", deps.name, deps.profile.Claude.AuthMode)
+			s := ui.For(out)
+			fmt.Fprintf(out, "%s %s\n",
+				s.Header(ui.IconChart, "axon status"),
+				s.Dim(fmt.Sprintf("— profile %q (auth: %s)", deps.name, deps.profile.Claude.AuthMode)))
 			printWindow(cmd, "day ", st.Day)
 			printWindow(cmd, "week", st.Week)
-			guard := "ok"
 			if st.GuardPaused {
-				guard = fmt.Sprintf("PAUSED (≥ %d%%)", st.GuardPct)
+				fmt.Fprintf(out, "budget-guard: %s\n", s.Bold(s.Red(fmt.Sprintf("%s PAUSED (≥ %d%%)", ui.IconWarn, st.GuardPct))))
+			} else {
+				fmt.Fprintf(out, "budget-guard: %s\n", s.Green(ui.IconOK+" ok"))
 			}
-			fmt.Fprintf(out, "budget-guard: %s\n", guard)
 			return nil
 		},
 	}
@@ -63,10 +67,23 @@ func newStatusCmd(gf *globalFlags) *cobra.Command {
 }
 
 func printWindow(cmd *cobra.Command, label string, w tokens.Window) {
+	out := cmd.OutOrStdout()
+	s := ui.For(out)
 	remaining := w.Limit - w.Used
 	if remaining < 0 {
 		remaining = 0
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "  %s: %d / %d tokens used (%.1f%%), %d remaining\n",
-		label, w.Used, w.Limit, w.Pct, remaining)
+	// Colour the usage percentage by pressure: green under 75%, amber up to 90%,
+	// red beyond — so a tight budget is obvious at a glance.
+	pct := fmt.Sprintf("%.1f%%", w.Pct)
+	switch {
+	case w.Pct >= 90:
+		pct = s.Red(pct)
+	case w.Pct >= 75:
+		pct = s.Yellow(pct)
+	default:
+		pct = s.Green(pct)
+	}
+	fmt.Fprintf(out, "  %s: %d / %d tokens used (%s), %d remaining\n",
+		label, w.Used, w.Limit, pct, remaining)
 }
