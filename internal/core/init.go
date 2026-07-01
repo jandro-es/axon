@@ -65,10 +65,9 @@ type InitOptions struct {
 
 // Init converges the active profile's environment: it validates inputs, runs
 // prerequisite checks, creates the data dir and database, verifies the
-// embedding model, scaffolds the vault and builds the first index — idempotently
-// and verbosely (FR-01, FR-02; docs/10 steps 1–6, 9–10). Claude Code wiring
-// (step 7) and in-vault dashboards (step 8) belong to later phases and are
-// deliberately not performed here.
+// embedding model, scaffolds the vault, wires Claude Code (.claude/), writes
+// the in-vault dashboards and builds the first index — idempotently and
+// verbosely (FR-01, FR-02; docs/10 steps 1–10).
 //
 // No step calls Claude: init spends no tokens (the cardinal token-chokepoint
 // rule is satisfied by there being no model call at all in this phase).

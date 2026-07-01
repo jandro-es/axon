@@ -95,7 +95,7 @@ profiles:
       # budget_tokens caps a single run (estimated). catch_up: skip = don't backfill missed runs.
       heartbeat:         { enabled: true,  schedule: "0 9,13,17 * * *", model: classify,  budget_tokens: 50_000,  catch_up: skip }
       daily-log:         { enabled: true,  schedule: "30 21 * * *",     model: routine,   budget_tokens: 120_000 }
-      inbox-triage:      { enabled: true,  schedule: "*/30 * * * *",    model: routine,   budget_tokens: 80_000,  dry_run: false }
+      inbox-triage:      { enabled: true,  schedule: "*/30 * * * *",    model: classify,  budget_tokens: 80_000,  dry_run: false }
       compaction:        { enabled: true,  schedule: "0 3 * * 0",       model: synthesis, budget_tokens: 300_000 }
       context-export:    { enabled: true,  schedule: "0 4 * * 0",       model: none,      budget_tokens: 0 }
       knowledge-reindex: { enabled: true,  schedule: "0 2 * * *",       model: none,      budget_tokens: 0 }

@@ -86,7 +86,8 @@ Every build is version-stamped and checkable with `axon version` (or `axon --ver
 | `axon automations [--json]` | List every automation: enabled state, purpose, schedule, and last run (status, when, tokens, skip/error reason). |
 | `axon health [--json]` | Score the vault's health (0–100 + grade) across index/link integrity, automation reliability, and knowledge freshness. |
 | `axon run <automation> [--dry-run]` | Run one automation through the engine (same path as the scheduler). |
-| `axon start [--no-dashboard]` | The daemon: scheduler + live SSE dashboard. |
+| `axon start [--no-dashboard]` | The daemon: scheduler + live SSE dashboard (refuses to double-start per profile). |
+| `axon stop [--timeout N]` | Gracefully stop the running daemon for the active profile. |
 | `axon mcp [install]` | The AXON MCP server (stdio); `install --client code\|desktop` wires a Claude client. |
 | `axon service <install\|uninstall\|print>` | Emit/install an OS service unit (launchd / systemd / Task Scheduler). |
 | `axon export [--out dir]` | Portable snapshot bundle (manifest + Markdown + activity). |

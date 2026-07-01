@@ -372,6 +372,7 @@ The standard automations (each toggleable in config, gated by `allowed_automatio
 | `inbox-triage` | yes | Classifies inbox items into PARA, proposes tags/links to the review queue. |
 | `compaction` | yes | Distils oversized notes into durable summaries. |
 | `knowledge-digest` | yes | Weekly digest of newly ingested sources. |
+| `memory-distill` | yes | Distils recent activity into durable entries in `MEMORY.md`'s managed block (§18). |
 
 Configure schedules and budgets per automation:
 
@@ -559,7 +560,9 @@ the vault is the source of truth, a full restore is: copy the vault back and run
 | `axon automations [--json]` | List automations: enabled state, purpose, schedule, and last run. |
 | `axon health [--json]` | Vault health score (0–100 + grade) across integrity, reliability, freshness. |
 | `axon run <automation> [--dry-run] [--json]` | Run one automation through the engine. |
-| `axon start [--no-dashboard] [--once]` | The daemon: scheduler + dashboard. |
+| `axon start [--no-dashboard] [--once]` | The daemon: scheduler + dashboard (refuses to start if one is already running for the profile). |
+| `axon stop [--timeout N]` | Signal the running daemon (from the pidfile) to shut down gracefully. |
+| `axon onboard [--from file] [--non-interactive]` | Build the personal identity layer (USER/SOUL/MEMORY, §18). No model call, idempotent. |
 | `axon mcp` | MCP server over stdio (launched by Claude Code). |
 | `axon hook <event>` | Hook handler (invoked from `.claude/settings.json`). |
 | `axon service <install\|uninstall\|print>` | OS service unit management. |

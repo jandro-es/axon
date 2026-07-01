@@ -14,17 +14,17 @@ flowchart TB
         PARA["00-Inbox / 01-Projects / 02-Areas / 03-Resources / 04-Archive"]
         DAILY["Daily/ + MOCs/ + Templates/"]
         AXDIR[".axon/ (logs, exports, snapshots, dashboards)"]
-        CLDIR[".claude/ (CLAUDE.md, plugin: skills/subagents/hooks, .mcp.json)"]
+        CLDIR[".claude/ (CLAUDE.md, skills/, agents/, hooks, .mcp.json)"]
     end
 
     subgraph Daemon["axon daemon (Go — single static binary)"]
-        SCHED["Scheduler (gocron)"]
+        SCHED["Scheduler (robfig/cron)"]
         AUTO["Automation runners"]
         INGEST["Knowledge ingestion pipeline"]
         TOKENS["Context & token manager"]
         MCP["AXON MCP server"]
         API["Dashboard API + SSE"]
-        DB[("SQLite + sqlite-vec + FTS5\n(one file per profile)")]
+        DB[("SQLite + FTS5 + vectors (ADR-010)\n(one file per profile)")]
     end
 
     subgraph External["External"]
@@ -64,43 +64,59 @@ One Go module (`module github.com/<you>/axon`), one binary, clear package seams.
 ```
 axon/
   cmd/
-    axon/        # main package — wires the CLI (init, start, stop, status, doctor, ingest, reindex, run, export)
+    axon/        # main package — wires the CLI (init, start, stop, status, doctor, ingest, search, reindex, run,
+                 #  export, config get/set/validate, mcp [install], hook, service, onboard, profiles, automations,
+                 #  health, version) and composes the daemon (start_cmd.go: scheduler + dashboard + pidfile)
   internal/      # all application packages (private — not importable outside the module)
-    config/      # types, schema (struct tags + validator), logging, paths, profile resolution, content hashing
-    core/        # daemon orchestration: scheduler, automation runners, ingestion, token manager, db layer
+    config/      # types, schema (struct tags + validator), paths, profile resolution, secrets, content hashing
+    core/        # cross-cutting operations: init (provisioning), doctor, reindex, reembed
     mcp/         # AXON MCP server (stdio): vault + knowledge + token tools
-    dashboard/   # dashboard HTTP + SSE handlers (Go) that serve the SPA and stream events
-    ...          # (db, vault, ingestion, embeddings, agent, tokens, scheduler, automations, api, events — see below)
+    dashboard/   # dashboard HTTP + SSE server (Go) that serves the SPA and streams events
+    ...          # (db, vault, ingestion, embeddings, agent, tokens, scheduler, automations, events,
+                 #  hooks, identity, clients, claudeassets, scaffold, search, service, health, ui — see below)
   web/           # dashboard SPA — Vite + React + Recharts; built to web/dist and embedded via embed.FS
-  plugin/        # Claude Code plugin: skills/, agents/, hooks/, .mcp.json template, CLAUDE.md template
   scripts/       # preflight + install/update/uninstall for macOS (launchd) & Linux (systemd), + _common.sh: build, install, service/Ollama wiring
-  templates/     # vault scaffolding (folder READMEs, note templates, Dataview dashboards)
   axon.config.example.yaml
   .env.example
 ```
 
-**Dependency rule:** `internal/config` ← everyone. `internal/db`, `vault`, `embeddings`, `agent`, `tokens` are leaf-ish packages; `core` composes them; `mcp` may import the db read-layer + vault + tokens; `dashboard` imports only the read-layer + event bus. Nothing imports `cmd`. Keep the graph acyclic — Go enforces this at compile time, so a cycle is a design smell to fix, not silence.
+Daemon orchestration (signal handling, pidfile, scheduler + dashboard + event
+persistence wiring) lives in `cmd/axon/start_cmd.go` — `cmd` composes, packages
+provide. The Claude Code plugin assets (CLAUDE.md template, skills, agents,
+hooks wiring) and the vault scaffolding are embedded Go assets under
+`internal/claudeassets/assets/` and `internal/scaffold/assets/`, written into
+the vault by `axon init`.
+
+**Dependency rule:** `internal/config` ← everyone. `internal/db`, `vault`, `embeddings`, `agent`, `events` are leaf packages; `tokens` is the only importer of `agent` (the chokepoint); `core` and `automations` compose the leaves; `mcp` composes its tools from the service layer (vault, db, search, tokens, ingestion, automations, identity); `dashboard` reads the db read-layer, event bus and token status. Nothing imports `cmd`. Keep the graph acyclic — Go enforces this at compile time, so a cycle is a design smell to fix, not silence.
 
 ### Core internal layout (`internal/`)
 
 ```
-config/        # load + validate + resolve profile, policy enforcement helpers
-db/            # connection, migrations, repositories (tokens, runs, sources, chunks, events, links)
-vault/         # markdown read/write, frontmatter, wikilink-safe ops, link graph index
-ingestion/     # fetch, extract, clean, chunk, embed, persist (see Component 05)
+config/        # load + validate + resolve profile, secrets, policy types
+db/            # modernc.org/sqlite: migrations, repositories (tokens, runs, sources, chunks, events, links), FTS5 + vector search
+vault/         # markdown read/write, frontmatter, managed blocks, wikilink-safe ops
+ingestion/     # fetch (egress-policied), extract, redact, chunk, enrich, persist (see Component 05)
 embeddings/    # provider interface + Ollama impl
-agent/         # Claude Code adapter (subprocess: `claude -p` headless + interactive); optional direct-API adapter (anthropic-sdk-go) for auth_mode: api_key
-tokens/        # accounting, budgets, frugality gates (see Component 07)
-scheduler/     # gocron wrapper, jitter, locks, catch-up policy
-automations/   # one package per automation (see Component 06)
-api/           # net/http server (dashboard handlers + SSE bus) + MCP wiring
-events/        # in-process event bus -> SSE + db; structured logger (log/slog)
+agent/         # Claude Code adapter (subprocess: `claude -p`); direct-API adapter (anthropic-sdk-go) for auth_mode: api_key
+tokens/        # the chokepoint: estimates, budgets, ledger, redaction (see Component 07)
+scheduler/     # robfig/cron/v3 wrapper: jitter, panic-safety, catch-up policy
+automations/   # the engine + the standard automation set (see Component 06)
+events/        # in-process event bus -> SSE + events table; structured logger (log/slog)
+hooks/         # Claude Code hook logic (invoked via `axon hook <event>`)
+identity/      # personal memory layer: USER/SOUL/MEMORY + onboarding (Component 12)
+clients/       # Claude Desktop config merge (Component 13)
+claudeassets/  # embedded .claude/ wiring assets (CLAUDE.md template, skills, agents, hooks)
+scaffold/      # embedded vault scaffolding (folder READMEs, templates, Dataview dashboards)
+search/        # hybrid search facade over db + embeddings
+service/       # launchd/systemd unit generation for `axon service`
+health/        # vault health scoring for `axon health`
+ui/            # terminal styling for CLI output
 ```
 
 ## 3. Key data flows
 
 ### 3.1 Knowledge ingestion (Component 05)
-`URL/PDF → fetch → extract main content → clean to Markdown → LLM enrich (title/summary/tags/links) under token budget → write note to 03-Resources/Knowledge → chunk → embed (Ollama) → upsert into sqlite-vec + FTS5 → emit event`. Idempotent on content hash; re-ingest updates in place.
+`URL/PDF → fetch → extract main content → clean to Markdown → LLM enrich (title/summary/tags/links) under token budget → write note to 03-Resources/Knowledge → chunk → embed (Ollama) → upsert vectors (float32 BLOBs) + FTS5 → emit event`. Idempotent on content hash; re-ingest updates in place.
 
 ### 3.2 Scheduled automation (Component 06)
 `Scheduler fires → runner acquires per-automation lock → change-gate (content hashes) → if no new material, log skip & exit → else build minimal context via retrieval → pre-flight token estimate vs budget → choose model → run (`claude -p`, or the direct-API adapter in `api_key` mode) → apply wikilink-safe vault writes (dry-run aware) → record run + tokens → emit event`.
@@ -139,7 +155,7 @@ A profile is the unit of isolation. Resolution order for any setting: CLI flag �
 **Why:** Localising the frontier model is out of scope and would gut capability; localising *data* delivers the privacy, cost and offline-resilience benefits that motivate "local-first" for a second brain. Stating this prevents scope confusion.
 
 ### ADR-002 — One SQLite file (relational + vector + lexical)
-**Decision:** SQLite with `sqlite-vec` (vectors) and FTS5 (lexical) in a single file per profile.
+**Decision:** SQLite with `sqlite-vec` (vectors) and FTS5 (lexical) in a single file per profile. *(Library choice amended by ADR-010 below: implemented on `modernc.org/sqlite` with brute-force cosine over float32 BLOBs; the single-file, pure-Go intent stands.)*
 **Why:** Single-process, cross-platform, zero extra infrastructure; metadata, vectors and full-text live together so hybrid retrieval and budget queries need no cross-store joins. In Go this is reached via `ncruces/go-sqlite3` + `asg017/sqlite-vec-go-bindings/ncruces` (pure-Go WASM, no cgo — best fit for the single-binary goal) or `mattn/go-sqlite3` + the cgo bindings (faster, needs a C toolchain); the `db` package hides which. Alternatives (LanceDB, libSQL, server stores) are documented but rejected for v1 simplicity. Revisit only if vector count or latency targets break (see Component 05 §scale).
 
 ### ADR-003 — Go for the daemon
@@ -163,7 +179,7 @@ A profile is the unit of isolation. Resolution order for any setting: CLI flag �
 **Decision:** No code path calls Claude without passing through the token manager (pre-flight count, budget check, change-gate, model selection).
 **Why:** "Token-aware, not wasting tokens" is a stated requirement; making the manager a mandatory chokepoint is the only way to guarantee it rather than hope for it.
 
-### ADR-008 — Scheduling in-daemon (gocron), OS units optional
+### ADR-008 — Scheduling in-daemon, OS units optional *(implemented with robfig/cron/v3)*
 **Decision:** Default scheduling runs inside the daemon for cross-platform parity; `axon` can *emit* launchd/systemd/Task-Scheduler units on request.
 **Why:** One config behaves identically on macOS/Linux/Windows; users who want OS-level supervision can opt in without the core depending on a specific OS scheduler.
 

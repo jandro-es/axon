@@ -4,7 +4,7 @@
 
 ## What you are building
 
-A cross-platform **Go 1.22+** daemon (`axon`) — one self-contained static binary — beside an Obsidian vault. The vault (plain Markdown) is durable memory; the daemon owns one local **SQLite + sqlite-vec + FTS5** database per profile, a knowledge-ingestion pipeline (URL/article/PDF → Markdown → chunk → embed via Ollama → index), a portable scheduler for automations, a token-accounting subsystem, an MCP server exposing wikilink-safe vault tools and hybrid search, and a real-time local dashboard (a React/Recharts SPA in `web/`, embedded in the binary). Claude Code is the brain, reached through the user's Claude **subscription** (personal: Max) or **enterprise** login (work) — not an API key — interactively (MCP + plugin + hooks + a generated vault `CLAUDE.md`) and headlessly on a schedule (`claude -p`). `axon init` reproduces the whole thing from config.
+A cross-platform **Go 1.26+** daemon (`axon`) — one self-contained static binary — beside an Obsidian vault. The vault (plain Markdown) is durable memory; the daemon owns one local **SQLite + FTS5 (+ in-file vectors, ADR-010)** database per profile, a knowledge-ingestion pipeline (URL/article/PDF → Markdown → chunk → embed via Ollama → index), a portable scheduler for automations, a token-accounting subsystem, an MCP server exposing wikilink-safe vault tools and hybrid search, and a real-time local dashboard (a React/Recharts SPA in `web/`, embedded in the binary). Claude Code is the brain, reached through the user's Claude **subscription** (personal: Max) or **enterprise** login (work) — not an API key — interactively (MCP + plugin + hooks + a generated vault `CLAUDE.md`) and headlessly on a schedule (`claude -p`). `axon init` reproduces the whole thing from config.
 
 ## The pack (read in this order)
 
@@ -27,24 +27,39 @@ Detail is in `@docs/`. Do not duplicate it here; reference it.
 ## Repository structure (single Go module)
 
 ```
-cmd/axon/      # main package — wires the cobra CLI; the only `package main`
+cmd/axon/      # main package — wires the cobra CLI and composes the daemon (start/stop, pidfile); the only `package main`
 internal/      # all application packages (private to the module)
-  config/      # types, schema (struct tags + validator), logging, paths, profile resolution, hashing
-  core/        # daemon orchestration: scheduler, automations, ingestion, token manager, db, api/SSE
-  db/ vault/ ingestion/ embeddings/ agent/ tokens/ scheduler/ automations/ api/ events/
+  config/      # types, schema (struct tags + validator), paths, profile resolution, secrets, content hashing
+  core/        # cross-cutting operations: init (provisioning), doctor, reindex, reembed
+  db/          # SQLite (modernc.org/sqlite): migrations, repositories, FTS5 + vector search
+  vault/       # markdown read/write, frontmatter, managed blocks, wikilink-safe ops
+  ingestion/   # fetch (egress-policied), extract, redact, chunk, enrich, persist
+  embeddings/  # provider interface + Ollama impl
+  agent/       # Claude adapters: `claude -p` subprocess (default) + direct-API (api_key mode)
+  tokens/      # the Component 07 chokepoint: estimate, budgets, ledger, redaction
+  scheduler/   # robfig/cron wrapper: jitter, panic-safety, catch-up policy
+  automations/ # the automation engine + the standard automation set
+  events/      # in-process event bus (SSE + persistence subscribers)
   mcp/         # AXON MCP server (stdio): vault + knowledge + token tools
-  dashboard/   # dashboard HTTP + SSE handlers (Go) that serve the SPA and stream events
+  dashboard/   # dashboard HTTP + SSE handlers (Go) serving the SPA and streaming events
+  hooks/       # Claude Code hook logic (SessionStart/PreToolUse/...), called via `axon hook`
+  identity/    # personal memory layer: USER/SOUL/MEMORY notes, onboarding (Component 12)
+  clients/     # multi-client wiring (Claude Desktop config merge, Component 13)
+  claudeassets/# embedded .claude/ wiring: CLAUDE.md template, skills, agents, hooks config
+  scaffold/    # embedded vault scaffolding: folder READMEs, note templates, Dataview dashboards
+  search/      # hybrid search facade over db + embeddings
+  service/     # OS service units (launchd/systemd) for `axon service`
+  health/      # vault health scoring for `axon health`
+  ui/          # terminal output styling for the CLI
 web/           # dashboard SPA — Vite + React + Recharts; built to web/dist, embedded via embed.FS
-plugin/        # Claude Code plugin: skills/, agents/, hooks/, .mcp.json + CLAUDE.md templates
 scripts/       # preflight + install/update/uninstall for macOS (launchd) & Linux (systemd), + _common.sh: build, install, service/Ollama wiring
-templates/     # vault scaffolding (folder READMEs, note templates, Dataview dashboards)
 ```
 
-**Dependency rule:** `internal/config` ← everyone. Leaf packages (`db`, `vault`, `embeddings`, `agent`, `tokens`) know nothing of each other's callers; `core` composes them; `mcp` imports the db read-layer + vault + tokens; `dashboard` imports only the read-layer + event bus. Nothing imports `cmd`. Go fails the build on import cycles — treat a cycle as a design error to fix, not work around.
+**Dependency rule:** `internal/config` ← everyone. Leaf packages (`db`, `vault`, `embeddings`, `agent`, `events`) know nothing of each other's callers. `tokens` is the only importer of `agent`; `core` and `automations` compose the leaves; `mcp` composes tools from the service layer (vault, db, search, tokens, ingestion, automations, identity); `dashboard` reads the db read-layer + event bus + token status. `cmd/axon` composes everything; nothing imports `cmd`. Go fails the build on import cycles — treat a cycle as a design error to fix, not work around.
 
 ## Build conventions
 
-- **Language/tooling:** Go 1.22+ (one module). `gofmt`/`goimports` clean, `go vet` and `golangci-lint` green. Idiomatic Go: wrap errors with `%w` and return them (don't panic in library code), propagate `context.Context` through every I/O and Claude/Ollama call, prefer small interfaces defined at the consumer, table-driven tests. Build the SPA in `web/` (Vite) then `go build ./cmd/axon` with the assets embedded via `embed.FS` → one static binary. Key libraries (pin them): `spf13/cobra` (CLI), `goccy/go-yaml` + `go-playground/validator` (config), `gocron`/`robfig/cron/v3` (scheduler), `modelcontextprotocol/go-sdk` (MCP), `ncruces/go-sqlite3` + `asg017/sqlite-vec-go-bindings/ncruces` (DB+vectors, pure-Go) or `mattn/go-sqlite3` + cgo bindings, `JohannesKaufmann/html-to-markdown` + `go-shiori/go-readability` (ingestion), and Vite + React + Recharts for `web/`. The Claude path is the `claude` CLI invoked as a subprocess (`claude -p`); `anthropics/anthropic-sdk-go` is needed **only** for the optional `auth_mode: api_key` adapter.
+- **Language/tooling:** Go 1.26+ (one module; the `go` directive in `go.mod` is authoritative). `gofmt`/`goimports` clean, `go vet` and `golangci-lint` green (config in `.golangci.yml`). Idiomatic Go: wrap errors with `%w` and return them (don't panic in library code), propagate `context.Context` through every I/O and Claude/Ollama call, prefer small interfaces defined at the consumer, table-driven tests. Build the SPA in `web/` (Vite) then `go build ./cmd/axon` with the assets embedded via `embed.FS` → one static binary. Key libraries (pinned in `go.mod`): `spf13/cobra` (CLI), `goccy/go-yaml` + `go-playground/validator` (config), `robfig/cron/v3` (scheduler), `modelcontextprotocol/go-sdk` (MCP), `modernc.org/sqlite` (pure-Go SQLite with FTS5; vectors are float32 BLOBs with brute-force cosine — ADR-010), `JohannesKaufmann/html-to-markdown` + `go-shiori/go-readability` (ingestion), and Vite + React + Recharts for `web/`. The Claude path is the `claude` CLI invoked as a subprocess (`claude -p`); `anthropics/anthropic-sdk-go` is needed **only** for the optional `auth_mode: api_key` adapter.
 - **Auth is subscription/enterprise, not API key.** Default `auth_mode` is `subscription` (personal, Max) or `enterprise` (work, SSO). AXON authenticates via the user's `claude login` session and a `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) for headless automations. Never set `ANTHROPIC_API_KEY` in these modes — Claude Code would divert onto API billing — and have `doctor` warn if one is present. The `api_key` mode is the only path that uses the Go SDK and exact `count_tokens`/dollar cost.
 - **Config is declarative.** All behaviour comes from `config.yaml` (at `~/.axon/config.yaml` by default; `--config` overrides; validated by struct tags + the validator in `config`) + `.env` for secrets. Never hardcode paths, models, prices, or budgets in logic. Model strings and prices live in config so they survive model/price changes; verify current model strings at build time rather than trusting any baked-in value.
 - **Profiles isolate everything.** Data dir, `CLAUDE_CONFIG_DIR`/`auth_mode`/OAuth token, policy block, automation set. Resolution order: CLI flag → `AXON_*` env → `profiles.<active>` → top-level → built-in default. One installation runs one active profile (personal and work are separate installs); nothing is shared across profiles.
@@ -61,7 +76,7 @@ A slice is done when: it satisfies its FR/NFR IDs; it has tests; `axon doctor` p
 
 ## Scope guardrails
 
-- **Do** keep the daemon single-language (Go) and the database single-file (SQLite + sqlite-vec + FTS5).
+- **Do** keep the daemon single-language (Go) and the database single-file (SQLite + FTS5 + in-file vectors).
 - **Do** make every subsystem toggleable via config.
 - **Don't** add a server-based vector DB, a cloud dependency, or a heavyweight framework without writing an ADR that justifies it (see the ADR format in `docs/02`).
 - **Don't** invent vault knowledge in SQLite that can't be regenerated from Markdown.

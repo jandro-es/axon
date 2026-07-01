@@ -10,7 +10,7 @@
 
 ## 2. Operational dashboard
 
-- **Stack:** a **Vite + React + Recharts** single-page app under `web/` — the only JavaScript in the project. Built to `web/dist` and embedded into the Go binary via `embed.FS`, then served by `internal/api` at `dashboard.host:port` (default `127.0.0.1:7777`). The Go side exposes a small REST + SSE API; the SPA is a pure client of it. Localhost-bound; holds no secrets; reads only the daemon API (FR-63). `web/` needs a Node toolchain at build time only; the distributed binary needs nothing.
+- **Stack:** a **Vite + React + Recharts** single-page app under `web/` — the only JavaScript in the project. Built to `web/dist` and embedded into the Go binary via `embed.FS`, then served by `internal/dashboard` at `dashboard.host:port` (default `127.0.0.1:7777`). The Go side exposes a small REST + SSE API; the SPA is a pure client of it. Localhost-bound; holds no secrets; reads only the daemon API (FR-63). `web/` needs a Node toolchain at build time only; the distributed binary needs nothing.
 - **Transport:** REST for snapshots + queries; **SSE** (`/events`) for the live stream off the in-process event bus. (WebSocket acceptable if bidirectional needs arise; SSE is sufficient and simpler.)
 - **Profile-aware:** the dashboard shows the profile this installation is bound to. Personal and work are separate installations, so there is normally one daemon and one dashboard per machine (default port 7777 for both).
 
@@ -35,7 +35,12 @@ A single in-process **event bus** is the spine: automations, ingestion, the toke
 ```ts
 type AxonEvent = {
   ts: string; level: 'info'|'warn'|'error';
-  kind: 'run.start'|'run.end'|'run.skip'|'ingest'|'tokens'|'budget'|'error'|'reindex';
+  // The kind union as emitted by the daemon (SSE frames use `event: <kind>`;
+  // the SPA's listener list in web/src/App.jsx must mirror this):
+  kind: 'automation.run'|'automation.skip'|'automation.fail'
+      | 'ingest.done'|'ingest.skip'|'ingest.enrich'
+      | 'ingest.embed.fail'|'ingest.embed.skip'|'ingest.review_queue.fail'
+      | 'token.ledger'|'token.deny'|'token.defer'|'token.downgrade'|'token.error';
   message: string;
   data?: Record<string, unknown>;   // never contains secrets
 };
