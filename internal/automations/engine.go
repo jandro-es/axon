@@ -138,8 +138,12 @@ func (e *Engine) Run(ctx context.Context, a Automation, dryRun bool) (Outcome, e
 		return e.finishFailed(ctx, out, runID, err)
 	}
 
-	// 4. Accounting + terminal status.
-	tokensUsed, _ := db.SumRunTokens(ctx, e.deps.DB, runID)
+	// 4. Accounting + terminal status. Written with a detached context: the run
+	// ctx may be moments from its deadline, and a cancelled accounting write
+	// would strand the row in 'running'.
+	dbCtx, dbCancel := detachedDBCtx(ctx)
+	defer dbCancel()
+	tokensUsed, _ := db.SumRunTokens(dbCtx, e.deps.DB, runID)
 	status := db.RunOK
 	if dryRun {
 		status = db.RunDryRun
@@ -150,7 +154,7 @@ func (e *Engine) Run(ctx context.Context, a Automation, dryRun bool) (Outcome, e
 	out.Estimated = res.EstimatedTokens
 	out.Tokens = tokensUsed
 
-	if err := db.FinishRun(ctx, e.deps.DB, db.RunUpdate{
+	if err := db.FinishRun(dbCtx, e.deps.DB, db.RunUpdate{
 		ID: runID, Status: status, FinishedAt: e.now().UTC().Format(time.RFC3339),
 		Changes: strings.Join(res.Changes, "\n"), Tokens: tokensUsed,
 	}); err != nil {
@@ -162,7 +166,7 @@ func (e *Engine) Run(ctx context.Context, a Automation, dryRun bool) (Outcome, e
 	// the next tick re-detect the same material as "changed" and re-spend tokens,
 	// so surface the failure rather than swallowing it.
 	if !dryRun && change.Cursor != "" {
-		if err := db.SetCursor(ctx, e.deps.DB, name, change.Cursor, e.now().UTC().Format(time.RFC3339)); err != nil {
+		if err := db.SetCursor(dbCtx, e.deps.DB, name, change.Cursor, e.now().UTC().Format(time.RFC3339)); err != nil {
 			e.deps.Log.Warn("failed to persist change-gate cursor; automation may re-run on unchanged material",
 				"automation", name, "error", err)
 		}
@@ -189,10 +193,20 @@ func (e *Engine) runCtx(runID int64, dryRun bool) RunCtx {
 	}
 }
 
+// detachedDBCtx derives a context for terminal-state writes that survives the
+// run context's cancellation — the write matters MOST precisely when the run
+// was cancelled (engine timeout, SIGTERM), otherwise the runs row is stranded
+// in 'running' forever. Bounded so shutdown can never hang on it.
+func detachedDBCtx(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+}
+
 func (e *Engine) finishSkipped(ctx context.Context, out Outcome, runID int64, reason string) (Outcome, error) {
+	dbCtx, cancel := detachedDBCtx(ctx)
+	defer cancel()
 	out.Status = db.RunSkipped
 	out.SkipReason = reason
-	if err := db.FinishRun(ctx, e.deps.DB, db.RunUpdate{
+	if err := db.FinishRun(dbCtx, e.deps.DB, db.RunUpdate{
 		ID: runID, Status: db.RunSkipped, FinishedAt: e.now().UTC().Format(time.RFC3339), SkipReason: reason,
 	}); err != nil {
 		e.deps.Log.Warn("failed to record skipped run", "automation", out.Automation, "error", err)
@@ -202,9 +216,11 @@ func (e *Engine) finishSkipped(ctx context.Context, out Outcome, runID int64, re
 }
 
 func (e *Engine) finishFailed(ctx context.Context, out Outcome, runID int64, runErr error) (Outcome, error) {
+	dbCtx, cancel := detachedDBCtx(ctx)
+	defer cancel()
 	out.Status = db.RunFailed
 	out.Err = runErr.Error()
-	if err := db.FinishRun(ctx, e.deps.DB, db.RunUpdate{
+	if err := db.FinishRun(dbCtx, e.deps.DB, db.RunUpdate{
 		ID: runID, Status: db.RunFailed, FinishedAt: e.now().UTC().Format(time.RFC3339), Error: runErr.Error(),
 	}); err != nil {
 		e.deps.Log.Warn("failed to record failed run", "automation", out.Automation, "error", err)

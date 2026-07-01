@@ -49,10 +49,11 @@ func newReindexCmd(gf *globalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(out, "%s reindex (profile %q): %s notes, %s links, %s\n",
+			fmt.Fprintf(out, "%s reindex (profile %q): %s notes, %s links, %s, %s\n",
 				st.Green(ui.IconOK), name,
 				st.Bold(fmt.Sprintf("%d", res.Notes)),
 				st.Bold(fmt.Sprintf("%d", res.Links)),
+				st.Dim(fmt.Sprintf("%d rechunked", res.Rechunked)),
 				st.Dim(fmt.Sprintf("%d unresolved wikilinks", res.BrokenWikilink)))
 
 			if embeddings {

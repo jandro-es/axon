@@ -41,6 +41,12 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 			st := ui.For(out)
 			fmt.Fprintln(out, st.Header(ui.IconRocket, fmt.Sprintf("axon start — profile %q", deps.name)))
 
+			// Refuse to double-start: a second daemon on the same profile would
+			// double-run every automation (the engine's locks are in-process).
+			if err := checkNotRunning(deps.paths.DataDir); err != nil {
+				return err
+			}
+
 			// Record the pid so `axon stop` can signal this daemon (FR-04).
 			if pidPath, perr := writePidFile(deps.paths.DataDir); perr != nil {
 				fmt.Fprintf(out, "%s could not write pidfile: %v\n", st.Yellow(ui.IconWarn), perr)

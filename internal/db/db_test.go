@@ -74,4 +74,32 @@ func TestOpenCreatesFileDatabase(t *testing.T) {
 	if fk != 1 {
 		t.Errorf("foreign_keys = %d, want 1", fk)
 	}
+
+	// WAL journaling on file databases (comes via the DSN, so any replacement
+	// connection after driver.ErrBadConn keeps it too).
+	var mode string
+	if err := sqlDB.QueryRow("PRAGMA journal_mode;").Scan(&mode); err != nil {
+		t.Fatalf("read journal_mode pragma: %v", err)
+	}
+	if mode != "wal" {
+		t.Errorf("journal_mode = %q, want wal", mode)
+	}
+
+	// And cascades actually fire (the pragma is real, not just reported).
+	if _, err := sqlDB.Exec(`INSERT INTO notes (path, title) VALUES ('x.md', 'X');`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sqlDB.Exec(`INSERT INTO chunks (note_id, ordinal, text) SELECT id, 0, 'body' FROM notes;`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sqlDB.Exec(`DELETE FROM notes;`); err != nil {
+		t.Fatal(err)
+	}
+	var orphans int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM chunks;`).Scan(&orphans); err != nil {
+		t.Fatal(err)
+	}
+	if orphans != 0 {
+		t.Errorf("chunks after note delete = %d, want 0 (FK cascade must fire)", orphans)
+	}
 }

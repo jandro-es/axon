@@ -17,12 +17,12 @@ items are fixed: `todo` → `in progress` → `done` (with commit) or `wontfix` 
 
 | # | Task | Where | Status |
 |---|------|-------|--------|
-| 5 | Terminal run state written with the already-expired run context: on the 5-min engine timeout or SIGTERM, `FinishRun` no-ops and runs stay `running` forever. Use `context.WithoutCancel` + short fresh timeout for `finishFailed`/`SetCursor`. | `internal/automations/engine.go:98-138` | todo |
-| 6 | SQLite pragmas applied per-connection, not in DSN — after a `driver.ErrBadConn` reconnect, `foreign_keys=OFF` silently returns, breaking every cascade. Move pragmas into the DSN (`?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)`). | `internal/db/db.go:22-47` | todo |
-| 7 | `axon reindex` rebuilds only `notes`+`links`, never chunks/FTS/vectors — violates the "SQLite is derived and disposable" contract (ADR-006): after `rm db.sqlite && axon reindex`, search is empty. Re-chunk bodies whose `content_hash` changed or that have no chunks. | `internal/core/reindex.go` | todo |
-| 8 | No double-daemon guard: `axon start` blindly overwrites the pidfile; a service + manual start double-runs every automation (double token spend). Refuse to start if pidfile PID is alive. | `cmd/axon/start_cmd.go:45`, `cmd/axon/pidfile.go` | todo |
-| 9 | `Scheduler.CatchUp` lacks the `recover()` that `fire()` has — a panicking catch-up automation crashes the daemon at startup (launchd crash loop). Extract shared `safeRun`. | `internal/scheduler/scheduler.go:120` | todo |
-| 10 | Agent-error paths (JSON parse failure after successful run, 120s adapter timeout) write nothing to the token ledger — real quota burned invisibly, guard never trips. Record a conservative ledger row on adapter error. | `internal/tokens/manager.go:299` | todo |
+| 5 | Terminal run state written with the already-expired run context: on the 5-min engine timeout or SIGTERM, `FinishRun` no-ops and runs stay `running` forever. Use `context.WithoutCancel` + short fresh timeout for `finishFailed`/`SetCursor`. | `internal/automations/engine.go:98-138` | done |
+| 6 | SQLite pragmas applied per-connection, not in DSN — after a `driver.ErrBadConn` reconnect, `foreign_keys=OFF` silently returns, breaking every cascade. Move pragmas into the DSN (`?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)`). | `internal/db/db.go:22-47` | done |
+| 7 | `axon reindex` rebuilds only `notes`+`links`, never chunks/FTS/vectors — violates the "SQLite is derived and disposable" contract (ADR-006): after `rm db.sqlite && axon reindex`, search is empty. Re-chunk bodies whose `content_hash` changed or that have no chunks. | `internal/core/reindex.go` | done |
+| 8 | No double-daemon guard: `axon start` blindly overwrites the pidfile; a service + manual start double-runs every automation (double token spend). Refuse to start if pidfile PID is alive. | `cmd/axon/start_cmd.go:45`, `cmd/axon/pidfile.go` | done |
+| 9 | `Scheduler.CatchUp` lacks the `recover()` that `fire()` has — a panicking catch-up automation crashes the daemon at startup (launchd crash loop). Extract shared `safeRun`. | `internal/scheduler/scheduler.go:120` | done |
+| 10 | Agent-error paths (JSON parse failure after successful run, 120s adapter timeout) write nothing to the token ledger — real quota burned invisibly, guard never trips. Record a conservative ledger row on adapter error (`operation` gets a `:failed` suffix; input debited from the pre-flight estimate). | `internal/tokens/manager.go:299` | done |
 
 ## P1 — Security & cardinal-rule hardening
 

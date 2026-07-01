@@ -41,6 +41,22 @@ func TestCatchUpRunsRunOnceJobs(t *testing.T) {
 	}
 }
 
+// TestCatchUpSurvivesPanickingJob: one broken automation must never take the
+// daemon down during startup catch-up (same guarantee fire() gives ticks).
+func TestCatchUpSurvivesPanickingJob(t *testing.T) {
+	s := New(Options{})
+	var ran int32
+	_ = s.Add(Job{Name: "boom", Schedule: "0 9 * * *", CatchUp: CatchUpRunOnce,
+		Run: func(ctx context.Context) error { panic("kaboom") }})
+	_ = s.Add(Job{Name: "after", Schedule: "0 9 * * *", CatchUp: CatchUpRunOnce,
+		Run: func(ctx context.Context) error { atomic.AddInt32(&ran, 1); return nil }})
+
+	s.CatchUp(context.Background()) // must not panic the caller
+	if atomic.LoadInt32(&ran) != 1 {
+		t.Error("job after the panicking one did not run")
+	}
+}
+
 func TestFireRunsJobWithJitter(t *testing.T) {
 	s := New(Options{Jitter: time.Millisecond, Seed: 1})
 	done := make(chan struct{})

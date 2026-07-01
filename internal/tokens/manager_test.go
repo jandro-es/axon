@@ -76,6 +76,44 @@ func TestRunLedgersEveryCall(t *testing.T) {
 	}
 }
 
+// TestRunLedgersFailedCalls: an adapter error (timeout killing claude -p
+// mid-generation, unparseable output after a completed run) may still have
+// burned real quota — the spend must land in the ledger and budget windows,
+// or the guard can never trip on it (cardinal rule 1: ledger on every path).
+func TestRunLedgersFailedCalls(t *testing.T) {
+	ctx := context.Background()
+	fake := agent.NewFake()
+	fake.Err = errors.New("claude -p: parse output: unexpected end of JSON input")
+	m := testManager(t, generousLimits(), fake)
+
+	_, err := m.Run(ctx, AgentCall{Operation: "automation.daily-log", ModelKey: "routine",
+		Messages: []Message{{Role: "user", Content: "summarise today"}}})
+	if err == nil {
+		t.Fatal("expected the failed call to return an error")
+	}
+
+	n, _ := db.CountLedger(ctx, m.db)
+	if n != 1 {
+		t.Fatalf("ledger rows after failed call = %d, want 1", n)
+	}
+	var op string
+	var input int64
+	if err := m.db.QueryRowContext(ctx,
+		`SELECT operation, input_tokens FROM token_ledger LIMIT 1;`).Scan(&op, &input); err != nil {
+		t.Fatal(err)
+	}
+	if op != "automation.daily-log:failed" {
+		t.Errorf("operation = %q, want the :failed marker", op)
+	}
+	if input <= 0 {
+		t.Errorf("input_tokens = %d, want the pre-flight estimate (> 0)", input)
+	}
+	st, _ := m.Status(ctx, "test")
+	if st.Day.Used <= 0 {
+		t.Errorf("day budget used = %d after failed call, want > 0", st.Day.Used)
+	}
+}
+
 func TestRunNoUsageFallsBackToEstimate(t *testing.T) {
 	ctx := context.Background()
 	fake := agent.NewFake()

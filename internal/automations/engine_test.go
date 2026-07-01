@@ -111,6 +111,37 @@ func TestEngineSkipsWhenNothingChangedNoModelCall(t *testing.T) {
 	}
 }
 
+// TestEngineRecordsTerminalStateWhenRunContextDies: when the run's own context
+// dies mid-run (engine timeout, SIGTERM), the runs row must still reach a
+// terminal status — a row stranded in 'running' corrupts run history, the
+// dashboard and LatestRunFinish forever.
+func TestEngineRecordsTerminalStateWhenRunContextDies(t *testing.T) {
+	h := newHarness(t, genLimits())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	a := fakeAutomation{name: "doomed", changed: true, runFn: func(ctx context.Context, rc RunCtx) (RunResult, error) {
+		cancel() // simulate shutdown/timeout firing while the automation runs
+		<-ctx.Done()
+		return RunResult{}, ctx.Err()
+	}}
+
+	out, err := h.engine.Run(ctx, a, false)
+	if err == nil {
+		t.Fatal("expected the cancelled run to return an error")
+	}
+	if out.RunID == 0 {
+		t.Fatal("no run id recorded")
+	}
+	var status string
+	if err := h.db.QueryRowContext(context.Background(),
+		`SELECT status FROM runs WHERE id = ?;`, out.RunID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != db.RunFailed {
+		t.Errorf("run status = %q, want %q (terminal state must survive ctx cancellation)", status, db.RunFailed)
+	}
+}
+
 func TestEngineDryRunWritesNothingButEstimates(t *testing.T) {
 	h := newHarness(t, genLimits())
 	ctx := context.Background()

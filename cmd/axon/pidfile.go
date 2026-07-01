@@ -41,6 +41,22 @@ func readPidFile(dataDir string) (int, error) {
 	return pid, nil
 }
 
+// checkNotRunning refuses a second daemon on the same profile: two daemons
+// would double-run every scheduled automation (double token spend) and the
+// in-process overlap locks (FR-35) cannot see across processes. A pidfile
+// pointing at a dead process is treated as stale and does not block.
+func checkNotRunning(dataDir string) error {
+	pid, err := readPidFile(dataDir)
+	if err != nil || pid == os.Getpid() {
+		return nil // no pidfile (or unreadable) — nothing to guard against
+	}
+	if processAlive(pid) {
+		return fmt.Errorf("an axon daemon for this profile is already running (pid %d) — stop it with `axon stop`, or remove %s if that pid is not axon",
+			pid, pidFilePath(dataDir))
+	}
+	return nil
+}
+
 // removePidFile deletes the pidfile (ignoring a missing file).
 func removePidFile(dataDir string) {
 	_ = os.Remove(pidFilePath(dataDir))

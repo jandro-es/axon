@@ -297,6 +297,19 @@ func (m *manager) Run(ctx context.Context, call AgentCall) (AgentResult, error) 
 		Prompt:    joinMessages(call.Messages),
 	})
 	if err != nil {
+		// A failed call may still have consumed real tokens upstream — an
+		// adapter timeout that killed `claude -p` mid-generation, or garbled
+		// stdout after a completed run. Record a conservative ledger row from
+		// the pre-flight estimate so quota is never burned invisibly and the
+		// budget guard can still trip (cardinal rule 1: ledger on EVERY path).
+		failed := call
+		failed.Operation = call.Operation + ":failed"
+		failedRes := res
+		failedRes.Usage.InputTokens = auth.EstInput
+		if _, lerr := m.record(ctx, failed, auth, failedRes); lerr != nil {
+			m.emit(events.LevelError, "token.error", call.Operation, auth,
+				map[string]any{"error": "ledger write after failed call: " + lerr.Error()})
+		}
 		m.emit(events.LevelError, "token.error", call.Operation, auth, map[string]any{"error": err.Error()})
 		return res, fmt.Errorf("agent run %q: %w", call.Operation, err)
 	}
@@ -324,7 +337,12 @@ func (m *manager) Run(ctx context.Context, call AgentCall) (AgentResult, error) 
 }
 
 // record writes the ledger row, updates day/week budgets and emits the event.
+// It detaches from the caller's context: the tokens are already spent, and a
+// run context that was cancelled mid-call (the most likely failure) must not
+// also cancel the accounting for that spend.
 func (m *manager) record(ctx context.Context, call AgentCall, auth Authorization, res AgentResult) (int64, error) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
 	ts := m.now().UTC()
 	total := int64(res.Usage.InputTokens + res.Usage.OutputTokens)
 

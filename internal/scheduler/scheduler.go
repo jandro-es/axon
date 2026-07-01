@@ -71,7 +71,9 @@ func (s *Scheduler) Add(job Job) error {
 	if _, err := s.cron.AddFunc(job.Schedule, func() { s.fire(job) }); err != nil {
 		return fmt.Errorf("schedule %q (%q): %w", job.Name, job.Schedule, err)
 	}
+	s.mu.Lock()
 	s.jobs = append(s.jobs, job)
+	s.mu.Unlock()
 	return nil
 }
 
@@ -86,13 +88,20 @@ func (s *Scheduler) fire(job Job) {
 			return
 		}
 	}
+	s.safeRun(s.ctx(), job, "automation")
+}
+
+// safeRun executes a job, converting a panic into a logged error so one broken
+// automation can never take the daemon down (used by both scheduled fires and
+// startup catch-up).
+func (s *Scheduler) safeRun(ctx context.Context, job Job, kind string) {
 	defer func() {
 		if r := recover(); r != nil {
-			s.log.Error("automation panicked", "job", job.Name, "panic", r)
+			s.log.Error(kind+" panicked", "job", job.Name, "panic", r)
 		}
 	}()
-	if err := job.Run(s.ctx()); err != nil {
-		s.log.Warn("automation run error", "job", job.Name, "error", err)
+	if err := job.Run(ctx); err != nil {
+		s.log.Warn(kind+" run error", "job", job.Name, "error", err)
 	}
 }
 
@@ -118,11 +127,9 @@ func (s *Scheduler) ctx() context.Context {
 // interpretation of catching up runs missed while the daemon was down. (skip
 // jobs are left for their next scheduled tick.)
 func (s *Scheduler) CatchUp(ctx context.Context) {
-	for _, job := range s.jobs {
+	for _, job := range s.Jobs() {
 		if job.CatchUp == CatchUpRunOnce {
-			if err := job.Run(ctx); err != nil {
-				s.log.Warn("catch-up run error", "job", job.Name, "error", err)
-			}
+			s.safeRun(ctx, job, "catch-up")
 		}
 	}
 }
@@ -141,5 +148,11 @@ func (s *Scheduler) Stop() context.Context {
 	return s.cron.Stop()
 }
 
-// Jobs returns the registered jobs (for status/inspection).
-func (s *Scheduler) Jobs() []Job { return s.jobs }
+// Jobs returns a copy of the registered jobs (for status/inspection).
+func (s *Scheduler) Jobs() []Job {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]Job, len(s.jobs))
+	copy(out, s.jobs)
+	return out
+}

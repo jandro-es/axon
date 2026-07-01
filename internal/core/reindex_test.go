@@ -81,8 +81,96 @@ func TestReindexIsRepeatableAndRebuildsFromScratch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r1 != r2 {
+	if r1.Notes != r2.Notes || r1.Links != r2.Links || r1.BrokenWikilink != r2.BrokenWikilink {
 		t.Errorf("reindex not repeatable: %+v vs %+v", r1, r2)
+	}
+	// The second pass must not churn: nothing changed, so nothing rechunks —
+	// this is what keeps existing vectors (and ingestion's source-anchored
+	// chunks) alive across routine reindexes.
+	if r2.Rechunked != 0 {
+		t.Errorf("second reindex rechunked %d notes, want 0 (no churn on unchanged vault)", r2.Rechunked)
+	}
+
+	// Vectors on unchanged notes survive further reindexes.
+	pending, err := db.ListPendingChunks(ctx, d, false)
+	if err != nil || len(pending) == 0 {
+		t.Fatalf("expected pending chunks to embed, got %d (err %v)", len(pending), err)
+	}
+	if err := db.UpsertChunkVector(ctx, d, pending[0].ID, "fake", []float32{1, 0}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Reindex(ctx, v, d); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := db.CountVectors(ctx, d); n != 1 {
+		t.Errorf("vectors after reindex of unchanged vault = %d, want 1 (preserved)", n)
+	}
+}
+
+// TestReindexRebuildsSearchFromMarkdown is the ADR-006 contract: delete the
+// database, reindex from the vault alone, and lexical search must work.
+func TestReindexRebuildsSearchFromMarkdown(t *testing.T) {
+	ctx := context.Background()
+	v := tempVault(t, map[string]string{
+		"notes/espresso.md": "Grinder settings for espresso: 18 grams in, 36 out.\n",
+		"notes/other.md":    "Completely unrelated gardening notes.\n",
+	})
+	d := migratedDB(t) // fresh, empty database — the rm-db recovery path
+
+	res, err := Reindex(ctx, v, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Rechunked != 2 {
+		t.Errorf("rechunked = %d, want 2 (both notes need chunks)", res.Rechunked)
+	}
+
+	hits, err := db.HybridSearch(ctx, d, db.SearchOpts{Query: "espresso grinder", TopK: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) == 0 || hits[0].Path != "notes/espresso.md" {
+		t.Fatalf("search after rebuild-from-scratch found %+v, want notes/espresso.md", hits)
+	}
+}
+
+// TestReindexRefreshesChunksOnEdit: hand-editing a note must replace its stale
+// chunks so search reflects the vault, not history.
+func TestReindexRefreshesChunksOnEdit(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	notePath := filepath.Join(dir, "topic.md")
+	if err := os.WriteFile(notePath, []byte("All about penguins and Antarctica.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	v := vault.NewFS(dir)
+	d := migratedDB(t)
+
+	if _, err := Reindex(ctx, v, d); err != nil {
+		t.Fatal(err)
+	}
+
+	// Human rewrites the note.
+	if err := os.WriteFile(notePath, []byte("Now it covers walruses in the Arctic instead.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Reindex(ctx, v, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Rechunked != 1 {
+		t.Errorf("rechunked = %d, want 1 (edited note)", res.Rechunked)
+	}
+
+	if hits, err := db.HybridSearch(ctx, d, db.SearchOpts{Query: "penguins Antarctica", TopK: 5}); err != nil {
+		t.Fatal(err)
+	} else if len(hits) != 0 {
+		t.Errorf("stale content still searchable after edit+reindex: %+v", hits)
+	}
+	if hits, err := db.HybridSearch(ctx, d, db.SearchOpts{Query: "walruses Arctic", TopK: 5}); err != nil {
+		t.Fatal(err)
+	} else if len(hits) != 1 {
+		t.Errorf("new content not searchable after edit+reindex: %+v", hits)
 	}
 }
 

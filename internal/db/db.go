@@ -7,6 +7,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	// Pure-Go SQLite (cgo-free transpilation of current SQLite, FTS5 built in)
 	// so the daemon stays a single static binary. Registers the "sqlite" driver.
@@ -19,8 +20,24 @@ const MemoryDSN = ":memory:"
 // Open opens (creating if needed) the SQLite database at path and applies the
 // pragmas AXON relies on: foreign keys on, WAL journaling (file DBs), busy
 // timeout. Pass MemoryDSN for an ephemeral test database.
+//
+// The pragmas are baked into the DSN, NOT Exec'd once after opening: database/sql
+// silently replaces connections after driver.ErrBadConn, and a replacement
+// connection would otherwise come up with SQLite defaults (foreign_keys=OFF),
+// quietly disabling every cascade the schema depends on.
 func Open(path string) (*sql.DB, error) {
-	sqlDB, err := sql.Open("sqlite", path)
+	pragmas := []string{
+		"_pragma=foreign_keys(1)",
+		"_pragma=busy_timeout(5000)",
+	}
+	var dsn string
+	if path == MemoryDSN {
+		dsn = "file::memory:?" + strings.Join(pragmas, "&")
+	} else {
+		pragmas = append(pragmas, "_pragma=journal_mode(WAL)")
+		dsn = "file:" + path + "?" + strings.Join(pragmas, "&")
+	}
+	sqlDB, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite %q: %w", path, err)
 	}
@@ -30,18 +47,12 @@ func Open(path string) (*sql.DB, error) {
 		_ = sqlDB.Close()
 		return nil, fmt.Errorf("ping sqlite %q: %w", path, err)
 	}
-	pragmas := []string{
-		"PRAGMA foreign_keys = ON;",
-		"PRAGMA busy_timeout = 5000;",
-	}
-	if path != MemoryDSN {
-		pragmas = append(pragmas, "PRAGMA journal_mode = WAL;")
-	}
-	for _, p := range pragmas {
-		if _, err := sqlDB.Exec(p); err != nil {
-			_ = sqlDB.Close()
-			return nil, fmt.Errorf("apply %q: %w", p, err)
-		}
+	// Sanity-check that the DSN pragma syntax was honored — a silent fallback to
+	// foreign_keys=OFF would be integrity-destroying, so fail loudly instead.
+	var fk int
+	if err := sqlDB.QueryRow("PRAGMA foreign_keys;").Scan(&fk); err != nil || fk != 1 {
+		_ = sqlDB.Close()
+		return nil, fmt.Errorf("sqlite %q: foreign_keys pragma not applied (got %d, err %v)", path, fk, err)
 	}
 	return sqlDB, nil
 }

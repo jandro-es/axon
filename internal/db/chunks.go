@@ -103,6 +103,39 @@ func DeleteChunksForSource(ctx context.Context, q DBTX, sourceID int64) error {
 	return nil
 }
 
+// DeleteChunksForNote removes all chunks (and, by cascade, their vectors) for a
+// note, plus their FTS rows. Used by reindex when a note's body has changed and
+// by DeleteNote.
+func DeleteChunksForNote(ctx context.Context, q DBTX, noteID int64) error {
+	rows, err := q.QueryContext(ctx, `SELECT id FROM chunks WHERE note_id = ?;`, noteID)
+	if err != nil {
+		return fmt.Errorf("list chunks for note %d: %w", noteID, err)
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("list chunks for note %d: %w", noteID, err)
+	}
+	rows.Close()
+	for _, id := range ids {
+		if _, err := q.ExecContext(ctx, `DELETE FROM fts_chunks WHERE chunk_id = ?;`, id); err != nil {
+			return fmt.Errorf("delete fts row %d: %w", id, err)
+		}
+	}
+	if _, err := q.ExecContext(ctx, `DELETE FROM chunks WHERE note_id = ?;`, noteID); err != nil {
+		return fmt.Errorf("delete chunks for note %d: %w", noteID, err)
+	}
+	return nil
+}
+
 // InsertChunk inserts a chunk row and returns its id.
 func InsertChunk(ctx context.Context, q Execer, c ChunkRow) (int64, error) {
 	r, err := q.ExecContext(ctx,

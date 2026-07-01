@@ -41,21 +41,32 @@ func ClearLinks(ctx context.Context, q Execer) error {
 	return nil
 }
 
-// NotePathIDs returns a map of vault-relative path -> note id for every note.
-func NotePathIDs(ctx context.Context, q Queryer2) (map[string]int64, error) {
-	rows, err := q.QueryContext(ctx, "SELECT path, id FROM notes;")
+// NoteIndexState is the per-note state reindex needs: identity, the content
+// hash last recorded, and whether any chunks exist for it.
+type NoteIndexState struct {
+	ID          int64
+	ContentHash string
+	Chunks      int
+}
+
+// NoteIndexStates returns vault-relative path -> index state for every note.
+func NoteIndexStates(ctx context.Context, q Queryer2) (map[string]NoteIndexState, error) {
+	rows, err := q.QueryContext(ctx,
+		`SELECT n.path, n.id, COALESCE(n.content_hash, ''), COUNT(c.id)
+		   FROM notes n LEFT JOIN chunks c ON c.note_id = n.id
+		  GROUP BY n.id;`)
 	if err != nil {
-		return nil, fmt.Errorf("list note paths: %w", err)
+		return nil, fmt.Errorf("list note index states: %w", err)
 	}
 	defer rows.Close()
-	out := make(map[string]int64)
+	out := make(map[string]NoteIndexState)
 	for rows.Next() {
 		var path string
-		var id int64
-		if err := rows.Scan(&path, &id); err != nil {
+		var st NoteIndexState
+		if err := rows.Scan(&path, &st.ID, &st.ContentHash, &st.Chunks); err != nil {
 			return nil, err
 		}
-		out[path] = id
+		out[path] = st
 	}
 	return out, rows.Err()
 }
@@ -65,28 +76,8 @@ func NotePathIDs(ctx context.Context, q Queryer2) (map[string]int64, error) {
 // explicitly first — leaving them behind breaks HybridSearch with dangling
 // chunk ids.
 func DeleteNote(ctx context.Context, q DBTX, id int64) error {
-	rows, err := q.QueryContext(ctx, `SELECT id FROM chunks WHERE note_id = ?;`, id)
-	if err != nil {
-		return fmt.Errorf("list chunks for note %d: %w", id, err)
-	}
-	var chunkIDs []int64
-	for rows.Next() {
-		var cid int64
-		if err := rows.Scan(&cid); err != nil {
-			rows.Close()
-			return err
-		}
-		chunkIDs = append(chunkIDs, cid)
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
+	if err := DeleteChunksForNote(ctx, q, id); err != nil {
 		return err
-	}
-	rows.Close()
-	for _, cid := range chunkIDs {
-		if _, err := q.ExecContext(ctx, `DELETE FROM fts_chunks WHERE chunk_id = ?;`, cid); err != nil {
-			return fmt.Errorf("delete fts row %d: %w", cid, err)
-		}
 	}
 	if _, err := q.ExecContext(ctx, "DELETE FROM notes WHERE id = ?;", id); err != nil {
 		return fmt.Errorf("delete note %d: %w", id, err)

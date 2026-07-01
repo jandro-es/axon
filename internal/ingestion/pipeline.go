@@ -300,9 +300,17 @@ func (p *Pipeline) persist(ctx context.Context, notePath string, in Input, enr E
 		}
 	}()
 
+	// The notes row records the hash of the NOTE BODY as written — the same
+	// convention reindex uses — so a routine reindex does not mistake every
+	// ingested note for "changed" and churn its chunks. The source row below
+	// keeps the cleaned-content hash for re-ingest change detection.
+	bodyHash := hash
+	if n, rerr := p.Vault.Read(ctx, notePath); rerr == nil {
+		bodyHash = config.ContentHash(n.Body)
+	}
 	noteID, err := db.UpsertNote(ctx, tx, db.NoteRow{
 		Path: notePath, Title: enr.Title, Type: "source", Tags: enr.Tags,
-		ContentHash: hash, WordCount: len(strings.Fields(cleaned)),
+		ContentHash: bodyHash, WordCount: len(strings.Fields(cleaned)),
 		Created: now, Updated: now, LastIndexed: now,
 	})
 	if err != nil {
