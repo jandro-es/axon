@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/jandro-es/axon/internal/ui"
 )
 
 func newStopCmd(gf *globalFlags) *cobra.Command {
@@ -25,6 +27,7 @@ func newStopCmd(gf *globalFlags) *cobra.Command {
 			}
 			defer deps.close()
 			out := cmd.OutOrStdout()
+			st := ui.For(out)
 			dataDir := deps.paths.DataDir
 
 			pid, err := readPidFile(dataDir)
@@ -33,19 +36,21 @@ func newStopCmd(gf *globalFlags) *cobra.Command {
 			}
 			if !processAlive(pid) {
 				removePidFile(dataDir)
-				fmt.Fprintf(out, "no running daemon (stale pidfile for pid %d removed)\n", pid)
+				fmt.Fprintf(out, "%s %s\n", st.Yellow(ui.IconWarn),
+					st.Dim(fmt.Sprintf("no running daemon (stale pidfile for pid %d removed)", pid)))
 				return nil
 			}
 			if err := signalStop(pid); err != nil {
 				return fmt.Errorf("signal pid %d: %w", pid, err)
 			}
-			fmt.Fprintf(out, "sent stop signal to pid %d; waiting…\n", pid)
+			fmt.Fprintf(out, "%s %s\n", st.Dim(ui.IconArrow),
+				st.Dim(fmt.Sprintf("sent stop signal to pid %d; waiting…", pid)))
 
 			deadline := time.Now().Add(time.Duration(timeoutSec) * time.Second)
 			for time.Now().Before(deadline) {
 				if !processAlive(pid) {
 					removePidFile(dataDir)
-					fmt.Fprintf(out, "daemon (pid %d) stopped\n", pid)
+					fmt.Fprintf(out, "%s %s\n", st.Green(ui.IconOK), fmt.Sprintf("daemon (pid %d) stopped", pid))
 					return nil
 				}
 				time.Sleep(200 * time.Millisecond)

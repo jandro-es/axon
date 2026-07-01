@@ -3,12 +3,15 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 
 	"github.com/jandro-es/axon/internal/automations"
 	"github.com/jandro-es/axon/internal/config"
+	"github.com/jandro-es/axon/internal/ui"
 )
 
 func newRunCmd(gf *globalFlags) *cobra.Command {
@@ -49,7 +52,7 @@ func newRunCmd(gf *globalFlags) *cobra.Command {
 				}
 				return runErr
 			}
-			printOutcome(cmd, out)
+			printOutcome(w, out)
 			return runErr
 		},
 	}
@@ -58,28 +61,35 @@ func newRunCmd(gf *globalFlags) *cobra.Command {
 	return cmd
 }
 
-func printOutcome(cmd *cobra.Command, out automations.Outcome) {
-	w := cmd.OutOrStdout()
+func printOutcome(w io.Writer, out automations.Outcome) {
+	st := ui.For(w)
+	name := st.Bold(out.Automation)
 	switch out.Status {
 	case "skipped":
-		fmt.Fprintf(w, "↻ %s skipped: %s\n", out.Automation, out.SkipReason)
+		// The skip reason is the useful part (change-gate, budget guard, locked) —
+		// give it room and dim it so it reads as an explanation, not an error.
+		fmt.Fprintf(w, "%s %s %s\n", st.Cyan(ui.IconAlready), name, st.Cyan("skipped"))
+		fmt.Fprintf(w, "  %s %s\n", st.Dim("reason:"), st.Dim(out.SkipReason))
 	case "failed":
-		fmt.Fprintf(w, "✗ %s failed: %s\n", out.Automation, out.Err)
+		fmt.Fprintf(w, "%s %s %s\n", st.Red(ui.IconError), name, st.Red("failed"))
+		fmt.Fprintf(w, "  %s %s\n", st.Dim("error: "), st.Red(out.Err))
+		fmt.Fprintf(w, "  %s %s\n", st.Yellow(ui.IconArrow),
+			st.Dim("preview with `axon run "+out.Automation+" --dry-run`, or check prerequisites with `axon doctor`"))
 	case "dry-run":
-		fmt.Fprintf(w, "dry-run %s: %s\n", out.Automation, out.Summary)
+		fmt.Fprintf(w, "%s %s %s\n", st.Bold("dry-run"), name, st.Dim("— "+out.Summary))
 		for _, c := range out.Changes {
-			fmt.Fprintf(w, "  - %s\n", c)
+			fmt.Fprintf(w, "  %s %s\n", st.Dim("·"), c)
 		}
 		if out.Estimated > 0 {
-			fmt.Fprintf(w, "  estimated input: ~%d tokens\n", out.Estimated)
+			fmt.Fprintf(w, "  %s ~%s tokens\n", st.Dim("estimated input:"), humanize.Comma(int64(out.Estimated)))
 		}
 	default:
-		fmt.Fprintf(w, "✓ %s: %s\n", out.Automation, out.Summary)
+		fmt.Fprintf(w, "%s %s %s\n", st.Green(ui.IconOK), name, st.Dim("— "+out.Summary))
 		for _, c := range out.Changes {
-			fmt.Fprintf(w, "  - %s\n", c)
+			fmt.Fprintf(w, "  %s %s\n", st.Dim("·"), c)
 		}
 		if out.Tokens > 0 {
-			fmt.Fprintf(w, "  tokens: %d\n", out.Tokens)
+			fmt.Fprintf(w, "  %s %s\n", st.Dim("tokens:"), st.Bold(humanize.Comma(out.Tokens)))
 		}
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/jandro-es/axon/internal/dashboard"
 	"github.com/jandro-es/axon/internal/events"
 	"github.com/jandro-es/axon/internal/scheduler"
+	"github.com/jandro-es/axon/internal/ui"
 	"github.com/jandro-es/axon/web"
 )
 
@@ -37,13 +38,15 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 			logger := events.NewLogger(cmd.OutOrStdout(), events.FormatText, "info")
 			svc := deps.buildServices(bus)
 			out := cmd.OutOrStdout()
+			st := ui.For(out)
+			fmt.Fprintln(out, st.Header(ui.IconRocket, fmt.Sprintf("axon start — profile %q", deps.name)))
 
 			// Record the pid so `axon stop` can signal this daemon (FR-04).
 			if pidPath, perr := writePidFile(deps.paths.DataDir); perr != nil {
-				fmt.Fprintf(out, "⚠ could not write pidfile: %v\n", perr)
+				fmt.Fprintf(out, "%s could not write pidfile: %v\n", st.Yellow(ui.IconWarn), perr)
 			} else {
 				defer removePidFile(deps.paths.DataDir)
-				fmt.Fprintf(out, "pid %d (%s)\n", os.Getpid(), pidPath)
+				fmt.Fprintf(out, "%s %s\n", st.Dim("pid"), st.Dim(fmt.Sprintf("%d (%s)", os.Getpid(), pidPath)))
 			}
 
 			sigCtx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
@@ -80,10 +83,10 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 					},
 				}
 				if err := sched.Add(job); err != nil {
-					fmt.Fprintf(out, "⚠ skip %s: %v\n", a.Name(), err)
+					fmt.Fprintf(out, "%s skip %s: %v\n", st.Yellow(ui.IconWarn), a.Name(), err)
 					continue
 				}
-				fmt.Fprintf(out, "scheduled %-18s %s\n", a.Name(), s.Schedule)
+				fmt.Fprintf(out, "%s scheduled %-18s %s\n", st.Green(ui.IconOK), a.Name(), st.Dim(s.Schedule))
 			}
 
 			// Serve the dashboard.
@@ -102,15 +105,15 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 				go func() {
 					defer wg.Done()
 					if err := dash.ListenAndServe(ctx); err != nil {
-						fmt.Fprintf(out, "⚠ dashboard: %v\n", err)
+						fmt.Fprintf(out, "%s dashboard: %v\n", st.Yellow(ui.IconWarn), err)
 					}
 				}()
-				fmt.Fprintf(out, "dashboard: http://%s\n", dash.Addr())
+				fmt.Fprintf(out, "%s dashboard: %s\n", st.Cyan(ui.IconChart), st.Cyan("http://"+dash.Addr()))
 			}
 
 			sched.Start(ctx)
 			sched.CatchUp(ctx)
-			fmt.Fprintln(out, "daemon running — press Ctrl-C to stop")
+			fmt.Fprintln(out, st.Green(ui.IconOK+" daemon running")+st.Dim(" — press Ctrl-C to stop"))
 
 			if once {
 				// Test/inspection mode: don't block on signals. The deferred
@@ -119,7 +122,7 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 				return nil
 			}
 			<-ctx.Done()
-			fmt.Fprintln(out, "\nstopping…")
+			fmt.Fprintln(out, st.Dim("\nstopping…"))
 			<-sched.Stop().Done()
 			return nil
 		},

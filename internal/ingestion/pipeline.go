@@ -58,6 +58,14 @@ type IngestResult struct {
 	Redacted      bool     `json:"redacted"`
 	SkippedReason string   `json:"skipped_reason,omitempty"`
 	Suggestions   []string `json:"suggestions,omitempty"`
+
+	// Enrichment accounting: how the metadata was produced and what it cost.
+	// EnrichKind is "heuristic" (no model call, zero tokens) or "claude".
+	EnrichKind   string `json:"enrich_kind,omitempty"`
+	EnrichModel  string `json:"enrich_model,omitempty"`
+	InputTokens  int    `json:"input_tokens"`
+	OutputTokens int    `json:"output_tokens"`
+	Tokens       int    `json:"tokens"` // input + output for enrichment
 }
 
 // Ingest runs the full pipeline for one input. Errors are returned and also
@@ -137,6 +145,11 @@ func (p *Pipeline) Ingest(ctx context.Context, arg string, opts IngestOptions) (
 	}
 	res.Title = enr.Title
 	res.Suggestions = enr.SuggestedLinks
+	res.EnrichKind = enr.Kind
+	res.EnrichModel = enr.Model
+	res.InputTokens = enr.InputTokens
+	res.OutputTokens = enr.OutputTokens
+	res.Tokens = enr.InputTokens + enr.OutputTokens
 
 	// Resolve the destination note path (stable across re-ingests).
 	notePath, err := p.notePathFor(ctx, existing, enr.Title)

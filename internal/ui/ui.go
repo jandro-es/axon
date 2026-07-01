@@ -37,6 +37,7 @@ const (
 	IconWarn    = "⚠" // non-fatal issue / soft check
 	IconError   = "✗" // blocking failure
 	IconInfo    = "•" // neutral information
+	IconDot     = "•" // neutral bullet / inactive state
 	IconArrow   = "→" // a next step / pointer
 	IconSearch  = "🔎"
 	IconWrench  = "🔧"
@@ -45,6 +46,9 @@ const (
 	IconRocket  = "🚀"
 	IconChart   = "📊"
 	IconBoom    = "💥"
+	IconRobot   = "🤖"
+	IconHeart   = "🫀"
+	IconBook    = "📚"
 )
 
 // Styler applies ANSI styling, but only when enabled. When disabled every method

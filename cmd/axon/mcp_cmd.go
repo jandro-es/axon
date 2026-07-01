@@ -10,6 +10,7 @@ import (
 	"github.com/jandro-es/axon/internal/clients"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/mcp"
+	"github.com/jandro-es/axon/internal/ui"
 )
 
 func newMCPCmd(gf *globalFlags) *cobra.Command {
@@ -65,6 +66,7 @@ func newMCPInstallCmd(gf *globalFlags) *cobra.Command {
 			}
 			defer deps.close()
 			out := cmd.OutOrStdout()
+			st := ui.For(out)
 
 			absCfg, err := filepath.Abs(gf.configPath)
 			if err != nil {
@@ -103,9 +105,10 @@ func newMCPInstallCmd(gf *globalFlags) *cobra.Command {
 				}
 				entry := clients.Entry(obs.Command, obs.Args, obs.Env)
 				if r, oerr := clients.InstallServer(path, "obsidian", entry); oerr != nil {
-					fmt.Fprintf(out, "⚠ obsidian interop (FR-54): %v\n", oerr)
+					fmt.Fprintf(out, "%s obsidian interop (FR-54): %v\n", st.Yellow(ui.IconWarn), oerr)
 				} else {
-					fmt.Fprintf(out, "Obsidian MCP backend: %s (interop; AXON remains the default)\n", r.Action)
+					fmt.Fprintf(out, "%s Obsidian MCP backend: %s %s\n", st.Green(ui.IconOK), r.Action,
+						st.Dim("(interop; AXON remains the default)"))
 				}
 			}
 
@@ -116,12 +119,14 @@ func newMCPInstallCmd(gf *globalFlags) *cobra.Command {
 					return werr
 				}
 				if len(res.Created) > 0 {
-					fmt.Fprintf(out, "Claude Code: wrote %d .claude file(s) under %s\n", len(res.Created), deps.paths.VaultPath)
+					fmt.Fprintf(out, "%s Claude Code: wrote %d .claude file(s) under %s\n",
+						st.Green(ui.IconOK), len(res.Created), st.Cyan(deps.paths.VaultPath))
 				} else {
-					fmt.Fprintf(out, "Claude Code: wiring already present under %s\n", deps.paths.VaultPath)
+					fmt.Fprintf(out, "%s Claude Code: wiring already present under %s\n",
+						st.Cyan(ui.IconAlready), st.Cyan(deps.paths.VaultPath))
 				}
 				installInterop(filepath.Join(deps.paths.VaultPath, ".claude", ".mcp.json"))
-				fmt.Fprintln(out, "Open Claude Code in the vault to use the AXON tools, hooks and skills.")
+				fmt.Fprintln(out, st.Dim("Open Claude Code in the vault to use the AXON tools, hooks and skills."))
 				return nil
 
 			case "desktop":
@@ -136,13 +141,14 @@ func newMCPInstallCmd(gf *globalFlags) *cobra.Command {
 				if ierr != nil {
 					return ierr
 				}
-				fmt.Fprintf(out, "Claude Desktop: %s %s (profile %q)\n", r.Action, r.Path, deps.name)
+				fmt.Fprintf(out, "%s Claude Desktop: %s %s %s\n", st.Green(ui.IconOK), r.Action,
+					st.Cyan(r.Path), st.Dim(fmt.Sprintf("(profile %q)", deps.name)))
 				installInterop(cfgPath)
 				if r.Action != "unchanged" {
-					fmt.Fprintln(out, "Restart Claude Desktop to load the AXON tools.")
+					fmt.Fprintf(out, "%s %s\n", st.Yellow(ui.IconArrow), st.Dim("Restart Claude Desktop to load the AXON tools."))
 				}
-				fmt.Fprintln(out, "Note: Desktop gets AXON's tools only — no hooks/skills/profile injection.")
-				fmt.Fprintln(out, "Keep all vault edits in the AXON tools (they stay wikilink-safe).")
+				fmt.Fprintln(out, st.Dim("Note: Desktop gets AXON's tools only — no hooks/skills/profile injection."))
+				fmt.Fprintln(out, st.Dim("Keep all vault edits in the AXON tools (they stay wikilink-safe)."))
 				return nil
 
 			default:

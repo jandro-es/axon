@@ -61,6 +61,13 @@ func TestClaudeEnricherRoutesThroughManager(t *testing.T) {
 	if n, _ := db.CountLedger(ctx, d); n != 1 {
 		t.Errorf("ledger rows = %d, want 1 (the enrichment call)", n)
 	}
+	// The enrichment carries its accounting so ingestion can surface token usage.
+	if enr.Kind != "claude" || enr.Model != "sonnet" {
+		t.Errorf("accounting kind/model = %q/%q, want claude/sonnet", enr.Kind, enr.Model)
+	}
+	if enr.InputTokens != 200 || enr.OutputTokens != 40 {
+		t.Errorf("accounting tokens = in %d/out %d, want 200/40", enr.InputTokens, enr.OutputTokens)
+	}
 }
 
 // TestClaudeEnricherDegradesUnderBudget proves a budget-denied enrichment falls

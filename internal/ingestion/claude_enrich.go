@@ -57,6 +57,12 @@ func (c ClaudeEnricher) Enrich(ctx context.Context, in EnrichInput) (Enrichment,
 	if enr.Title == "" {
 		enr.Title = in.Title
 	}
+	// Attribute the model spend so ingestion can surface it (the same numbers the
+	// token manager ledgered under operation "ingest.enrich").
+	enr.Kind = "claude"
+	enr.Model = res.Model
+	enr.InputTokens = res.Usage.InputTokens
+	enr.OutputTokens = res.Usage.OutputTokens
 	return enr, nil
 }
 

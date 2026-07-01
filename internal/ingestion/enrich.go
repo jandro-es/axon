@@ -7,12 +7,20 @@ import (
 )
 
 // Enrichment is the metadata produced for a source: a title, a short summary,
-// tags and grounded suggested links to existing notes.
+// tags and grounded suggested links to existing notes. It also carries the
+// accounting for how it was produced so ingestion can surface token usage.
 type Enrichment struct {
 	Title          string
 	Summary        string
 	Tags           []string
 	SuggestedLinks []string // vault-relative note paths
+
+	// Accounting (set by the enricher): Kind is "heuristic" (no model call) or
+	// "claude"; Model and token counts are populated only for a real model call.
+	Kind         string
+	Model        string
+	InputTokens  int
+	OutputTokens int
 }
 
 // EnrichInput is what an Enricher works from: the extracted title and cleaned
@@ -64,6 +72,7 @@ func (h Heuristic) Enrich(ctx context.Context, in EnrichInput) (Enrichment, erro
 		Summary:        leadSummary(in.Markdown, sentences),
 		Tags:           nil, // left to the human / Claude enricher in Phase 3
 		SuggestedLinks: links,
+		Kind:           "heuristic",
 	}, nil
 }
 

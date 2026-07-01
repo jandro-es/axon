@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/jandro-es/axon/internal/config"
+	"github.com/jandro-es/axon/internal/ui"
 )
 
 // profileView is the isolation-relevant, secret-free summary of a profile.
@@ -63,20 +64,23 @@ func newProfilesCmd(gf *globalFlags) *cobra.Command {
 				enc.SetIndent("", "  ")
 				return enc.Encode(views)
 			}
+			st := ui.For(w)
 			for _, v := range views {
+				name := st.Bold(v.Name)
 				marker := "  "
 				if v.Active {
-					marker = "▸ "
+					marker = st.Green("▸ ")
+					name = st.Bold(st.Green(v.Name)) + " " + st.Cyan("(active)")
 				}
-				fmt.Fprintf(w, "%s%s (auth: %s)\n", marker, v.Name, v.AuthMode)
-				fmt.Fprintf(w, "    vault:      %s\n", v.VaultPath)
-				fmt.Fprintf(w, "    data dir:   %s\n", v.DataDir)
-				fmt.Fprintf(w, "    config dir: %s\n", v.ConfigDir)
-				fmt.Fprintf(w, "    oauth:      %s\n", orNone(v.OAuthTokenRef))
-				fmt.Fprintf(w, "    automations:%s\n", fmtAllow(v.AllowedAutomations))
+				fmt.Fprintf(w, "%s%s %s\n", marker, name, st.Dim("· auth "+v.AuthMode))
+				fmt.Fprintf(w, "    %s %s\n", st.Dim("vault:      "), v.VaultPath)
+				fmt.Fprintf(w, "    %s %s\n", st.Dim("data dir:   "), v.DataDir)
+				fmt.Fprintf(w, "    %s %s\n", st.Dim("config dir: "), v.ConfigDir)
+				fmt.Fprintf(w, "    %s %s\n", st.Dim("oauth:      "), st.Dim(orNone(v.OAuthTokenRef)))
+				fmt.Fprintf(w, "    %s%s\n", st.Dim("automations:"), st.Dim(fmtAllow(v.AllowedAutomations)))
 			}
-			fmt.Fprintln(w, "\nProfiles are separate installations; one is active per machine. No data,")
-			fmt.Fprintln(w, "secrets or Claude account is shared across them (NFR-04).")
+			fmt.Fprintln(w, st.Dim("\nProfiles are separate installations; one is active per machine. No data,"))
+			fmt.Fprintln(w, st.Dim("secrets or Claude account is shared across them (NFR-04)."))
 			return nil
 		},
 	}

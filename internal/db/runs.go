@@ -64,6 +64,39 @@ func CountRuns(ctx context.Context, q Queryer) (int, error) {
 	return scanCount(q.QueryRowContext(ctx, "SELECT COUNT(*) FROM runs;"))
 }
 
+// RunRecord is one row of the runs table, as read back for reporting.
+type RunRecord struct {
+	ID         int64  `json:"id"`
+	Automation string `json:"automation"`
+	StartedAt  string `json:"started_at"`
+	FinishedAt string `json:"finished_at,omitempty"`
+	Status     string `json:"status"`
+	SkipReason string `json:"skip_reason,omitempty"`
+	Tokens     int64  `json:"tokens"`
+	Error      string `json:"error,omitempty"`
+}
+
+// LastRun returns the most recent run for an automation. found is false when the
+// automation has never run.
+func LastRun(ctx context.Context, q Queryer, automation string) (rec RunRecord, found bool, err error) {
+	var finished, skip, errStr sql.NullString
+	var tokens sql.NullInt64
+	row := q.QueryRowContext(ctx,
+		`SELECT id, automation, started_at, finished_at, status, skip_reason, tokens, error
+		   FROM runs WHERE automation = ? ORDER BY id DESC LIMIT 1;`, automation)
+	if err := row.Scan(&rec.ID, &rec.Automation, &rec.StartedAt, &finished, &rec.Status, &skip, &tokens, &errStr); err != nil {
+		if err == sql.ErrNoRows {
+			return RunRecord{}, false, nil
+		}
+		return RunRecord{}, false, fmt.Errorf("last run %q: %w", automation, err)
+	}
+	rec.FinishedAt = finished.String
+	rec.SkipReason = skip.String
+	rec.Tokens = tokens.Int64
+	rec.Error = errStr.String
+	return rec, true, nil
+}
+
 // LastRunStatus returns the status of the most recent run for an automation, or "".
 func LastRunStatus(ctx context.Context, q Queryer, automation string) (string, error) {
 	var status string

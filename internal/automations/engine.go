@@ -120,9 +120,15 @@ func (e *Engine) Run(ctx context.Context, a Automation, dryRun bool) (Outcome, e
 	}
 
 	// 2. Budget pre-check: non-essential automations pause when guard is active.
+	// Surface the guard's own explanation (which window, how far over) so a
+	// skipped run says *why*, not just "budget".
 	if !a.Essential() {
 		if st, serr := e.deps.Manager.Status(ctx, e.deps.Profile); serr == nil && st.GuardPaused {
-			return e.finishSkipped(ctx, out, runID, "budget")
+			reason := st.GuardReason
+			if reason == "" {
+				reason = "budget guard active — non-essential automations paused"
+			}
+			return e.finishSkipped(ctx, out, runID, reason)
 		}
 	}
 

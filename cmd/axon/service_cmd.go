@@ -10,6 +10,7 @@ import (
 
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/service"
+	"github.com/jandro-es/axon/internal/ui"
 )
 
 func newServiceCmd(gf *globalFlags) *cobra.Command {
@@ -50,11 +51,14 @@ func newServiceCmd(gf *globalFlags) *cobra.Command {
 			}
 
 			out := cmd.OutOrStdout()
+			st := ui.For(out)
 			switch args[0] {
 			case "print":
+				// The unit file content is emitted RAW so it can be piped straight to
+				// the real unit path; only the trailing how-to comment is styled.
 				fmt.Fprint(out, unit.Content)
-				fmt.Fprintf(out, "\n# install path: %s\n# enable: %s\n# start:  %s\n# stop:   %s\n",
-					unit.Path, unit.EnableCmd, unit.StartCmd, unit.StopCmd)
+				fmt.Fprint(out, st.Dim(fmt.Sprintf("\n# install path: %s\n# enable: %s\n# start:  %s\n# stop:   %s\n",
+					unit.Path, unit.EnableCmd, unit.StartCmd, unit.StopCmd)))
 				return nil
 			case "install":
 				if err := os.MkdirAll(filepath.Dir(unit.Path), 0o755); err != nil {
@@ -63,14 +67,16 @@ func newServiceCmd(gf *globalFlags) *cobra.Command {
 				if err := os.WriteFile(unit.Path, []byte(unit.Content), 0o644); err != nil {
 					return err
 				}
-				fmt.Fprintf(out, "✓ wrote %s unit: %s\n", unit.Kind, unit.Path)
-				fmt.Fprintf(out, "  enable & start with:\n    %s\n    %s\n", unit.EnableCmd, unit.StartCmd)
+				fmt.Fprintf(out, "%s wrote %s unit: %s\n", st.Green(ui.IconOK), unit.Kind, st.Cyan(unit.Path))
+				fmt.Fprintf(out, "  %s\n    %s\n    %s\n", st.Dim("enable & start with:"),
+					st.Bold(unit.EnableCmd), st.Bold(unit.StartCmd))
 				return nil
 			case "uninstall":
 				if err := os.Remove(unit.Path); err != nil && !os.IsNotExist(err) {
 					return err
 				}
-				fmt.Fprintf(out, "✓ removed %s\n  (stop first if running: %s)\n", unit.Path, unit.StopCmd)
+				fmt.Fprintf(out, "%s removed %s\n  %s\n", st.Green(ui.IconOK), st.Cyan(unit.Path),
+					st.Dim("(stop first if running: "+unit.StopCmd+")"))
 				return nil
 			default:
 				return fmt.Errorf("unknown subcommand %q (use install|uninstall|print)", args[0])

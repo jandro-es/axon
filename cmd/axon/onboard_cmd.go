@@ -15,6 +15,7 @@ import (
 	"github.com/jandro-es/axon/internal/claudeassets"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/identity"
+	"github.com/jandro-es/axon/internal/ui"
 )
 
 // onboardFile is the YAML/JSON shape accepted by `--from`, mapped onto
@@ -108,25 +109,26 @@ func newOnboardCmd(gf *globalFlags) *cobra.Command {
 			}
 
 			// Human summary.
-			fmt.Fprintf(out, "axon onboard — profile %q (%s)\n", deps.name, mode)
-			fmt.Fprintln(out, strings.Repeat("─", 60))
+			st := ui.For(out)
+			fmt.Fprintln(out, st.Header(ui.IconSpark, fmt.Sprintf("axon onboard — profile %q (%s)", deps.name, mode)))
+			fmt.Fprintln(out, st.Divider(60))
 			for _, p := range res.Created {
-				fmt.Fprintf(out, "  ✓ created  %s\n", p)
+				fmt.Fprintf(out, "  %s created  %s\n", st.Green(ui.IconOK), p)
 			}
 			for _, p := range res.Skipped {
-				fmt.Fprintf(out, "  ↻ kept     %s (existing edits preserved)\n", p)
+				fmt.Fprintf(out, "  %s kept     %s %s\n", st.Cyan(ui.IconAlready), p, st.Dim("(existing edits preserved)"))
 			}
 			if werr != nil {
-				fmt.Fprintf(out, "  ⚠ claude wiring: %v\n", werr)
+				fmt.Fprintf(out, "  %s claude wiring: %v\n", st.Yellow(ui.IconWarn), werr)
 			} else if len(wiring.Created) > 0 {
-				fmt.Fprintf(out, "  ✓ wired Claude Code (.claude/: %d file(s))\n", len(wiring.Created))
+				fmt.Fprintf(out, "  %s wired Claude Code %s\n", st.Green(ui.IconOK), st.Dim(fmt.Sprintf("(.claude/: %d file(s))", len(wiring.Created))))
 			} else {
-				fmt.Fprintln(out, "  ↻ Claude Code wiring already present")
+				fmt.Fprintf(out, "  %s Claude Code wiring already present\n", st.Cyan(ui.IconAlready))
 			}
-			fmt.Fprintln(out, strings.Repeat("─", 60))
-			fmt.Fprintf(out, "Your profile lives in %s/ — edit it any time in Obsidian.\n", identity.Dir)
-			fmt.Fprintln(out, "Other clients: `axon mcp install --client desktop` wires Claude Desktop.")
-			fmt.Fprintln(out, "Next: open Claude Code in the vault — it now greets you with your profile.")
+			fmt.Fprintln(out, st.Divider(60))
+			fmt.Fprintf(out, "%s\n", st.Dim(fmt.Sprintf("Your profile lives in %s/ — edit it any time in Obsidian.", identity.Dir)))
+			fmt.Fprintln(out, st.Dim("Other clients: `axon mcp install --client desktop` wires Claude Desktop."))
+			fmt.Fprintf(out, "%s %s\n", st.Cyan(ui.IconArrow), st.Dim("Next: open Claude Code in the vault — it now greets you with your profile."))
 			return nil
 		},
 	}

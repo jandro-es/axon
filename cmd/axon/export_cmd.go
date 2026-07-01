@@ -11,6 +11,7 @@ import (
 
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/tokens"
+	"github.com/jandro-es/axon/internal/ui"
 )
 
 func newExportCmd(gf *globalFlags) *cobra.Command {
@@ -85,7 +86,11 @@ func newExportCmd(gf *globalFlags) *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "✓ exported snapshot to %s\n  manifest.json · core-context.md · activity.json\n", dir)
+			eout := cmd.OutOrStdout()
+			est := ui.For(eout)
+			fmt.Fprintf(eout, "%s exported snapshot to %s\n  %s\n",
+				est.Green(ui.IconOK), est.Cyan(dir),
+				est.Dim("manifest.json · core-context.md · activity.json"))
 			return nil
 		},
 	}

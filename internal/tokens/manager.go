@@ -81,6 +81,10 @@ type BudgetStatus struct {
 	Week        Window
 	GuardPct    int
 	GuardPaused bool
+	// GuardReason is a human-readable explanation of why the guard is paused
+	// (which window crossed the threshold), or "" when not paused. It gives
+	// automations and the CLI a clear, actionable message instead of a bare flag.
+	GuardReason string
 }
 
 // Context is a token-bounded assembled context from retrieval.
@@ -418,8 +422,22 @@ func (m *manager) Status(ctx context.Context, profile string) (BudgetStatus, err
 	}
 	if guard > 0 && (day.Pct >= float64(guard) || week.Pct >= float64(guard)) {
 		st.GuardPaused = true
+		st.GuardReason = guardReason(guard, day, week)
 	}
 	return st, nil
+}
+
+// guardReason builds the human-readable explanation for a paused guard, naming
+// the window(s) that crossed the threshold so the message is actionable.
+func guardReason(guard int, day, week Window) string {
+	which := "daily"
+	pct := day.Pct
+	if week.Pct >= float64(guard) && (day.Pct < float64(guard) || week.Pct >= day.Pct) {
+		which = "weekly"
+		pct = week.Pct
+	}
+	return fmt.Sprintf("budget guard active — %s usage %.0f%% ≥ %d%% pause threshold; non-essential automations pause until the window rolls over",
+		which, pct, guard)
 }
 
 // windows reads the current day/week usage and computes percentages.

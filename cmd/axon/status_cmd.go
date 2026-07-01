@@ -56,6 +56,9 @@ func newStatusCmd(gf *globalFlags) *cobra.Command {
 			printWindow(cmd, "week", st.Week)
 			if st.GuardPaused {
 				fmt.Fprintf(out, "budget-guard: %s\n", s.Bold(s.Red(fmt.Sprintf("%s PAUSED (≥ %d%%)", ui.IconWarn, st.GuardPct))))
+				if st.GuardReason != "" {
+					fmt.Fprintf(out, "  %s\n", s.Dim(st.GuardReason))
+				}
 			} else {
 				fmt.Fprintf(out, "budget-guard: %s\n", s.Green(ui.IconOK+" ok"))
 			}

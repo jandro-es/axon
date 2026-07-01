@@ -191,8 +191,11 @@ func TestEngineBudgetPausePausesNonEssential(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.Status != db.RunSkipped || out.SkipReason != "budget" {
-		t.Errorf("non-essential should skip for budget; got %+v", out)
+	if out.Status != db.RunSkipped || !strings.Contains(out.SkipReason, "budget guard") {
+		t.Errorf("non-essential should skip with a descriptive budget-guard reason; got %+v", out)
+	}
+	if !strings.Contains(out.SkipReason, "80%") {
+		t.Errorf("skip reason should name the guard threshold; got %q", out.SkipReason)
 	}
 
 	// Essential automations are never paused.
