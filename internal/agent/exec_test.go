@@ -25,14 +25,19 @@ func TestExecClaudeKillsOnContextTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
+	// The `sleep 30 &` grandchild inherits the stdout/stderr pipes: without
+	// the process-group kill + WaitDelay, Wait blocks on it for the full 30s
+	// even after the direct child is dead (the exact failure seen in CI).
 	start := time.Now()
-	_, _, err := execClaude(ctx, "/bin/sh", []string{"-c", "sleep 30"}, nil, "")
+	_, _, err := execClaude(ctx, "/bin/sh", []string{"-c", "sleep 30 & sleep 30"}, nil, "")
 	elapsed := time.Since(start)
 
 	if err == nil {
 		t.Fatal("expected an error when the context deadline kills the child")
 	}
-	if elapsed > 5*time.Second {
+	// Prompt = well under the 30s sleeps; 10s allows for the 5s WaitDelay
+	// fallback plus slow CI runners.
+	if elapsed > 10*time.Second {
 		t.Fatalf("child was not killed promptly: took %v", elapsed)
 	}
 }

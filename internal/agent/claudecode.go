@@ -171,6 +171,16 @@ func execClaude(ctx context.Context, bin string, args, env []string, stdin strin
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	// Two guards so a context deadline actually ends the call promptly:
+	//  - killProcessGroup (unix) puts the child in its own process group and
+	//    kills the whole group on cancel, so helpers the CLI spawned die too
+	//    rather than lingering as orphans;
+	//  - WaitDelay bounds Wait even if something unkillable still holds the
+	//    stdout/stderr pipes after the kill — without it, Wait blocks until
+	//    every pipe holder exits (observed on Linux: a grandchild kept the
+	//    call alive for its full runtime past the deadline).
+	killProcessGroup(cmd)
+	cmd.WaitDelay = 5 * time.Second
 	err := cmd.Run()
 	return stdout.Bytes(), stderr.Bytes(), err
 }
