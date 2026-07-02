@@ -35,6 +35,11 @@ func Hint(err error) string {
 	case strings.Contains(msg, "parse config"):
 		return "The config file is not valid YAML. Check indentation and syntax, then run `axon config validate`."
 
+	// Apple embeddings helper missing/failed (must precede the generic
+	// embedding-provider matches).
+	case strings.Contains(msg, "apple embed helper"), strings.Contains(msg, "axon-apple-embed"):
+		return "The Apple embeddings helper isn't built or failed. Re-run `axon init` (needs Xcode Command Line Tools), then verify with `axon doctor`."
+
 	// Ollama not reachable (embeddings / ingestion).
 	case strings.Contains(msg, "connection refused") && strings.Contains(msg, "11434"),
 		strings.Contains(msg, "ollama"):
