@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"text/template"
 )
 
@@ -26,11 +27,11 @@ active_profile: {{ .Profile }}
 profiles:
   {{ .Profile }}:
     vault_path: "{{ .VaultPath }}"
-    data_dir: "~/.axon/profiles/{{ .Profile }}"
+    data_dir: "{{ .Home }}/profiles/{{ .Profile }}"
 
     claude:
       auth_mode: subscription                 # subscription | enterprise | api_key
-      config_dir: "~/.axon/profiles/{{ .Profile }}/claude"
+      config_dir: "{{ .Home }}/profiles/{{ .Profile }}/claude"
       # Headless automations need a token from ` + "`claude setup-token`" + ` in ~/.axon/.env:
       oauth_token: env:CLAUDE_CODE_OAUTH_TOKEN
 
@@ -87,10 +88,17 @@ profiles:
 
 // Starter renders a fresh single-profile config for `axon setup`. provider is
 // "ollama" or "apple"; model/dim follow it (Ollama defaults when empty).
+// Data/config dirs are rooted at AXON_HOME when set — an isolated install must
+// NEVER read or write the default ~/.axon profile data — and stay the portable
+// literal "~/.axon" otherwise.
 func Starter(profile, vaultPath, provider string) ([]byte, error) {
 	model, dim := "nomic-embed-text", 768
 	if provider == "apple" {
 		model, dim = AppleEmbeddingModel, AppleEmbeddingDim
+	}
+	home := DefaultAxonHome // portable "~/.axon" in the common case
+	if v := os.Getenv("AXON_HOME"); v != "" {
+		home = ExpandPath(v)
 	}
 	tpl, err := template.New("starter").Parse(starterTemplate)
 	if err != nil {
@@ -98,7 +106,7 @@ func Starter(profile, vaultPath, provider string) ([]byte, error) {
 	}
 	var buf bytes.Buffer
 	if err := tpl.Execute(&buf, map[string]any{
-		"Profile": profile, "VaultPath": vaultPath, "Provider": provider, "Model": model, "Dim": dim,
+		"Profile": profile, "VaultPath": vaultPath, "Provider": provider, "Model": model, "Dim": dim, "Home": home,
 	}); err != nil {
 		return nil, err
 	}

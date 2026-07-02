@@ -68,8 +68,18 @@ The install scripts handle **toolchain + OS wiring** (a shared `scripts/prefligh
 - A run transcript is saved to `.axon/logs/init-<ts>.log`.
 
 ## 5. Lifecycle commands
+
+The lifecycle is IN THE BINARY (operations-overhaul spec, Components 3–5);
+`install.sh` at the repo root bootstraps a release binary and hands over to
+`axon setup`. The shell scripts under `scripts/` remain the from-source path.
+
+- `axon setup` — first-run provisioning: starter config + `.env` (kept if present), vault/DB/index via the init steps, optional service-at-login. Interactive (huh form) on a TTY; `--vault/--profile-name/--embeddings/--service` headless.
+- `axon update` — checksum-verified self-update from GitHub Releases (`--check-only`, `--json`); availability is cached daily and surfaced by `doctor` and the dashboard `/health`.
+- `axon uninstall [--purge]` — stop daemon, remove service unit + binary; `--purge` deletes `$AXON_HOME` behind a typed confirmation (`--yes-purge-all-data` headless). The vault is NEVER touched.
+- `axon configure` — interactive settings menu + scriptable subcommands; `configure embeddings <p> --reindex` is the one-flow provider switch.
+- `axon vault move <new-path>` — relocate the vault; updates `vault_path` + regenerates `.claude/` wiring; refuses under a running daemon (`--stop-daemon` for scripts).
 - `axon start|stop|status` — daemon control; `start` also serves the dashboard; `status` shows health + budget + last runs.
-- `axon doctor` — the prerequisite checks on demand (FR-05).
+- `axon doctor` — the prerequisite checks on demand (FR-05), plus cached update availability.
 - `axon reindex [--embeddings]` — rebuild derived state from the vault (ADR-006); `--embeddings` forces full re-embed (after a model change).
 - `axon export` — context-export bundle on demand.
 - `axon service install|uninstall` — emit/remove OS service units (FR-06, optional).
