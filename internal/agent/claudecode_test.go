@@ -44,10 +44,17 @@ func TestClaudeCodeBuildArgs(t *testing.T) {
 	c := NewClaudeCode(ClaudeCodeOptions{})
 	args := c.buildArgs(Request{Model: "claude-haiku-4-5", System: "be concise"})
 	joined := strings.Join(args, " ")
-	for _, want := range []string{"--print", "--output-format json", "--max-turns 1", "--tools", "--bare", "--model claude-haiku-4-5", "--append-system-prompt be concise"} {
+	for _, want := range []string{"--print", "--output-format json", "--max-turns 1", "--tools", "--setting-sources", "--strict-mcp-config", "--model claude-haiku-4-5", "--append-system-prompt be concise"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("args missing %q; got %q", want, joined)
 		}
+	}
+	// REGRESSION GUARD: --bare disables credential lookup entirely —
+	// CLAUDE_CODE_OAUTH_TOKEN is ignored and every headless run dies with
+	// "Not logged in" (verified live: bogus token + --bare → "Not logged in",
+	// without --bare → 401 attempted auth). Never reintroduce it.
+	if strings.Contains(joined, "--bare") {
+		t.Errorf("--bare must not be passed (breaks OAuth token auth); got %q", joined)
 	}
 }
 
