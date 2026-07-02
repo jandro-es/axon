@@ -109,6 +109,11 @@ install_hint() {
         linux) echo "curl -fsSL https://ollama.com/install.sh | sh" ;;
         *)     echo "https://ollama.com/download" ;;
       esac ;;
+    xcode-clt)
+      case "$(axon_os)" in
+        macos) echo "xcode-select --install" ;;
+        *)     echo "not available on this OS (macOS only)" ;;
+      esac ;;
     claude)
       echo "npm install -g @anthropic-ai/claude-code   then: claude login && claude setup-token" ;;
     make)
