@@ -65,10 +65,18 @@ func loadProfileDeps(gf *globalFlags, openDB bool) (*profileDeps, error) {
 }
 
 // embeddingsProvider builds the configured embedding provider for a profile.
-// Construction is lazy (no network), so an unreachable Ollama only surfaces when
-// embedding is actually attempted.
+// Construction is lazy (no network/subprocess), so an unreachable Ollama or a
+// missing Apple helper only surfaces when embedding is actually attempted.
 func embeddingsProvider(profile config.Profile) embeddings.Provider {
-	return embeddings.NewOllama(profile.Embeddings.Host, profile.Embeddings.Model, profile.Embeddings.Dim)
+	e := profile.Embeddings
+	if e.Provider == "apple" {
+		helper := e.Helper
+		if helper == "" {
+			helper = config.DefaultAppleHelperPath()
+		}
+		return embeddings.NewApple(helper, e.Model, e.Dim)
+	}
+	return embeddings.NewOllama(e.Host, e.Model, e.Dim)
 }
 
 // agentAdapter builds the Claude adapter for this profile. In api_key mode it is
