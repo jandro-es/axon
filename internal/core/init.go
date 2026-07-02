@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -279,7 +280,12 @@ func vaultScaffoldStep(paths config.ResolvedPaths) (StepResult, *vault.FS) {
 // matches the configured dim. An unreachable Ollama stays a warning — init
 // never blocks on embeddings (search degrades to lexical-only).
 func probeEmbeddingModel(ctx context.Context, e config.EmbeddingsConfig) StepResult {
-	if e.Provider != "ollama" {
+	switch e.Provider {
+	case "apple":
+		return probeAppleEmbedding(ctx, e, realAppleProbeDeps())
+	case "ollama":
+		// fall through to the Ollama flow below
+	default:
 		return StepResult{"embeddings", StepWarn, fmt.Sprintf("provider %q not checked", e.Provider)}
 	}
 	host := e.Host
@@ -303,6 +309,53 @@ func probeEmbeddingModel(ctx context.Context, e config.EmbeddingsConfig) StepRes
 		return StepResult{"embeddings", StepWarn, fmt.Sprintf("model %q present but probe failed: %v", e.Model, err)}
 	}
 	return StepResult{"embeddings", StepDone, fmt.Sprintf("model %q ready (dim %d verified)", e.Model, e.Dim)}
+}
+
+// appleProbeDeps are the seams probeAppleEmbedding needs; injectable in tests.
+type appleProbeDeps struct {
+	goos    string
+	swiftOK func() bool
+	ensure  func(ctx context.Context, helperPath string) (bool, error)
+	probe   func(ctx context.Context, helper string, e config.EmbeddingsConfig) error
+}
+
+func realAppleProbeDeps() appleProbeDeps {
+	return appleProbeDeps{
+		goos:    runtime.GOOS,
+		swiftOK: embeddings.SwiftAvailable,
+		ensure:  embeddings.EnsureAppleHelper,
+		probe: func(ctx context.Context, helper string, e config.EmbeddingsConfig) error {
+			return embeddings.NewApple(helper, e.Model, e.Dim).Healthcheck(ctx)
+		},
+	}
+}
+
+// probeAppleEmbedding converges the Apple provider (FR-01): compile the Swift
+// helper if the embedded source changed, then probe a live embedding to assert
+// the dimension. Warnings only — init never blocks on embeddings (search
+// degrades to lexical-only), mirroring the Ollama convention.
+func probeAppleEmbedding(ctx context.Context, e config.EmbeddingsConfig, d appleProbeDeps) StepResult {
+	if d.goos != "darwin" {
+		return StepResult{"embeddings", StepWarn, "provider \"apple\" requires macOS — set embeddings.provider: ollama on this machine"}
+	}
+	if !d.swiftOK() {
+		return StepResult{"embeddings", StepWarn, "swiftc not found — install Xcode Command Line Tools (`xcode-select --install`), then re-run `axon init`"}
+	}
+	helper := e.Helper
+	if helper == "" {
+		helper = config.DefaultAppleHelperPath()
+	}
+	changed, err := d.ensure(ctx, helper)
+	if err != nil {
+		return StepResult{"embeddings", StepWarn, fmt.Sprintf("could not build Apple embeddings helper: %v", err)}
+	}
+	if err := d.probe(ctx, helper, e); err != nil {
+		return StepResult{"embeddings", StepWarn, fmt.Sprintf("helper built but probe failed: %v", err)}
+	}
+	if changed {
+		return StepResult{"embeddings", StepDone, fmt.Sprintf("Apple helper compiled at %s (dim %d verified)", helper, e.Dim)}
+	}
+	return StepResult{"embeddings", StepDone, fmt.Sprintf("Apple helper ready (dim %d verified)", e.Dim)}
 }
 
 // ollamaReachable reports whether the Ollama API answers at host.
