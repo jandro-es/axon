@@ -82,9 +82,20 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 	checks = append(checks, binaryCheck("claude-cli", "claude",
 		"Claude Code CLI found", "claude CLI not found on PATH (needed for automations + interactive use)"))
 
-	// 4. ollama presence (informational — local embeddings).
-	checks = append(checks, binaryCheck("ollama", "ollama",
-		"Ollama found", "ollama not found on PATH (needed for local embeddings in Phase 2)"))
+	// 4. Embeddings provider prerequisite (informational — local embeddings):
+	// the ollama binary, or the compiled Apple helper, per the profile's config.
+	// Without a resolvable profile, fall back to the generic ollama check.
+	embChecked := false
+	if cfg != nil {
+		if p, ok := cfg.Profiles[activeProfile]; ok {
+			checks = append(checks, embeddingsCheck(p))
+			embChecked = true
+		}
+	}
+	if !embChecked {
+		checks = append(checks, binaryCheck("ollama", "ollama",
+			"Ollama found", "ollama not found on PATH (needed for local embeddings in Phase 2)"))
+	}
 
 	// 5–7. Profile-scoped prerequisites (FR-05): vault writable, dashboard port
 	// free, and the data-residency posture.
@@ -104,6 +115,25 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 	}
 
 	return DoctorReport{Checks: checks}
+}
+
+// embeddingsCheck verifies the configured embeddings provider's local
+// prerequisite: the ollama binary, or the compiled Apple helper.
+func embeddingsCheck(p config.Profile) Check {
+	if p.Embeddings.Provider == "apple" {
+		const name = "apple-embeddings"
+		helper := p.Embeddings.Helper
+		if helper == "" {
+			helper = config.DefaultAppleHelperPath()
+		}
+		st, err := os.Stat(helper)
+		if err != nil || st.Mode()&0o111 == 0 {
+			return Check{name, StatusWarn, fmt.Sprintf("Apple embeddings helper not built at %s — run `axon init` (requires Xcode CLT)", helper)}
+		}
+		return Check{name, StatusOK, "Apple embeddings helper present: " + helper}
+	}
+	return binaryCheck("ollama", "ollama",
+		"Ollama found", "ollama not found on PATH (needed for local embeddings in Phase 2)")
 }
 
 // interopCheck reports the optional external-MCP backend posture (FR-54). It is

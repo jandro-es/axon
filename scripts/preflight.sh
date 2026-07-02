@@ -101,6 +101,10 @@ if [ "$SCOPE" = runtime ] || [ "$SCOPE" = all ]; then
   else report_bad optional "claude CLI" "needed for automations + interactive use" claude; fi
   if have ollama; then report_ok "ollama"
   else report_bad optional "ollama" "needed for local embeddings + hybrid search" ollama; fi
+  if [ "$(axon_os)" = macos ]; then
+    if have swiftc; then report_ok "swiftc" "enables the 'apple' embeddings provider"
+    else report_bad optional "swiftc" "only needed for embeddings.provider: apple" xcode-clt; fi
+  fi
   check_simple "curl" curl optional "used by the installer to health-check the daemon" curl
 fi
 

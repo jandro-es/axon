@@ -106,6 +106,13 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 					Manager: svc.manager,
 					Bus:     bus,
 					Static:  web.Assets(),
+					Health: func(context.Context) map[string]any {
+						return map[string]any{
+							"embeddings_provider": deps.profile.Embeddings.Provider,
+							"embeddings_model":    deps.profile.Embeddings.Model,
+							"embeddings_dim":      deps.profile.Embeddings.Dim,
+						}
+					},
 				})
 				wg.Add(1)
 				go func() {

@@ -103,6 +103,10 @@ fi
 
 "${AX[@]}" config validate >/dev/null && ok "config valid" || die "config invalid — fix $CONFIG (see message above) and re-run."
 
+# The apple embeddings provider is macOS-only (NLContextualEmbedding).
+EMB_PROVIDER="$("${AX[@]}" config get embeddings.provider 2>/dev/null || echo ollama)"
+[ "$EMB_PROVIDER" = apple ] && die "embeddings.provider 'apple' is macOS-only — set it to 'ollama' in $CONFIG"
+
 PROFILE="${PROFILE:-$("${AX[@]}" config get active_profile 2>/dev/null || echo personal)}"
 MODEL="$("${AX[@]}" config get embeddings.model 2>/dev/null || echo nomic-embed-text)"
 PORT="$("${AX[@]}" config get dashboard.port 2>/dev/null || echo 7777)"

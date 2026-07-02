@@ -12,6 +12,8 @@
 #   --profile NAME   provision this profile               (default: config's active_profile)
 #   --no-service     don't install the launchd auto-start agent
 #   --no-ollama      don't install/manage Ollama
+#   --embeddings P   embeddings provider: ollama or apple (default: ask on a fresh
+#                    interactive install, else keep what the config says)
 #   --skip-build     use an existing ./axon build instead of rebuilding
 #   -h, --help       show this help
 #
@@ -31,8 +33,9 @@ PROFILE=""
 DO_SERVICE=1
 DO_OLLAMA=1
 SKIP_BUILD=0
+EMBEDDINGS=""
 
-usage() { sed -n '3,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '3,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -40,11 +43,13 @@ while [ $# -gt 0 ]; do
     --profile)   PROFILE="$2"; shift 2 ;;
     --no-service) DO_SERVICE=0; shift ;;
     --no-ollama)  DO_OLLAMA=0; shift ;;
+    --embeddings) EMBEDDINGS="$2"; shift 2 ;;
     --skip-build) SKIP_BUILD=1; shift ;;
     -h|--help)   usage 0 ;;
     *) err "unknown option: $1"; usage 1 ;;
   esac
 done
+case "$EMBEDDINGS" in ""|ollama|apple) : ;; *) err "--embeddings must be ollama or apple"; usage 1 ;; esac
 
 BIN="$PREFIX/bin/axon"
 CONFIG="$AXON_HOME/config.yaml"
@@ -72,16 +77,6 @@ step "Checking prerequisites"
 bash "$SCRIPT_DIR/preflight.sh" --all \
   || die "a required dependency is missing (see above) — install it and re-run 'make setup'"
 
-# Convenience: offer to install Ollama via Homebrew if it's missing.
-if [ "$DO_OLLAMA" -eq 1 ] && ! have ollama; then
-  if have brew && confirm "Install Ollama now via Homebrew?"; then
-    info "installing Ollama…"
-    brew install ollama && ok "ollama installed" \
-      || warn "Ollama install failed — install it manually ($(install_hint ollama)); not required until embeddings run"
-  else
-    warn "Ollama not installed — add it later with: $(install_hint ollama)"
-  fi
-fi
 have brew || warn "Homebrew not found — Ollama auto-start uses 'brew services'. Without it you'll start Ollama yourself."
 
 # ── 2. Build ────────────────────────────────────────────────────────────────
@@ -126,6 +121,44 @@ fi
 # Validate before doing anything that depends on a good config.
 "${AX[@]}" config validate >/dev/null && ok "config valid" || die "config invalid — fix $CONFIG (see message above) and re-run."
 
+# ── Embeddings provider choice ──────────────────────────────────────────────
+# Config stays the source of truth: an explicit choice (flag, or the prompt on
+# a fresh interactive install) is persisted by `axon init --embeddings` below;
+# otherwise whatever the config already says is converged unchanged.
+set_ctx "choosing the embeddings provider"
+step "Embeddings provider"
+EMBEDDINGS_EXPLICIT=1
+if [ -z "$EMBEDDINGS" ]; then
+  if [ "$created_config" -eq 1 ] && [ -t 0 ]; then
+    if confirm "Use Apple's on-device model for embeddings instead of Ollama? (no Ollama server needed; requires Xcode CLT)"; then
+      EMBEDDINGS=apple
+    else
+      EMBEDDINGS=ollama
+    fi
+  else
+    EMBEDDINGS="$("${AX[@]}" config get embeddings.provider 2>/dev/null || echo ollama)"
+    EMBEDDINGS_EXPLICIT=0
+    skip "keeping configured provider '$EMBEDDINGS' (choose with --embeddings ollama|apple)"
+  fi
+fi
+if [ "$EMBEDDINGS" = apple ]; then
+  DO_OLLAMA=0
+  xcode-select -p >/dev/null 2>&1 \
+    || warn "Xcode Command Line Tools not found — the helper build in 'axon init' will warn until you run: $(install_hint xcode-clt)"
+else
+  # Convenience: offer to install Ollama via Homebrew if it's missing.
+  if [ "$DO_OLLAMA" -eq 1 ] && ! have ollama; then
+    if have brew && confirm "Install Ollama now via Homebrew?"; then
+      info "installing Ollama…"
+      brew install ollama && ok "ollama installed" \
+        || warn "Ollama install failed — install it manually ($(install_hint ollama)); not required until embeddings run"
+    else
+      warn "Ollama not installed — add it later with: $(install_hint ollama)"
+    fi
+  fi
+fi
+ok "embeddings provider: $EMBEDDINGS"
+
 # Resolve the values we need for service + ollama from the live config.
 PROFILE="${PROFILE:-$("${AX[@]}" config get active_profile 2>/dev/null || echo personal)}"
 MODEL="$("${AX[@]}" config get embeddings.model 2>/dev/null || echo nomic-embed-text)"
@@ -134,8 +167,8 @@ DATADIR="$("${AX[@]}" config get data_dir 2>/dev/null || echo "$AXON_HOME/profil
 DATADIR="${DATADIR/#\~/$HOME}"   # expand a leading ~ for display/log paths
 PLIST="$HOME/Library/LaunchAgents/com.axon.$PROFILE.plist"
 
-# ── 5. Ollama at login + embedding model ────────────────────────────────────
-if [ "$DO_OLLAMA" -eq 1 ] && have ollama; then
+# ── 5. Ollama at login + embedding model (skipped for the apple provider) ───
+if [ "$EMBEDDINGS" != apple ] && [ "$DO_OLLAMA" -eq 1 ] && have ollama; then
   step "Configuring Ollama"
   if have brew && brew list ollama >/dev/null 2>&1; then
     brew services start ollama >/dev/null 2>&1 && ok "Ollama runs at login (brew services)"
@@ -154,7 +187,11 @@ fi
 
 # ── 6. Provision the profile ────────────────────────────────────────────────
 step "Provisioning profile '$PROFILE' (axon init)"
-"${AX[@]}" init   # streams its own ✓/↻/⚠/✗ report
+if [ "$EMBEDDINGS_EXPLICIT" -eq 1 ]; then
+  "${AX[@]}" init --embeddings "$EMBEDDINGS"   # persists the choice, then streams its ✓/↻/⚠/✗ report
+else
+  "${AX[@]}" init   # streams its own ✓/↻/⚠/✗ report
+fi
 
 # ── 7. Auto-start the daemon at login (launchd) ─────────────────────────────
 if [ "$DO_SERVICE" -eq 1 ]; then

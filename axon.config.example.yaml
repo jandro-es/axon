@@ -61,11 +61,19 @@ profiles:
       port: 7777
 
     embeddings:
-      provider: ollama                        # pluggable; ollama is the local default
-      host: "http://localhost:11434"
+      provider: ollama                        # ollama | apple
+      #   ollama : local Ollama server (any pulled model; cross-platform)
+      #   apple  : Apple's on-device model (macOS 14+; no server; helper compiled
+      #            by `axon init`, needs Xcode CLT). Use with:
+      #              provider: apple, model: apple-nlcontextual-v1, dim: 512
+      #            (or just run `axon init --embeddings apple`; switching back,
+      #            set model/dim to your Ollama model yourself). Switching
+      #            provider changes dim -> run `axon reindex --embeddings`.
+      host: "http://localhost:11434"          # ollama only
       model: nomic-embed-text                 # 768-dim. Changing the model forces a full re-index.
       dim: 768                                # MUST match the model's output dimension
       batch_size: 32
+      # helper: "~/.axon/bin/axon-apple-embed"  # apple only: helper binary override
 
     models:                                   # preferred Claude model per operation class.
       classify:  claude-haiku-4-5             # passed to `claude -p --model`; actual availability

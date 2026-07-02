@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -88,6 +89,21 @@ func TestValidate(t *testing.T) {
 			p.VaultPath = ""
 			c.Profiles["personal"] = p
 		}, true},
+		{"apple embeddings provider valid", func(c *Config) {
+			p := c.Profiles["personal"]
+			p.Embeddings.Provider = "apple"
+			c.Profiles["personal"] = p
+		}, false},
+		{"unknown embeddings provider", func(c *Config) {
+			p := c.Profiles["personal"]
+			p.Embeddings.Provider = "openai"
+			c.Profiles["personal"] = p
+		}, true},
+		{"missing embeddings provider", func(c *Config) {
+			p := c.Profiles["personal"]
+			p.Embeddings.Provider = ""
+			c.Profiles["personal"] = p
+		}, true},
 	}
 
 	for _, tt := range tests {
@@ -113,6 +129,43 @@ func validProfile() Profile {
 		Limits:     LimitsConfig{DailyTokens: 1_500_000, WeeklyTokens: 8_000_000, GuardPauseAtPct: 80},
 		Retrieval:  RetrievalConfig{TopK: 8, MaxContextTokens: 12_000},
 		Policy:     PolicyConfig{DataResidency: "local-only"},
+	}
+}
+
+func TestEmbeddingsHelperField(t *testing.T) {
+	raw := []byte(`
+version: 1
+project_name: axon
+active_profile: p
+profiles:
+  p:
+    vault_path: "/tmp/v"
+    data_dir: "/tmp/d"
+    claude: {auth_mode: subscription}
+    dashboard: {host: "127.0.0.1", port: 7777}
+    embeddings: {provider: apple, model: apple-nlcontextual-v1, dim: 512, batch_size: 16, helper: "/opt/helper"}
+    models: {classify: c, routine: r, synthesis: s}
+    limits: {daily_tokens: 1, weekly_tokens: 1}
+    retrieval: {top_k: 4, max_context_tokens: 1000}
+    policy: {data_residency: local-only}
+`)
+	cfg, err := Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, p, err := cfg.ResolveProfile("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Embeddings.Helper != "/opt/helper" {
+		t.Errorf("helper = %q, want /opt/helper", p.Embeddings.Helper)
+	}
+}
+
+func TestDefaultAppleHelperPath(t *testing.T) {
+	got := DefaultAppleHelperPath()
+	if !strings.HasSuffix(got, filepath.Join("bin", "axon-apple-embed")) {
+		t.Errorf("unexpected helper path %q", got)
 	}
 }
 
