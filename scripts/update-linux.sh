@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 #
-# update-linux.sh — update an existing AXON installation in place (systemd --user).
+# update-linux.sh — update a FROM-SOURCE AXON installation in place (systemd --user).
+#
+# Release-binary installs update themselves: just run `axon update`.
 #
 # Rebuilds the binary + dashboard, replaces the installed binary, converges the
 # profile (`axon init`), refreshes the systemd unit and restarts the daemon.
