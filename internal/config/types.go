@@ -142,13 +142,17 @@ type DashboardConfig struct {
 }
 
 // EmbeddingsConfig configures the local embedding provider. dim MUST match the
-// model's output dimension; changing the model forces a full re-index.
+// model's output dimension; changing the model or provider forces a full
+// re-index (`axon reindex --embeddings`).
 type EmbeddingsConfig struct {
-	Provider  string `yaml:"provider" validate:"required"`
-	Host      string `yaml:"host"`
+	Provider  string `yaml:"provider" validate:"required,oneof=ollama apple"`
+	Host      string `yaml:"host"` // ollama only
 	Model     string `yaml:"model" validate:"required"`
 	Dim       int    `yaml:"dim" validate:"required,min=1"`
 	BatchSize int    `yaml:"batch_size" validate:"required,min=1"`
+	// Helper overrides the apple provider's helper binary path.
+	// Default: DefaultAppleHelperPath(). Ignored by other providers.
+	Helper string `yaml:"helper,omitempty"`
 }
 
 // ModelsConfig names the preferred Claude model per operation class. These are

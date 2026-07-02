@@ -46,6 +46,20 @@ func ExpandPath(p string) string {
 	return filepath.Clean(p)
 }
 
+// AppleEmbeddingModel and AppleEmbeddingDim are the defaults written to config
+// when the apple embeddings provider is selected. The dim is asserted live by
+// the init probe; NLContextualEmbedding v1 reports 512.
+const (
+	AppleEmbeddingModel = "apple-nlcontextual-v1"
+	AppleEmbeddingDim   = 512
+)
+
+// DefaultAppleHelperPath is where `axon init` compiles the Apple embeddings
+// helper: a machine-level tool (like the ollama binary), not per-profile.
+func DefaultAppleHelperPath() string {
+	return filepath.Join(AxonHome(), "bin", "axon-apple-embed")
+}
+
 // ResolvedPaths holds the concrete, ~-expanded paths a running profile needs.
 type ResolvedPaths struct {
 	VaultPath string
