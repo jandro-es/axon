@@ -216,10 +216,10 @@ Secrets never live in the YAML — they're referenced by name (`env:NAME`, or
 `keychain:NAME` for the OS keychain) and resolved at runtime (`env:` from `.env`
 or the real environment), never logged or sent to the model.
 
-`.env` is read from the current directory by default; pass `--env <path>` to
-read it from elsewhere. Keeping it next to the config (`~/.axon/.env`) is the
-tidy option — just pass `--env ~/.axon/.env`, and set the same path in the
-service unit so headless runs find it too.
+`.env` is read from `~/.axon/.env` by default (next to the config, and found
+regardless of the working directory); pass `--env <path>` to read it from
+elsewhere — the service unit records whatever path was in effect at
+`axon service install` time.
 
 ```bash
 cp .env.example ~/.axon/.env

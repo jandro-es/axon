@@ -29,3 +29,9 @@ func TestDefaultConfigPath(t *testing.T) {
 		}
 	})
 }
+func TestDefaultEnvPath(t *testing.T) {
+	t.Setenv("AXON_HOME", "/tmp/axhome-test")
+	if got, want := DefaultEnvPath(), filepath.Join("/tmp/axhome-test", ".env"); got != want {
+		t.Errorf("DefaultEnvPath() = %q, want %q", got, want)
+	}
+}
