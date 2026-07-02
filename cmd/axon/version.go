@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/jandro-es/axon/internal/selfupdate"
 	"github.com/jandro-es/axon/internal/ui"
 )
 
@@ -78,25 +79,39 @@ func buildVersion() (v, c, d string) {
 }
 
 func newVersionCmd() *cobra.Command {
-	var short bool
+	var short, check bool
 	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print the axon version and build metadata",
 		Args:  cobra.NoArgs,
-		Run: func(cmd *cobra.Command, _ []string) {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			out := cmd.OutOrStdout()
 			st := ui.For(out)
 			v, c, d := buildVersion()
 			if short {
 				fmt.Fprintln(out, v)
-				return
+				return nil
 			}
 			fmt.Fprintf(out, "%s %s %s\n", ui.IconRocket, st.Bold("axon"), st.Cyan(v))
 			fmt.Fprintf(out, "  %s %s\n", st.Dim("commit:"), c)
 			fmt.Fprintf(out, "  %s %s\n", st.Dim("built: "), d)
 			fmt.Fprintf(out, "  %s %s %s/%s\n", st.Dim("go:    "), runtime.Version(), runtime.GOOS, runtime.GOARCH)
+			if check {
+				rel, err := selfupdate.CheckLatest(cmd.Context(), updateBaseURL(), updateRepoOwner, updateRepoName)
+				if err != nil {
+					return fmt.Errorf("update check: %w", err)
+				}
+				writeUpdateCache(rel.Version)
+				if selfupdate.IsNewer(v, rel.Version) {
+					fmt.Fprintf(out, "  %s %s %s\n", st.Dim("latest:"), st.Bold(rel.Version), st.Yellow("(update available — run `axon update`)"))
+				} else {
+					fmt.Fprintf(out, "  %s %s %s\n", st.Dim("latest:"), rel.Version, st.Green("(up to date)"))
+				}
+			}
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&short, "short", false, "print just the version string (for scripts)")
+	cmd.Flags().BoolVar(&check, "check", false, "also check GitHub Releases for a newer version")
 	return cmd
 }

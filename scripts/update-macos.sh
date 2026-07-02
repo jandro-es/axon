@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 #
-# update-macos.sh — update an existing AXON installation in place.
+# update-macos.sh — update a FROM-SOURCE AXON installation in place.
+#
+# Release-binary installs update themselves: just run `axon update`.
 #
 # Rebuilds the binary + dashboard from the current source tree, replaces the
 # installed binary, converges the profile (`axon init` — DB migrations, vault

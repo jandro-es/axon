@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 #
-# install-macos.sh — one-command macOS setup for AXON.
+# install-macos.sh — macOS setup for AXON FROM SOURCE (repo checkout + Go/Node).
+#
+# Not building from source? The one-liner release install is simpler:
+#   curl -fsSL https://raw.githubusercontent.com/jandro-es/axon/main/install.sh | bash
+# and later lifecycle is in the binary itself: axon setup / update / uninstall.
 #
 # Builds the binary (and dashboard SPA), installs it to PREFIX/bin, scaffolds the
 # config + secrets under ~/.axon, makes Ollama start at login, runs `axon init`,

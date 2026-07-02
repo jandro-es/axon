@@ -116,6 +116,7 @@ release: web ## cross-compile versioned binaries into dist/ (all platforms)
 	  printf '$(C_DIM)→ %s/%s$(C_RESET)\n' $$os $$arch; \
 	  GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 go build -ldflags "$(RELEASE_LDFLAGS)" -o $$out $(PKG) || exit 1; \
 	done
+	@cd dist && shasum -a 256 $(BINARY)_* > checksums.txt
 	@printf '$(C_GREEN)✓$(C_RESET) release binaries in dist/\n'; ls -1 dist/
 
 ##@ Quality

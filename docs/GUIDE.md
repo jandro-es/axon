@@ -80,7 +80,24 @@ ollama pull nomic-embed-text
 
 ## 3. Installation
 
-### Quick install (macOS / Linux)
+### Quick install (macOS / Linux) — no toolchain needed
+
+One line downloads the latest release binary (SHA-256 verified) and hands over
+to the interactive `axon setup`, which asks for your vault path, profile and
+embeddings provider (Apple on-device vs Ollama), then provisions everything:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jandro-es/axon/main/install.sh | bash
+```
+
+(`--user` installs to `~/.local/bin` without sudo; `--no-setup` installs the
+binary only.) `axon setup` is idempotent — re-run it any time; existing config
+and secrets are always kept. **Update later with `axon update`** (checksum-
+verified self-update from GitHub Releases; `axon doctor` and the dashboard tell
+you when one is available) and **remove with `axon uninstall`** (`--purge`
+also deletes `~/.axon`; your vault is never touched).
+
+### Building from source
 
 First check your toolchain, then let one command build, install, and wire up
 auto-start:
@@ -102,7 +119,8 @@ make setup          # dispatches to the macOS (launchd) or Linux (systemd --user
 
 Useful flags (via `ARGS`, e.g. `make setup ARGS="--no-ollama"`): `--no-service` (skip auto-start), `--no-ollama` (manage Ollama yourself), `--profile NAME`, `--prefix DIR`, `--skip-build`.
 
-**Update** an existing install after pulling new code:
+**Update** a from-source install after pulling new code (release installs just
+run `axon update`):
 
 ```bash
 make update          # rebuild, swap the binary (with the version delta), re-run
@@ -114,9 +132,26 @@ It preserves your config, secrets, and SQLite DB, and lists any config settings 
 **Uninstall** everything with:
 
 ```bash
-make uninstall                 # stop + remove the daemon and binary; keep ~/.axon
-make uninstall ARGS="--purge"  # also delete ~/.axon (config, secrets, DB) — your vault is never touched
+axon uninstall                 # stop + remove the daemon, service and binary; keep ~/.axon
+axon uninstall --purge         # also delete ~/.axon (typed confirmation) — your vault is never touched
 ```
+
+(`make uninstall` remains for from-source installs.)
+
+### Moving your vault
+
+One command relocates the vault and updates every reference AXON owns —
+`vault_path` in the config and the `.claude/` wiring inside the vault; the
+search index needs nothing because it stores vault-relative paths:
+
+```bash
+axon vault move ~/Documents/NewVaultLocation
+```
+
+It refuses while the daemon runs (offers to stop it; `--stop-daemon` in
+scripts), verifies cross-filesystem copies before deleting the source, and
+reminds you of the one thing it cannot update: Obsidian's own vault bookmark —
+use "Open folder as vault" once at the new location.
 
 Run `make` with no arguments for the full, self-documenting target list, and see [INSTALL.md](../INSTALL.md) for the complete cross-platform guide (Windows included).
 

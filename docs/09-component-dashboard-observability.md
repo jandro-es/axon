@@ -58,7 +58,7 @@ Written as Markdown notes in `.axon/dashboards/` (and/or `MOCs/`), e.g.:
 These let the human work entirely inside Obsidian while the operational dashboard handles the system telemetry.
 
 ## 5. Health & diagnostics
-- `GET /health` → daemon, DB, Ollama, scheduler, last successful run per automation.
+- `GET /health` → daemon, DB, Ollama, scheduler, last successful run per automation; plus the active embeddings provider/model/dim, the running `version`, and `latest_version`/`update_available` from the daily cached release check (never a live network call).
 - Powers `axon doctor` and a header status pill on the dashboard.
 
 ## 6. Acceptance checks

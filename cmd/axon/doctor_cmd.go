@@ -7,6 +7,7 @@ import (
 
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/core"
+	"github.com/jandro-es/axon/internal/selfupdate"
 	"github.com/jandro-es/axon/internal/tui"
 	"github.com/jandro-es/axon/internal/ui"
 )
@@ -30,6 +31,7 @@ func newDoctorCmd(gf *globalFlags) *cobra.Command {
 			}
 
 			report := core.Doctor(cfg, activeProfile)
+			report.Checks = append(report.Checks, updateAvailabilityCheck())
 
 			out := cmd.OutOrStdout()
 
@@ -72,6 +74,25 @@ func newDoctorCmd(gf *globalFlags) *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// updateAvailabilityCheck reads ONLY the daily update-check cache (written by
+// `axon update`, `axon version --check` and the daemon's background check) —
+// doctor itself never touches the network for this.
+func updateAvailabilityCheck() core.Check {
+	const name = "update-available"
+	current, _, _ := buildVersion()
+	c, ok := readUpdateCache()
+	if !ok {
+		return core.Check{Name: name, Status: core.StatusOK,
+			Detail: "no release check recorded yet — run `axon version --check`"}
+	}
+	if selfupdate.IsNewer(current, c.Latest) {
+		return core.Check{Name: name, Status: core.StatusWarn,
+			Detail: fmt.Sprintf("v%s available (running %s) — run `axon update`", c.Latest, current)}
+	}
+	return core.Check{Name: name, Status: core.StatusOK,
+		Detail: fmt.Sprintf("up to date (latest known release: %s, checked %s)", c.Latest, c.CheckedAt.Format("2006-01-02"))}
 }
 
 // doctorStepStatus maps a doctor check status onto the tui step vocabulary.
