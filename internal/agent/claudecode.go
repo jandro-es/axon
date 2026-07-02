@@ -15,8 +15,10 @@ import (
 // in headless print mode (`claude -p`), authenticated by the profile's
 // subscription/enterprise login. Flags and the JSON output shape are isolated
 // here so a CLI change is a one-file fix (docs/06 §4). Verified against the
-// Claude Code headless docs: --print, --output-format json, --model,
-// --append-system-prompt, --max-turns, --tools, --bare.
+// Claude Code headless docs AND live CLI behavior: --print, --output-format
+// json, --model, --append-system-prompt, --max-turns, --tools,
+// --setting-sources, --strict-mcp-config. NOT --bare: it disables credential
+// lookup (the OAuth token is never read), killing headless auth.
 //
 // Cardinal rule: this is reached only via the token manager (Component 07).
 type ClaudeCode struct {
@@ -104,7 +106,12 @@ func (c *ClaudeCode) buildArgs(req Request) []string {
 		"--output-format", "json",
 		"--max-turns", "1",
 		"--tools", "", // pure text generation: no tool use
-		"--bare", // ignore local hooks/skills/MCP/CLAUDE.md for determinism
+		// Determinism WITHOUT --bare: --bare skips credential lookup entirely
+		// (CLAUDE_CODE_OAUTH_TOKEN ignored → "Not logged in" on every headless
+		// run), so isolation is assembled from the surgical flags instead:
+		// no settings/hooks from any source, no external MCP servers.
+		"--setting-sources", "",
+		"--strict-mcp-config",
 	}
 	if req.Model != "" {
 		args = append(args, "--model", req.Model)
