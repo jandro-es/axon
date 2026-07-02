@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jandro-es/axon/internal/config"
 )
 
 // writeTempConfig writes a minimal valid config rooted at dir and returns its
@@ -78,6 +80,35 @@ func TestInitCommandJSON(t *testing.T) {
 	}
 	if !strings.Contains(out, `"profile": "personal"`) || !strings.Contains(out, `"steps"`) {
 		t.Errorf("unexpected JSON output:\n%s", out)
+	}
+}
+
+func TestInitEmbeddingsFlagPersistsProvider(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeTempConfig(t, dir)
+
+	// init itself may warn (no swiftc/helper in a hermetic env); we assert only
+	// the persisted config.
+	_, _ = run(t, "init", "--embeddings", "apple", "--config", cfgPath, "--env", filepath.Join(dir, "nonexistent.env"))
+
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, p, err := cfg.ResolveProfile("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Embeddings.Provider != "apple" {
+		t.Errorf("provider = %q, want apple", p.Embeddings.Provider)
+	}
+	if p.Embeddings.Model != config.AppleEmbeddingModel || p.Embeddings.Dim != config.AppleEmbeddingDim {
+		t.Errorf("model/dim = %q/%d, want apple defaults", p.Embeddings.Model, p.Embeddings.Dim)
+	}
+
+	// Invalid value is refused before any init work.
+	if _, err := run(t, "init", "--embeddings", "banana", "--config", cfgPath); err == nil {
+		t.Error("expected error for invalid --embeddings value")
 	}
 }
 

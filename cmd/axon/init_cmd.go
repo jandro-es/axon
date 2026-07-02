@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -14,6 +15,7 @@ import (
 
 func newInitCmd(gf *globalFlags) *cobra.Command {
 	var asJSON bool
+	var embeddingsChoice string
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Provision the active profile: data dir, DB, vault scaffold, first index",
@@ -23,6 +25,27 @@ func newInitCmd(gf *globalFlags) *cobra.Command {
 			"Re-running reports what already exists and changes nothing.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// Persist an explicit provider choice BEFORE loading, so the init
+			// below converges the chosen provider. Switching to apple also sets
+			// the matching model/dim defaults (a later `axon reindex
+			// --embeddings` re-vectorises the index).
+			if embeddingsChoice != "" {
+				if embeddingsChoice != "ollama" && embeddingsChoice != "apple" {
+					return fmt.Errorf("--embeddings must be ollama or apple, got %q", embeddingsChoice)
+				}
+				if err := setConfigValue(gf.configPath, gf.profile, "embeddings.provider", embeddingsChoice); err != nil {
+					return fmt.Errorf("persist embeddings provider: %w", err)
+				}
+				if embeddingsChoice == "apple" {
+					if err := setConfigValue(gf.configPath, gf.profile, "embeddings.model", config.AppleEmbeddingModel); err != nil {
+						return fmt.Errorf("persist embeddings model: %w", err)
+					}
+					if err := setConfigValue(gf.configPath, gf.profile, "embeddings.dim", strconv.Itoa(config.AppleEmbeddingDim)); err != nil {
+						return fmt.Errorf("persist embeddings dim: %w", err)
+					}
+				}
+			}
+
 			_ = config.LoadDotEnv(gf.envPath)
 			cfg, err := config.Load(gf.configPath)
 			if err != nil {
@@ -70,5 +93,7 @@ func newInitCmd(gf *globalFlags) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&asJSON, "json", false, "emit machine-readable step results as JSON")
+	cmd.Flags().StringVar(&embeddingsChoice, "embeddings", "",
+		"select the embeddings provider (ollama|apple) and persist it to config before converging")
 	return cmd
 }

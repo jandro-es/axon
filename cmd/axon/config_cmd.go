@@ -108,37 +108,7 @@ func newConfigSetCmd(gf *globalFlags) *cobra.Command {
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			key, value := args[0], args[1]
-			raw, err := os.ReadFile(gf.configPath)
-			if err != nil {
-				return err
-			}
-			cfg, err := config.Parse(raw)
-			if err != nil {
-				return err
-			}
-			name := cfg.ResolveProfileName(gf.profile)
-
-			file, err := parser.ParseBytes(raw, parser.ParseComments)
-			if err != nil {
-				return fmt.Errorf("parse config: %w", err)
-			}
-			path, err := yaml.PathString(jsonPathFor(name, key))
-			if err != nil {
-				return fmt.Errorf("invalid key %q: %w", key, err)
-			}
-			// Confirm the key exists (set only modifies existing keys).
-			if _, rerr := path.ReadNode(bytes.NewReader(raw)); rerr != nil {
-				return fmt.Errorf("key %q not found; `config set` only updates existing keys", key)
-			}
-			if err := path.ReplaceWithReader(file, strings.NewReader(yamlScalar(value))); err != nil {
-				return fmt.Errorf("set %q: %w", key, err)
-			}
-
-			updated := []byte(file.String())
-			if _, err := config.Parse(updated); err != nil {
-				return fmt.Errorf("refusing to write: the change makes the config invalid: %w", err)
-			}
-			if err := writeFileAtomic(gf.configPath, updated); err != nil {
+			if err := setConfigValue(gf.configPath, gf.profile, key, value); err != nil {
 				return err
 			}
 			out := cmd.OutOrStdout()
@@ -154,6 +124,43 @@ func newConfigSetCmd(gf *globalFlags) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&asJSON, "json", false, "emit a machine-readable result")
 	return cmd
+}
+
+// setConfigValue applies one comment-preserving, re-validated config edit.
+// Only existing keys may be set (same contract as `axon config set`, which is
+// implemented on top of this; `axon init --embeddings` uses it too).
+func setConfigValue(configPath, profileFlag, key, value string) error {
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		return err
+	}
+	cfg, err := config.Parse(raw)
+	if err != nil {
+		return err
+	}
+	name := cfg.ResolveProfileName(profileFlag)
+
+	file, err := parser.ParseBytes(raw, parser.ParseComments)
+	if err != nil {
+		return fmt.Errorf("parse config: %w", err)
+	}
+	path, err := yaml.PathString(jsonPathFor(name, key))
+	if err != nil {
+		return fmt.Errorf("invalid key %q: %w", key, err)
+	}
+	// Confirm the key exists (set only modifies existing keys).
+	if _, rerr := path.ReadNode(bytes.NewReader(raw)); rerr != nil {
+		return fmt.Errorf("key %q not found; `config set` only updates existing keys", key)
+	}
+	if err := path.ReplaceWithReader(file, strings.NewReader(yamlScalar(value))); err != nil {
+		return fmt.Errorf("set %q: %w", key, err)
+	}
+
+	updated := []byte(file.String())
+	if _, err := config.Parse(updated); err != nil {
+		return fmt.Errorf("refusing to write: the change makes the config invalid: %w", err)
+	}
+	return writeFileAtomic(configPath, updated)
 }
 
 // yamlScalar renders a CLI string value as a YAML scalar source: bare for
