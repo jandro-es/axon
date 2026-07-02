@@ -9,12 +9,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/huh"
 	"github.com/goccy/go-yaml"
 	"github.com/spf13/cobra"
 
 	"github.com/jandro-es/axon/internal/claudeassets"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/identity"
+	"github.com/jandro-es/axon/internal/tui"
 	"github.com/jandro-es/axon/internal/ui"
 )
 
@@ -160,6 +162,13 @@ func gatherOnboardValues(cmd *cobra.Command, fromPath string, nonInteractive, as
 	}
 
 	out := cmd.OutOrStdout()
+
+	// Real terminal: a huh form (ADR-014). Piped stdin (tests, scripts that
+	// answer prompts) keeps the line-based flow below.
+	if tui.Interactive(out) {
+		return onboardForm(cmd, vals, present)
+	}
+
 	r := bufio.NewReader(cmd.InOrStdin())
 	if present {
 		fmt.Fprintf(out, "An identity layer already exists in %s/. Existing files are kept;\n", identity.Dir)
@@ -182,6 +191,57 @@ func gatherOnboardValues(cmd *cobra.Command, fromPath string, nonInteractive, as
 	vals.Tone = ask(out, r, "Assistant tone", orDefault(vals.Tone, "direct, warm, pragmatic"))
 	vals.Boundaries = askList(out, r, "Boundaries the assistant must respect (comma-separated)", vals.Boundaries)
 	fmt.Fprintln(out)
+	return vals, nil
+}
+
+// onboardForm collects the identity values through one huh form. Field
+// semantics are identical to the line-based flow: empty answers keep the
+// incoming (file/default) values, lists are comma-separated.
+func onboardForm(cmd *cobra.Command, vals identity.Values, present bool) (identity.Values, error) {
+	vals.Communication = orDefault(vals.Communication, "concise, no preamble; bullet points")
+	vals.AgentName = orDefault(vals.AgentName, "Axon")
+	vals.Tone = orDefault(vals.Tone, "direct, warm, pragmatic")
+
+	goals := strings.Join(vals.Goals, ", ")
+	people := strings.Join(vals.People, ", ")
+	projects := strings.Join(vals.Projects, ", ")
+	tools := strings.Join(vals.Tools, ", ")
+	boundaries := strings.Join(vals.Boundaries, ", ")
+
+	note := "Let's set up your profile. Empty answers keep the defaults."
+	if present {
+		note = fmt.Sprintf("An identity layer already exists in %s/ — answers only fill files that are still missing.", identity.Dir)
+	}
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().Title("axon onboard").Description(note),
+			huh.NewInput().Title("Your name").Value(&vals.Name),
+			huh.NewInput().Title("Your role / what you do").Value(&vals.Role),
+			huh.NewInput().Title("Timezone").Placeholder("Europe/Madrid").Value(&vals.Timezone),
+			huh.NewInput().Title("Preferred communication style").Value(&vals.Communication),
+		),
+		huh.NewGroup(
+			huh.NewInput().Title("Current goals (comma-separated)").Value(&goals),
+			huh.NewInput().Title("Key people (comma-separated)").Value(&people),
+			huh.NewInput().Title("Active projects (comma-separated)").Value(&projects),
+			huh.NewInput().Title("Tools you rely on (comma-separated)").Value(&tools),
+		),
+		huh.NewGroup(
+			huh.NewInput().Title("Name for your assistant").Value(&vals.AgentName),
+			huh.NewInput().Title("Assistant tone").Value(&vals.Tone),
+			huh.NewInput().Title("Boundaries the assistant must respect (comma-separated)").Value(&boundaries),
+		),
+	).WithOutput(cmd.OutOrStdout()).WithInput(cmd.InOrStdin())
+
+	if err := form.Run(); err != nil {
+		return vals, err
+	}
+	vals.Goals = splitList(goals)
+	vals.People = splitList(people)
+	vals.Projects = splitList(projects)
+	vals.Tools = splitList(tools)
+	vals.Boundaries = splitList(boundaries)
 	return vals, nil
 }
 
