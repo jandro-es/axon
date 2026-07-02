@@ -15,6 +15,7 @@ import (
 	"github.com/jandro-es/axon/internal/dashboard"
 	"github.com/jandro-es/axon/internal/events"
 	"github.com/jandro-es/axon/internal/scheduler"
+	"github.com/jandro-es/axon/internal/selfupdate"
 	"github.com/jandro-es/axon/internal/ui"
 	"github.com/jandro-es/axon/web"
 )
@@ -107,11 +108,18 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 					Bus:     bus,
 					Static:  web.Assets(),
 					Health: func(context.Context) map[string]any {
-						return map[string]any{
+						h := map[string]any{
 							"embeddings_provider": deps.profile.Embeddings.Provider,
 							"embeddings_model":    deps.profile.Embeddings.Model,
 							"embeddings_dim":      deps.profile.Embeddings.Dim,
 						}
+						current, _, _ := buildVersion()
+						h["version"] = current
+						if c, ok := readUpdateCache(); ok {
+							h["latest_version"] = c.Latest
+							h["update_available"] = selfupdate.IsNewer(current, c.Latest)
+						}
+						return h
 					},
 				})
 				wg.Add(1)
@@ -126,6 +134,25 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 
 			sched.Start(ctx)
 			sched.CatchUp(ctx)
+
+			// Daily release-availability check (cache only — doctor and the
+			// dashboard read it; updating is always the user's explicit action).
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				refreshUpdateCache(ctx)
+				tick := time.NewTicker(24 * time.Hour)
+				defer tick.Stop()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-tick.C:
+						refreshUpdateCache(ctx)
+					}
+				}
+			}()
+
 			fmt.Fprintln(out, st.Green(ui.IconOK+" daemon running")+st.Dim(" — press Ctrl-C to stop"))
 
 			if once {
