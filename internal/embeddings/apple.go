@@ -13,7 +13,7 @@ import (
 
 // Apple embeds via Apple's on-device NLContextualEmbedding, reached through a
 // small Swift helper subprocess (compiled by `axon init`; see apple_setup.go).
-// JSON over stdin/stdout keeps the Go binary pure Go — no cgo (ADR-011).
+// JSON over stdin/stdout keeps the Go binary pure Go — no cgo (ADR-013).
 // Safe for concurrent use: each call spawns its own process.
 type Apple struct {
 	helper  string

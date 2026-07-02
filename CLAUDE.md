@@ -34,7 +34,7 @@ internal/      # all application packages (private to the module)
   db/          # SQLite (modernc.org/sqlite): migrations, repositories, FTS5 + vector search
   vault/       # markdown read/write, frontmatter, managed blocks, wikilink-safe ops
   ingestion/   # fetch (egress-policied), extract, redact, chunk, enrich, persist
-  embeddings/  # provider interface + Ollama impl
+  embeddings/  # provider interface + Ollama impl + Apple on-device impl (ADR-013)
   agent/       # Claude adapters: `claude -p` subprocess (default) + direct-API (api_key mode)
   tokens/      # the Component 07 chokepoint: estimate, budgets, ledger, redaction
   scheduler/   # robfig/cron wrapper: jitter, panic-safety, catch-up policy

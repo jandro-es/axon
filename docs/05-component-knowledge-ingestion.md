@@ -53,7 +53,7 @@ type EmbeddingProvider interface {
     Healthcheck(ctx context.Context) error
 }
 ```
-Default impl: Ollama (`/api/embeddings`). Changing `model`/`dim` requires `axon reindex --embeddings` (vectors across models are incomparable). The daemon refuses to start if the configured `dim` disagrees with the live model, with a remediation hint. Vectors are written to `vec0` tables using the sqlite-vec bindings' `SerializeFloat32` helper.
+Default impl: Ollama (`/api/embeddings`). Alternative impl: Apple on-device NLContextualEmbedding via a Swift helper subprocess, macOS-only (`embeddings.provider: apple`, ADR-013). Changing `provider`/`model`/`dim` requires `axon reindex --embeddings` (vectors across models are incomparable). The daemon refuses to start if the configured `dim` disagrees with the live model, with a remediation hint. Vectors are written to `vec0` tables using the sqlite-vec bindings' `SerializeFloat32` helper.
 
 ## 5. CLI / MCP surface
 
