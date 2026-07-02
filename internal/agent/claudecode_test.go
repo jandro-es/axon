@@ -111,6 +111,42 @@ func TestClaudeCodeRunErrorTruncatesLongOutput(t *testing.T) {
 	}
 }
 
+func TestClaudeCodeRunErrorMentionsUnresolvedToken(t *testing.T) {
+	// When the config NAMED an oauth token but it could not be resolved
+	// (typically ~/.axon/.env not loaded), a subprocess failure must say so —
+	// "not logged in" alone sends the user hunting through the wrong layer.
+	c := NewClaudeCode(ClaudeCodeOptions{
+		OAuthTokenErr: errors.New(`secret env "CLAUDE_CODE_OAUTH_TOKEN_WORK" is not set`),
+	})
+	c.run = func(ctx context.Context, bin string, args, env []string, stdin string) ([]byte, []byte, error) {
+		return []byte("not logged in"), nil, errors.New("exit status 1")
+	}
+	_, err := c.Run(context.Background(), Request{Operation: "op", Prompt: "p"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	for _, want := range []string{"CLAUDE_CODE_OAUTH_TOKEN_WORK", "--env"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error missing %q; got %q", want, err.Error())
+		}
+	}
+}
+
+func TestClaudeCodeRunErrorNoTokenHintWhenTokenResolved(t *testing.T) {
+	// A resolved token means the failure is something else; don't misdirect.
+	c := NewClaudeCode(ClaudeCodeOptions{OAuthToken: "sk-ant-oat01-x"})
+	c.run = func(ctx context.Context, bin string, args, env []string, stdin string) ([]byte, []byte, error) {
+		return []byte("some other failure"), nil, errors.New("exit status 1")
+	}
+	_, err := c.Run(context.Background(), Request{Operation: "op", Prompt: "p"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if strings.Contains(err.Error(), "--env") {
+		t.Errorf("unexpected token hint on resolved-token failure: %q", err.Error())
+	}
+}
+
 func TestClaudeCodeRunUsesInjectedExecutor(t *testing.T) {
 	c := NewClaudeCode(ClaudeCodeOptions{})
 	var gotStdin string

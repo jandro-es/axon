@@ -23,6 +23,7 @@ type ClaudeCode struct {
 	bin        string
 	configDir  string // CLAUDE_CONFIG_DIR (profile-isolated auth)
 	oauthToken string // resolved CLAUDE_CODE_OAUTH_TOKEN (may be empty: rely on `claude login`)
+	tokenErr   error  // why oauthToken is empty when the config named one (see Run)
 	authMode   string
 	timeout    time.Duration
 
@@ -35,8 +36,13 @@ type ClaudeCodeOptions struct {
 	Bin        string // default "claude"
 	ConfigDir  string
 	OAuthToken string
-	AuthMode   string
-	Timeout    time.Duration // default 120s
+	// OAuthTokenErr carries the secret-resolution failure when the config
+	// referenced an oauth token that could not be resolved (e.g. env var unset
+	// because no .env was loaded). It is surfaced in run failures so an auth
+	// error explains itself instead of dead-ending at "not logged in".
+	OAuthTokenErr error
+	AuthMode      string
+	Timeout       time.Duration // default 120s
 }
 
 // NewClaudeCode builds the adapter with the real subprocess executor.
@@ -53,6 +59,7 @@ func NewClaudeCode(opts ClaudeCodeOptions) *ClaudeCode {
 		bin:        bin,
 		configDir:  opts.ConfigDir,
 		oauthToken: opts.OAuthToken,
+		tokenErr:   opts.OAuthTokenErr,
 		authMode:   opts.AuthMode,
 		timeout:    timeout,
 		run:        execClaude,
@@ -77,7 +84,14 @@ func (c *ClaudeCode) Run(ctx context.Context, req Request) (*Response, error) {
 
 	stdout, stderr, err := c.run(ctx, c.bin, args, env, req.Prompt)
 	if err != nil {
-		return nil, fmt.Errorf("claude -p %q: %w: %s", req.Operation, err, failureOutput(stdout, stderr))
+		runErr := fmt.Errorf("claude -p %q: %w: %s", req.Operation, err, failureOutput(stdout, stderr))
+		// If the config named an oauth token that never resolved, the failure is
+		// almost certainly that — say so, instead of dead-ending at the CLI's
+		// "not logged in".
+		if c.oauthToken == "" && c.tokenErr != nil {
+			return nil, fmt.Errorf("%w (oauth token unresolved: %v — is the secret in ~/.axon/.env, and was --env passed / does the service unit include it?)", runErr, c.tokenErr)
+		}
+		return nil, runErr
 	}
 	return parseClaudeJSON(stdout, req.Model)
 }

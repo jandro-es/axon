@@ -26,6 +26,14 @@ func DefaultConfigPath() string {
 	return filepath.Join(AxonHome(), DefaultConfigFile)
 }
 
+// DefaultEnvPath is the absolute path the CLI loads secrets from when no --env
+// flag is given: <AXON_HOME>/.env — anchored like DefaultConfigPath so secrets
+// are found regardless of the working directory (a daemon's cwd, or any shell
+// location, is almost never ~/.axon).
+func DefaultEnvPath() string {
+	return filepath.Join(AxonHome(), ".env")
+}
+
 // ExpandPath expands a leading ~ (or ~/) to the user's home directory and
 // returns a cleaned, absolute-where-possible path. A bare "~" maps to home; an
 // unexpandable ~ is returned unchanged rather than erroring, since config paths

@@ -93,11 +93,15 @@ func (d *profileDeps) agentAdapter() agent.Agent {
 		}
 		return agent.NewAPIKey(key)
 	}
-	oauth, _ := config.ResolveSecret(d.profile.Claude.OAuthToken)
+	// A failed resolution is NOT fatal here — an interactive `claude login`
+	// session in the profile's config dir can still carry the call — but the
+	// error rides along so a subsequent auth failure explains itself.
+	oauth, oauthErr := config.ResolveSecret(d.profile.Claude.OAuthToken)
 	return agent.NewClaudeCode(agent.ClaudeCodeOptions{
-		ConfigDir:  d.paths.ConfigDir,
-		OAuthToken: oauth,
-		AuthMode:   d.profile.Claude.AuthMode,
+		ConfigDir:     d.paths.ConfigDir,
+		OAuthToken:    oauth,
+		OAuthTokenErr: oauthErr,
+		AuthMode:      d.profile.Claude.AuthMode,
 	})
 }
 
