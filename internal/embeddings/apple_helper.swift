@@ -18,11 +18,29 @@ let modelID = "apple-nlcontextual-v1"
 guard let embedding = NLContextualEmbedding(language: .english) else {
     fail("no on-device contextual embedding model (requires macOS 14+)", code: 2)
 }
+
+// --check-assets: report availability WITHOUT downloading. Lets callers (the
+// integration test, diagnostics) find out cheaply whether this machine can
+// embed at all — CI runners and managed Macs often cannot fetch the assets.
+if CommandLine.arguments.contains("--check-assets") {
+    if embedding.hasAvailableAssets {
+        print("assets available (dim \(embedding.dimension))")
+        exit(0)
+    }
+    fail("assets not downloaded on this machine", code: 3)
+}
+
 if !embedding.hasAvailableAssets {
     let sem = DispatchSemaphore(value: 0)
     var assetErr: Error?
     embedding.requestAssets { _, error in assetErr = error; sem.signal() }
-    sem.wait()
+    // BOUNDED wait, shorter than every Go-side timeout: on machines that
+    // cannot fetch the assets (CI, MDM-restricted), an unbounded wait hangs
+    // silently until the caller SIGKILLs us — "signal: killed" with no clue.
+    // Better to die on our own terms with a readable reason.
+    if sem.wait(timeout: .now() + 75) == .timedOut {
+        fail("embedding assets not downloadable within 75s (offline, CI, or managed Mac?) — run once with network access, or use embeddings.provider: ollama", code: 3)
+    }
     if let e = assetErr { fail("embedding assets unavailable: \(e.localizedDescription)", code: 3) }
 }
 do { try embedding.load() } catch { fail("load embedding model: \(error.localizedDescription)", code: 4) }
