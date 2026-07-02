@@ -75,18 +75,13 @@ func configureMenu(cmd *cobra.Command, gf *globalFlags) error {
 		case "done":
 			return nil
 		case "embeddings":
-			target := "apple"
-			if p.Embeddings.Provider == "apple" {
-				target = "ollama"
-			}
-			pick, err := tui.Select(out, in, "Embeddings provider", []tui.Option{
+			target, err := tui.Select(out, in, "Embeddings provider", []tui.Option{
 				{Label: "Apple on-device (macOS, no server)", Value: "apple"},
 				{Label: "Ollama (any pulled model, cross-platform)", Value: "ollama"},
 			})
 			if err != nil {
 				return err
 			}
-			target = pick
 			if target == p.Embeddings.Provider {
 				fmt.Fprintf(out, "%s already using %s\n", ui.IconAlready, target)
 				continue

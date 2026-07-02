@@ -117,10 +117,10 @@ func (m stepsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case stepMsg:
 		if i, ok := m.index[msg.name]; ok {
-			m.rows[i] = stepRow{msg.name, msg.detail, msg.st}
+			m.rows[i] = stepRow(msg)
 		} else {
 			m.index[msg.name] = len(m.rows)
-			m.rows = append(m.rows, stepRow{msg.name, msg.detail, msg.st})
+			m.rows = append(m.rows, stepRow(msg))
 		}
 		return m, nil
 	case finishMsg:
