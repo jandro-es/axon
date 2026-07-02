@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -164,13 +165,15 @@ func glyphFor(st StepStatus) string {
 }
 
 func (m stepsModel) View() string {
-	out := titleStyle.Render(m.title) + "\n"
+	var b strings.Builder
+	b.WriteString(titleStyle.Render(m.title))
+	b.WriteByte('\n')
 	for _, r := range m.rows {
 		glyph := m.spin.View()
 		if r.st != StatusRunning {
 			glyph = glyphStyles[r.st].Render(glyphFor(r.st))
 		}
-		out += fmt.Sprintf("  %s %s %s\n", glyph, nameStyle.Render(fmt.Sprintf("%-22s", r.name)), detailStyle.Render(r.detail))
+		fmt.Fprintf(&b, "  %s %s %s\n", glyph, nameStyle.Render(fmt.Sprintf("%-22s", r.name)), detailStyle.Render(r.detail))
 	}
-	return out
+	return b.String()
 }

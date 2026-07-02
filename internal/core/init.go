@@ -317,6 +317,12 @@ func probeEmbeddingModel(ctx context.Context, e config.EmbeddingsConfig) StepRes
 	return StepResult{"embeddings", StepDone, fmt.Sprintf("model %q ready (dim %d verified)", e.Model, e.Dim)}
 }
 
+// ProbeEmbeddings converges + verifies the configured embeddings provider —
+// the same step `axon init` runs, exported for `axon configure`'s switch flow.
+func ProbeEmbeddings(ctx context.Context, e config.EmbeddingsConfig) StepResult {
+	return probeEmbeddingModel(ctx, e)
+}
+
 // appleProbeDeps are the seams probeAppleEmbedding needs; injectable in tests.
 type appleProbeDeps struct {
 	goos    string
