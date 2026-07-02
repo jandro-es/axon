@@ -62,6 +62,15 @@ git commit -m "Adopt the Charm TUI stack (ADR-014)"
 
 ### Task 2: Reimplement `internal/ui` on lipgloss (API-frozen)
 
+> **EXECUTION DEVIATION (recorded during implementation):** rewriting the Styler
+> on lipgloss double-gates color decisions (lipgloss's renderer does its own
+> TTY/profile detection, conflicting with ui's NO_COLOR/FORCE_COLOR contract and
+> the `Styler{on: true}` test seam) while emitting byte-identical 4-bit ANSI for
+> every color ui uses. The spec goal — one visual language — is met by shared
+> glyphs + the same ANSI palette. Kept ui's internals; documented the ADR-014
+> relationship in the package comment. lipgloss is used where it adds real value
+> (tui tables and live views).
+
 **Files:**
 - Modify: `internal/ui/ui.go` (rewrite internals only)
 - Test: `internal/ui/ui_test.go` (existing tests must pass unchanged; add one lipgloss-specific test)

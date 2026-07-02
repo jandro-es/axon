@@ -6,6 +6,11 @@
 //
 // The package intentionally imports nothing from the rest of the module — it is
 // a leaf that both cmd and core can depend on without creating import cycles.
+//
+// Relationship to the Charm stack (ADR-014): ui is the PLAIN-output facade —
+// the canonical rendering for non-TTY, --json and CI. Live interactive views
+// live in internal/tui (bubbletea/huh/lipgloss) and reuse these glyphs and the
+// same 4-bit ANSI palette, so both surfaces share one visual language.
 package ui
 
 import (
