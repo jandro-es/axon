@@ -192,9 +192,11 @@ profiles:
     # provider: ollama | apple. `apple` uses Apple's on-device NLContextualEmbedding
     # (macOS 14+, no server; ADR-013): a Swift helper compiled by `axon init` (needs
     # Xcode CLT) at ~/.axon/bin/axon-apple-embed (override with `helper:`); `host` is
-    # ignored, and model/dim must be apple-nlcontextual-v1 / 512. Switch either way with
-    # `axon init --embeddings apple|ollama` (persists provider+model+dim), then
-    # `axon reindex --embeddings` — the dim change invalidates stored vectors.
+    # ignored, and model/dim must be apple-nlcontextual-v1 / 512. Switch with
+    # `axon init --embeddings apple` (persists provider+model+dim) or back with
+    # `axon init --embeddings ollama` (persists the provider; set model/dim to your
+    # Ollama model yourself), then `axon reindex --embeddings` — the dim change
+    # invalidates stored vectors.
     models:   { classify: claude-haiku-4-5, routine: claude-sonnet-4-6, synthesis: claude-opus-4-8 }  # passed to `claude -p --model`; plan tier governs availability
     limits:   { daily_tokens: 1_500_000, weekly_tokens: 8_000_000, guard_pause_at_pct: 80 }           # estimated tokens; no dollar cap here
     retrieval: { top_k: 8, max_context_tokens: 12_000 }

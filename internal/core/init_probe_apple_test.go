@@ -30,7 +30,9 @@ func TestProbeAppleEmbedding(t *testing.T) {
 			d.ensure = func(context.Context, string) (bool, error) { return false, fmt.Errorf("boom") }
 		}, StepWarn, "boom"},
 		{"probe failure warns", func(d *appleProbeDeps) {
-			d.probe = func(context.Context, string, config.EmbeddingsConfig) error { return fmt.Errorf("dim 512 != configured 768") }
+			d.probe = func(context.Context, string, config.EmbeddingsConfig) error {
+				return fmt.Errorf("dim 512 != configured 768")
+			}
 		}, StepWarn, "dim"},
 		{"already current", func(d *appleProbeDeps) {
 			d.ensure = func(context.Context, string) (bool, error) { return false, nil }
