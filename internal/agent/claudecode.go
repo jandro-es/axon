@@ -77,7 +77,7 @@ func (c *ClaudeCode) Run(ctx context.Context, req Request) (*Response, error) {
 
 	stdout, stderr, err := c.run(ctx, c.bin, args, env, req.Prompt)
 	if err != nil {
-		return nil, fmt.Errorf("claude -p %q: %w: %s", req.Operation, err, strings.TrimSpace(string(stderr)))
+		return nil, fmt.Errorf("claude -p %q: %w: %s", req.Operation, err, failureOutput(stdout, stderr))
 	}
 	return parseClaudeJSON(stdout, req.Model)
 }
@@ -120,6 +120,29 @@ func (c *ClaudeCode) buildEnv() []string {
 		env = append(env, "CLAUDE_CODE_OAUTH_TOKEN="+c.oauthToken)
 	}
 	return env
+}
+
+// failureOutput assembles the subprocess output for a failure message. Claude
+// Code prints many failures (auth, model access) to STDOUT in --print mode, so
+// stderr alone is often blank — include both, capped because the message is
+// persisted (runs.error, token events).
+func failureOutput(stdout, stderr []byte) string {
+	const capPerStream = 1024
+	parts := make([]string, 0, 2)
+	if s := truncate(strings.TrimSpace(string(stderr)), capPerStream); s != "" {
+		parts = append(parts, s)
+	}
+	if s := truncate(strings.TrimSpace(string(stdout)), capPerStream); s != "" {
+		parts = append(parts, "stdout: "+s)
+	}
+	return strings.Join(parts, "; ")
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "… (truncated)"
 }
 
 // claudeJSON mirrors the `claude -p --output-format json` schema (the fields we

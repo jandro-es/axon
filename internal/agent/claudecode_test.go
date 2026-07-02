@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -73,6 +74,40 @@ func TestClaudeCodeKeepsAPIKeyInAPIKeyMode(t *testing.T) {
 	c := NewClaudeCode(ClaudeCodeOptions{AuthMode: "api_key"})
 	if !strings.Contains(strings.Join(c.buildEnv(), "\n"), "ANTHROPIC_API_KEY=sk-ant-keep") {
 		t.Error("api_key mode should keep ANTHROPIC_API_KEY")
+	}
+}
+
+func TestClaudeCodeRunErrorIncludesStdoutAndStderr(t *testing.T) {
+	// Claude Code prints failures like "Invalid API key · Please run /login" to
+	// STDOUT in --print mode; a failure message showing only stderr can be blank.
+	c := NewClaudeCode(ClaudeCodeOptions{})
+	c.run = func(ctx context.Context, bin string, args, env []string, stdin string) ([]byte, []byte, error) {
+		return []byte("Invalid API key · Please run /login\n"), []byte("warn: something"), errors.New("exit status 1")
+	}
+	_, err := c.Run(context.Background(), Request{Operation: "op", Prompt: "p"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	for _, want := range []string{"Invalid API key · Please run /login", "warn: something", "exit status 1"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error missing %q; got %q", want, err.Error())
+		}
+	}
+}
+
+func TestClaudeCodeRunErrorTruncatesLongOutput(t *testing.T) {
+	// The failure message is persisted (runs.error, events); a huge stdout must
+	// not be copied wholesale into it.
+	c := NewClaudeCode(ClaudeCodeOptions{})
+	c.run = func(ctx context.Context, bin string, args, env []string, stdin string) ([]byte, []byte, error) {
+		return []byte(strings.Repeat("x", 10_000)), nil, errors.New("exit status 1")
+	}
+	_, err := c.Run(context.Background(), Request{Operation: "op", Prompt: "p"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if len(err.Error()) > 3000 {
+		t.Errorf("error message not truncated: %d chars", len(err.Error()))
 	}
 }
 
