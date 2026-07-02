@@ -372,6 +372,24 @@ axon reindex               # notes mirror + link graph
 axon reindex --embeddings  # also re-embed (after a model change / to back-fill pending vectors)
 ```
 
+### Changing settings
+
+`axon configure` is the simple way to change common settings — on a terminal it
+opens an interactive menu; in scripts use the subcommands:
+
+```bash
+axon configure                                   # interactive menu
+axon configure embeddings apple --reindex        # switch to Apple on-device embeddings, re-embed now
+axon configure embeddings ollama --model nomic-embed-text --dim 768 --reindex
+axon configure models synthesis claude-opus-4-8
+axon configure limits daily 2000000
+axon configure automations knowledge-digest off
+```
+
+Switching the embeddings provider runs the whole chain in one flow: persist
+the config, converge (compile the Apple helper or verify the Ollama model),
+and re-embed the index (confirmed interactively, `--reindex` in scripts).
+
 ---
 
 ## 8. Automations & the daemon

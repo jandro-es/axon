@@ -33,7 +33,7 @@ func newRootCmd() *cobra.Command {
 	pf.StringVarP(&gf.profile, "profile", "p", "", "active profile (overrides config + AXON_PROFILE)")
 	pf.StringVar(&gf.envPath, "env", config.DefaultEnvPath(), "path to the .env secrets file (default ~/.axon/.env)")
 
-	root.AddCommand(newConfigCmd(gf), newDoctorCmd(gf), newVersionCmd())
+	root.AddCommand(newConfigCmd(gf), newConfigureCmd(gf), newDoctorCmd(gf), newVersionCmd())
 	root.AddCommand(newInitCmd(gf), newReindexCmd(gf), newOnboardCmd(gf))
 	root.AddCommand(newIngestCmd(gf), newSearchCmd(gf), newStatusCmd(gf))
 	root.AddCommand(newRunCmd(gf), newStartCmd(gf), newStopCmd(gf))

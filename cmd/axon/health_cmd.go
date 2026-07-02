@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/jandro-es/axon/internal/health"
+	"github.com/jandro-es/axon/internal/tui"
 	"github.com/jandro-es/axon/internal/ui"
 )
 
@@ -38,6 +39,17 @@ func newHealthCmd(gf *globalFlags) *cobra.Command {
 				enc := json.NewEncoder(out)
 				enc.SetIndent("", "  ")
 				return enc.Encode(rep)
+			}
+			// Styled table on a TTY; the plain renderer stays canonical.
+			if tui.Interactive(out) {
+				rows := make([][]string, 0, len(rep.Dimensions)+1)
+				rows = append(rows, []string{"Overall", fmt.Sprintf("%d/100 (%s)", rep.Score, rep.Grade), ""})
+				for _, d := range rep.Dimensions {
+					rows = append(rows, []string{d.Label, fmt.Sprintf("%d", d.Score), d.Detail})
+				}
+				fmt.Fprintln(out, ui.For(out).Header(ui.IconHeart, fmt.Sprintf("axon health — profile %q", deps.name)))
+				tui.Table(out, []string{"DIMENSION", "SCORE", "DETAIL"}, rows)
+				return nil
 			}
 			renderHealth(out, deps.name, rep)
 			return nil

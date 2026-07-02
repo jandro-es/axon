@@ -64,6 +64,9 @@ type InitOptions struct {
 	// CheckEmbeddingModel optionally overrides the Ollama reachability probe so
 	// tests can run hermetically. If nil, a real short-timeout probe is used.
 	CheckEmbeddingModel func(ctx context.Context, e config.EmbeddingsConfig) StepResult
+	// OnStep, when set, receives every step result in order as it completes —
+	// the live-TUI hook. Plain text still streams to Out independently.
+	OnStep func(StepResult)
 }
 
 // Init converges the active profile's environment: it validates inputs, runs
@@ -86,6 +89,9 @@ func Init(ctx context.Context, opts InitOptions) (InitReport, error) {
 	add := func(s StepResult) {
 		rep.Steps = append(rep.Steps, s)
 		fmt.Fprintln(out, renderStep(st, s))
+		if opts.OnStep != nil {
+			opts.OnStep(s)
+		}
 		if s.Status == StepFailed {
 			rep.OK = false
 		}
@@ -309,6 +315,12 @@ func probeEmbeddingModel(ctx context.Context, e config.EmbeddingsConfig) StepRes
 		return StepResult{"embeddings", StepWarn, fmt.Sprintf("model %q present but probe failed: %v", e.Model, err)}
 	}
 	return StepResult{"embeddings", StepDone, fmt.Sprintf("model %q ready (dim %d verified)", e.Model, e.Dim)}
+}
+
+// ProbeEmbeddings converges + verifies the configured embeddings provider —
+// the same step `axon init` runs, exported for `axon configure`'s switch flow.
+func ProbeEmbeddings(ctx context.Context, e config.EmbeddingsConfig) StepResult {
+	return probeEmbeddingModel(ctx, e)
 }
 
 // appleProbeDeps are the seams probeAppleEmbedding needs; injectable in tests.

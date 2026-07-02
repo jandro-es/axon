@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/core"
+	"github.com/jandro-es/axon/internal/tui"
 )
 
 func newInitCmd(gf *globalFlags) *cobra.Command {
@@ -72,6 +74,30 @@ func newInitCmd(gf *globalFlags) *cobra.Command {
 			}
 			if asJSON {
 				opts.Out = nil // suppress streaming text; emit JSON only
+			}
+
+			// Live step view on a TTY; the plain streamed report (canonical
+			// output) is unchanged everywhere else.
+			if !asJSON && tui.Interactive(out) {
+				steps := tui.NewSteps(out, fmt.Sprintf("axon init — profile %q", name), nil)
+				steps.Start()
+				opts.Out = io.Discard
+				opts.OnStep = func(s core.StepResult) {
+					steps.Set(s.Name, s.Detail, tui.StepStatus(s.Status))
+				}
+				rep, runErr := core.Init(cmd.Context(), opts)
+				summary := "environment converged"
+				if !rep.Changed {
+					summary = "no changes, already converged"
+				}
+				_ = steps.Finish(summary)
+				if runErr != nil {
+					return runErr
+				}
+				if !rep.OK {
+					return fmt.Errorf("init completed with blocking failures")
+				}
+				return nil
 			}
 
 			rep, runErr := core.Init(cmd.Context(), opts)

@@ -51,6 +51,7 @@ internal/      # all application packages (private to the module)
   service/     # OS service units (launchd/systemd) for `axon service`
   health/      # vault health scoring for `axon health`
   ui/          # terminal output styling for the CLI
+  tui/         # Charm-based terminal UI: TTY gate, steps/spinner/table surfaces, forms (ADR-014)
 web/           # dashboard SPA — Vite + React + Recharts; built to web/dist, embedded via embed.FS
 scripts/       # preflight + install/update/uninstall for macOS (launchd) & Linux (systemd), + _common.sh: build, install, service/Ollama wiring
 ```

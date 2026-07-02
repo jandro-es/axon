@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/jandro-es/axon/internal/search"
+	"github.com/jandro-es/axon/internal/tui"
 	"github.com/jandro-es/axon/internal/ui"
 )
 
@@ -38,6 +39,21 @@ func newSearchCmd(gf *globalFlags) *cobra.Command {
 				enc.SetIndent("", "  ")
 				return enc.Encode(hits)
 			}
+			// Styled table on a TTY; the plain list below stays canonical.
+			if tui.Interactive(out) && len(hits) > 0 {
+				rows := make([][]string, 0, len(hits))
+				for i, h := range hits {
+					snippet := strings.ReplaceAll(h.Snippet, "\n", " ")
+					if len(snippet) > 60 {
+						snippet = snippet[:60] + "…"
+					}
+					rows = append(rows, []string{fmt.Sprintf("%d", i+1), h.Path, fmt.Sprintf("%.4f", h.Score), snippet})
+				}
+				fmt.Fprintf(out, "%s %s\n", ui.IconSearch, ui.For(out).Dim(fmt.Sprintf("%d result(s) for %q", len(hits), query)))
+				tui.Table(out, []string{"#", "PATH", "SCORE", "SNIPPET"}, rows)
+				return nil
+			}
+
 			sty := ui.For(out)
 			if len(hits) == 0 {
 				fmt.Fprintf(out, "%s %s\n", sty.Yellow(ui.IconSearch), sty.Dim(fmt.Sprintf("no results for %q", query)))
