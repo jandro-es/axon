@@ -7,6 +7,7 @@ import (
 
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/core"
+	"github.com/jandro-es/axon/internal/tui"
 	"github.com/jandro-es/axon/internal/ui"
 )
 
@@ -31,6 +32,21 @@ func newDoctorCmd(gf *globalFlags) *cobra.Command {
 			report := core.Doctor(cfg, activeProfile)
 
 			out := cmd.OutOrStdout()
+
+			// Live step view on a TTY; the plain report below stays canonical.
+			if tui.Interactive(out) {
+				steps := tui.NewSteps(out, "axon doctor", nil)
+				steps.Start()
+				for _, c := range report.Checks {
+					steps.Set(c.Name, c.Detail, doctorStepStatus(c.Status))
+				}
+				if report.HasFailure() {
+					_ = steps.Finish("status: FAIL")
+					return fmt.Errorf("doctor found blocking issues — see the failing check(s) above")
+				}
+				return steps.Finish("status: OK")
+			}
+
 			st := ui.For(out)
 			fmt.Fprintln(out, st.Header(ui.IconDoctor, "axon doctor"))
 			fmt.Fprintln(out, st.Divider(40))
@@ -55,6 +71,18 @@ func newDoctorCmd(gf *globalFlags) *cobra.Command {
 			fmt.Fprintf(out, "%s %s\n", st.Green(ui.IconOK), st.Bold(st.Green("status: OK")))
 			return nil
 		},
+	}
+}
+
+// doctorStepStatus maps a doctor check status onto the tui step vocabulary.
+func doctorStepStatus(s core.CheckStatus) tui.StepStatus {
+	switch s {
+	case core.StatusOK:
+		return tui.StatusDone
+	case core.StatusWarn:
+		return tui.StatusWarn
+	default:
+		return tui.StatusFailed
 	}
 }
 

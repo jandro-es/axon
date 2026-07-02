@@ -64,6 +64,9 @@ type InitOptions struct {
 	// CheckEmbeddingModel optionally overrides the Ollama reachability probe so
 	// tests can run hermetically. If nil, a real short-timeout probe is used.
 	CheckEmbeddingModel func(ctx context.Context, e config.EmbeddingsConfig) StepResult
+	// OnStep, when set, receives every step result in order as it completes —
+	// the live-TUI hook. Plain text still streams to Out independently.
+	OnStep func(StepResult)
 }
 
 // Init converges the active profile's environment: it validates inputs, runs
@@ -86,6 +89,9 @@ func Init(ctx context.Context, opts InitOptions) (InitReport, error) {
 	add := func(s StepResult) {
 		rep.Steps = append(rep.Steps, s)
 		fmt.Fprintln(out, renderStep(st, s))
+		if opts.OnStep != nil {
+			opts.OnStep(s)
+		}
 		if s.Status == StepFailed {
 			rep.OK = false
 		}
