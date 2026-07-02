@@ -8,6 +8,7 @@ import (
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/core"
 	"github.com/jandro-es/axon/internal/db"
+	"github.com/jandro-es/axon/internal/tui"
 	"github.com/jandro-es/axon/internal/ui"
 	"github.com/jandro-es/axon/internal/vault"
 )
@@ -45,6 +46,32 @@ func newReindexCmd(gf *globalFlags) *cobra.Command {
 			}
 
 			vfs := vault.NewFS(paths.VaultPath)
+
+			// Live spinner on a TTY; the plain lines below stay canonical.
+			if tui.Interactive(out) {
+				if err := tui.Spin(out, fmt.Sprintf("reindexing vault (profile %q)…", name), func() (string, error) {
+					res, err := core.Reindex(cmd.Context(), vfs, sqlDB)
+					if err != nil {
+						return "", err
+					}
+					return fmt.Sprintf("reindex: %d notes, %d links, %d rechunked, %d unresolved wikilinks",
+						res.Notes, res.Links, res.Rechunked, res.BrokenWikilink), nil
+				}); err != nil {
+					return err
+				}
+				if embeddings {
+					embedder := embeddingsProvider(profile)
+					return tui.Spin(out, "re-embedding chunks…", func() (string, error) {
+						re, err := core.ReembedPending(cmd.Context(), sqlDB, embedder, true)
+						if err != nil {
+							return "", fmt.Errorf("re-embed: %w (is Ollama running?)", err)
+						}
+						return fmt.Sprintf("re-embedded %d/%d chunks via %s", re.Embedded, re.Total, profile.Embeddings.Model), nil
+					})
+				}
+				return nil
+			}
+
 			res, err := core.Reindex(cmd.Context(), vfs, sqlDB)
 			if err != nil {
 				return err

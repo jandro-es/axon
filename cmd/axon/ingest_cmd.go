@@ -14,6 +14,7 @@ import (
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/ingestion"
 	"github.com/jandro-es/axon/internal/tokens"
+	"github.com/jandro-es/axon/internal/tui"
 	"github.com/jandro-es/axon/internal/ui"
 )
 
@@ -63,15 +64,36 @@ func newIngestCmd(gf *globalFlags) *cobra.Command {
 				Profile:  deps.name,
 			}
 			_ = noApplyLinks
-			res, runErr := pipeline.Ingest(cmd.Context(), args[0], ingestion.IngestOptions{
+			opts := ingestion.IngestOptions{
 				DryRun:     dryRun,
 				ApplyLinks: false,
 				// The CLI is user-initiated, so local-file ingestion is allowed
 				// here (it is not on the agent-driven MCP path).
 				AllowLocalFiles: true,
-			})
+			}
 
 			out := cmd.OutOrStdout()
+
+			// Live spinner on a TTY (fetch+embed can take a while); plain path
+			// below stays canonical.
+			if !asJSON && tui.Interactive(out) {
+				var res ingestion.IngestResult
+				if err := tui.Spin(out, "ingesting "+args[0]+"…", func() (string, error) {
+					var ierr error
+					res, ierr = pipeline.Ingest(cmd.Context(), args[0], opts)
+					if ierr != nil {
+						return "", ierr
+					}
+					return "ingested " + args[0], nil
+				}); err != nil {
+					return err
+				}
+				printIngestResult(out, res)
+				printIngestBudget(cmd.Context(), out, mgr, deps.name)
+				return nil
+			}
+
+			res, runErr := pipeline.Ingest(cmd.Context(), args[0], opts)
 			if asJSON {
 				enc := json.NewEncoder(out)
 				enc.SetIndent("", "  ")

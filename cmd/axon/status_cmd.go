@@ -8,6 +8,7 @@ import (
 
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/tokens"
+	"github.com/jandro-es/axon/internal/tui"
 	"github.com/jandro-es/axon/internal/ui"
 )
 
@@ -49,6 +50,23 @@ func newStatusCmd(gf *globalFlags) *cobra.Command {
 				enc.SetIndent("", "  ")
 				return enc.Encode(st)
 			}
+			// Styled table on a TTY; the plain lines below stay canonical.
+			if tui.Interactive(out) {
+				guard := ui.IconOK + " ok"
+				if st.GuardPaused {
+					guard = fmt.Sprintf("%s PAUSED (≥ %d%%) %s", ui.IconWarn, st.GuardPct, st.GuardReason)
+				}
+				rows := [][]string{
+					{"day", fmt.Sprintf("%d", st.Day.Used), fmt.Sprintf("%d", st.Day.Limit), fmt.Sprintf("%.1f%%", st.Day.Pct)},
+					{"week", fmt.Sprintf("%d", st.Week.Used), fmt.Sprintf("%d", st.Week.Limit), fmt.Sprintf("%.1f%%", st.Week.Pct)},
+				}
+				fmt.Fprintf(out, "%s %s\n", ui.For(out).Header(ui.IconChart, "axon status"),
+					ui.For(out).Dim(fmt.Sprintf("— profile %q (auth: %s)", deps.name, deps.profile.Claude.AuthMode)))
+				tui.Table(out, []string{"WINDOW", "USED", "LIMIT", "PCT"}, rows)
+				fmt.Fprintf(out, "budget-guard: %s\n", guard)
+				return nil
+			}
+
 			s := ui.For(out)
 			fmt.Fprintf(out, "%s %s\n",
 				s.Header(ui.IconChart, "axon status"),

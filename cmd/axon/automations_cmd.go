@@ -14,6 +14,7 @@ import (
 	"github.com/jandro-es/axon/internal/automations"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
+	"github.com/jandro-es/axon/internal/tui"
 	"github.com/jandro-es/axon/internal/ui"
 )
 
@@ -51,6 +52,31 @@ func newAutomationsCmd(gf *globalFlags) *cobra.Command {
 				enc := json.NewEncoder(out)
 				enc.SetIndent("", "  ")
 				return enc.Encode(views)
+			}
+			// Styled table on a TTY; the plain renderer stays canonical.
+			if tui.Interactive(out) {
+				rows := make([][]string, 0, len(views))
+				for _, v := range views {
+					state := "disabled"
+					switch {
+					case v.Enabled:
+						state = "enabled"
+					case v.ConfigEnabled && !v.Allowed:
+						state = "blocked"
+					}
+					model := v.Model
+					if model == "" {
+						model = "none"
+					}
+					last := "never run"
+					if v.LastRun != nil {
+						last = v.LastRun.Status
+					}
+					rows = append(rows, []string{v.Name, state, model, v.Schedule, last})
+				}
+				fmt.Fprintln(out, ui.For(out).Header(ui.IconRobot, fmt.Sprintf("axon automations — profile %q", deps.name)))
+				tui.Table(out, []string{"NAME", "STATE", "MODEL", "SCHEDULE", "LAST RUN"}, rows)
+				return nil
 			}
 			renderAutomations(out, deps.name, views)
 			return nil

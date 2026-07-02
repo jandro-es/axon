@@ -11,6 +11,7 @@ import (
 
 	"github.com/jandro-es/axon/internal/automations"
 	"github.com/jandro-es/axon/internal/config"
+	"github.com/jandro-es/axon/internal/tui"
 	"github.com/jandro-es/axon/internal/ui"
 )
 
@@ -41,9 +42,28 @@ func newRunCmd(gf *globalFlags) *cobra.Command {
 			}
 
 			engine := deps.buildEngine(nil)
+			w := cmd.OutOrStdout()
+
+			// Live spinner on a TTY; plain path below stays canonical.
+			if !asJSON && tui.Interactive(w) {
+				var out automations.Outcome
+				_ = tui.Spin(w, "running "+name+"…", func() (string, error) {
+					var rerr error
+					out, rerr = engine.Run(cmd.Context(), a, dryRun)
+					if rerr != nil {
+						return "", rerr
+					}
+					return name + ": " + out.Status, nil
+				})
+				printOutcome(w, out)
+				if out.Status == "failed" {
+					return fmt.Errorf("%s", out.Err)
+				}
+				return nil
+			}
+
 			out, runErr := engine.Run(cmd.Context(), a, dryRun)
 
-			w := cmd.OutOrStdout()
 			if asJSON {
 				enc := json.NewEncoder(w)
 				enc.SetIndent("", "  ")
