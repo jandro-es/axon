@@ -43,6 +43,16 @@ func (c ClaudeEnricher) Enrich(ctx context.Context, in EnrichInput) (Enrichment,
 		System:       enrichSystemPrompt,
 		Messages:     []tokens.Message{{Role: "user", Content: prompt}},
 		BudgetTokens: c.BudgetTokens,
+		// Structured-output contract (ADR-015): local providers use the schema
+		// (Apple guided generation, Ollama JSON mode) and the validator moves
+		// parse failures into the chokepoint's retry/fallback ladder.
+		OutputSchema: json.RawMessage(`{"properties":{
+			"title":{"type":"string"},"summary":{"type":"string"},
+			"tags":{"type":"array"},"links":{"type":"array"}}}`),
+		ValidateOutput: func(text string) error {
+			_, perr := parseEnrichment(text, in.Related)
+			return perr
+		},
 	})
 	if err != nil {
 		// Budget-deferred/denied or transport error: degrade to heuristic so the

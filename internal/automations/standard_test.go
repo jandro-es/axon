@@ -285,3 +285,13 @@ func mustReindex(t *testing.T, rc RunCtx) {
 		t.Fatal(err)
 	}
 }
+
+// TestInboxTriageEmptyReplyFails proves the ADR-015 output validator turns an
+// empty classification into a failed run instead of a silent empty queue line.
+func TestInboxTriageEmptyReplyFails(t *testing.T) {
+	rc, fake := newRC(t, map[string]string{"00-Inbox/item.md": "capture me\n"})
+	fake.Reply = ""
+	if _, err := (InboxTriage{}).Run(context.Background(), rc); err == nil {
+		t.Fatal("empty model reply should fail the triage run")
+	}
+}

@@ -119,3 +119,40 @@ func TestParseEnrichmentGroundsLinks(t *testing.T) {
 		t.Errorf("links = %v, want only the grounded real.md", enr.SuggestedLinks)
 	}
 }
+
+// TestClaudeEnricherValidationFailureDegrades proves that unparseable model
+// output is now caught by the chokepoint validator (ADR-015) and the enricher
+// still degrades to the deterministic heuristic rather than failing ingestion.
+func TestClaudeEnricherValidationFailureDegrades(t *testing.T) {
+	ctx := context.Background()
+	fake := agent.NewFake()
+	fake.Reply = "sorry, no JSON today"
+	d, err := db.Open(db.MemoryDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if _, err := db.Migrate(d); err != nil {
+		t.Fatal(err)
+	}
+	mgr := tokens.New(d, fake, nil, nil, tokens.Config{
+		Profile: "test", AuthMode: "subscription",
+		Models: config.ModelsConfig{Classify: "haiku", Routine: "sonnet", Synthesis: "opus"},
+		Limits: config.LimitsConfig{DailyTokens: 1_000_000, WeeklyTokens: 5_000_000},
+	})
+
+	enr, err := ClaudeEnricher{Manager: mgr}.Enrich(ctx, EnrichInput{
+		Title:    "Fallback Title",
+		Markdown: "First sentence here. Second sentence follows.",
+		Related:  []string{"x.md"},
+	})
+	if err != nil {
+		t.Fatalf("enrich should degrade gracefully, got error: %v", err)
+	}
+	if enr.Kind == "claude" {
+		t.Errorf("expected heuristic fallback, got model enrichment: %+v", enr)
+	}
+	if enr.Title != "Fallback Title" {
+		t.Errorf("title = %q, want Fallback Title", enr.Title)
+	}
+}
