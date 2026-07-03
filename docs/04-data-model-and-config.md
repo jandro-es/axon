@@ -196,7 +196,18 @@ profiles:
     # `axon configure embeddings apple --reindex` (or `... embeddings ollama
     # --model M --dim N --reindex`) — persists, converges and re-embeds in one
     # flow. `axon init --embeddings <p>` remains for provisioning-time choice.
-    models:   { classify: claude-haiku-4-5, routine: claude-sonnet-4-6, synthesis: claude-opus-4-8 }  # passed to `claude -p --model`; plan tier governs availability
+    # models: per-tier model with provider-prefixed strings (ADR-015). A bare
+    # string is a Claude model (passed to `claude -p --model`; plan tier governs
+    # availability). "ollama:<model>" routes the tier to a local Ollama chat
+    # model; "apple" routes classify to the Apple Foundation Models on-device
+    # model (macOS 26+, Apple Silicon, Apple Intelligence; classify tier only).
+    # synthesis is always Claude (validated). Local calls appear in token_ledger
+    # with provider-prefixed model strings (ollama:qwen3:8b, apple-foundation-v1),
+    # cost_usd null, and do NOT accrue to budget_windows (FR-78) — budgets keep
+    # meaning Claude quota. Optional keys: ollama_host (default
+    # http://localhost:11434, independent of embeddings.host), local_fallback
+    # (claude|fail, default claude — FR-79), apple_helper (helper path override).
+    models:   { classify: claude-haiku-4-5, routine: claude-sonnet-4-6, synthesis: claude-opus-4-8 }
     limits:   { daily_tokens: 1_500_000, weekly_tokens: 8_000_000, guard_pause_at_pct: 80 }           # estimated tokens; no dollar cap here
     retrieval: { top_k: 8, max_context_tokens: 12_000 }
     policy:

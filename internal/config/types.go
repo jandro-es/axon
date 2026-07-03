@@ -155,12 +155,23 @@ type EmbeddingsConfig struct {
 	Helper string `yaml:"helper,omitempty"`
 }
 
-// ModelsConfig names the preferred Claude model per operation class. These are
-// passed to `claude -p --model`; actual availability follows the plan tier.
+// ModelsConfig names the preferred model per operation class. Claude strings
+// are passed to `claude -p --model`; "ollama:<model>" and "apple" route the
+// tier to a local provider through the same token-manager chokepoint
+// (ADR-015). synthesis is always Claude (validated).
 type ModelsConfig struct {
 	Classify  string `yaml:"classify" validate:"required"`
 	Routine   string `yaml:"routine" validate:"required"`
 	Synthesis string `yaml:"synthesis" validate:"required"`
+	// OllamaHost is the Ollama server for local chat tiers (default
+	// http://localhost:11434). Independent of embeddings.host.
+	OllamaHost string `yaml:"ollama_host,omitempty"`
+	// LocalFallback governs local-provider failures: "claude" (default)
+	// falls forward through the normal budget path; "fail" surfaces the error.
+	LocalFallback string `yaml:"local_fallback,omitempty"`
+	// AppleHelper overrides the Foundation Models helper binary path.
+	// Default: DefaultAppleLMHelperPath(). Ignored unless a tier is "apple".
+	AppleHelper string `yaml:"apple_helper,omitempty"`
 }
 
 // LimitsConfig is the token-awareness budget. On subscription/enterprise these

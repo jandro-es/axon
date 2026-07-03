@@ -6,10 +6,28 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
-Developer-experience, observability, and installation improvements. No changes to
-the two cardinal rules or the vault contract.
+Developer-experience, observability, and installation improvements. Cardinal
+rule 1 is generalized by ADR-015 (no generative call — Claude or local —
+bypasses the token manager); the vault contract is unchanged.
 
 ### Added
+
+- **Local model routing (ADR-015, FR-77…FR-80)** — the `classify` and
+  `routine` tiers can now be served by local providers via provider-prefixed
+  model strings: `models.classify: "ollama:qwen3:8b"` (local Ollama chat) or
+  `models.classify: "apple"` (Apple Foundation Models on-device model;
+  macOS 26+, Apple Silicon, Apple Intelligence, classify tier only — delivered
+  with the same compiled-at-init Swift helper pattern as Apple embeddings).
+  Local calls run through the token-manager chokepoint and are fully ledgered
+  (provider-prefixed model strings, `cost_usd` null) but **budget-exempt**:
+  they never consume the day/week windows or trigger defer/deny/downgrade —
+  budgets keep meaning Claude quota. On local failure or schema-invalid
+  output, `models.local_fallback` (default `claude`) retries locally once and
+  then falls forward to Claude through the normal budget path, or fails
+  visibly when set to `fail`. `axon configure models` gained a provider step
+  with convergence probes, and `axon doctor`/`axon init` report and converge
+  the configured local providers. New optional config: `models.ollama_host`,
+  `models.local_fallback`, `models.apple_helper`.
 
 - **Build versioning you can check** — `axon version` reports the version,
   commit, build date, and Go/OS/arch, with `--short` for scripts; `axon --version`

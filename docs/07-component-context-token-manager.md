@@ -60,11 +60,13 @@ Callers **never** construct a raw Claude request; they call `Run()` (or `Authori
 - Hard rule: **no automation or tool sends the whole vault**. If a task seems to need everything, it needs compaction first, or a narrower query.
 - Prompt-caching: stable preambles (the `CLAUDE.md`-style schema, long reference blocks) are placed first and marked cacheable so repeat calls read cache instead of re-paying. Record cache hits in the ledger.
 
-## 6. Model selection (FR-45)
+## 6. Model selection (FR-45, FR-77…FR-80)
 
-- Per-operation model from config (`models.classify|routine|synthesis`), overridable per automation and per MCP tool. On the Claude Code path it is passed as `claude -p --model`; **actual availability follows the plan tier** (e.g. Opus access and rate limits differ by Max tier), so treat it as a preference and degrade gracefully if a model isn't available.
+- Per-operation model from config (`models.classify|routine|synthesis`), overridable per automation and per MCP tool. Each tier string resolves to a **(provider, model)** pair (ADR-015): a bare string is a Claude model (passed as `claude -p --model`; **actual availability follows the plan tier**, so treat it as a preference and degrade gracefully); `ollama:<model>` routes the tier to a local Ollama chat model; `apple` routes `classify` to the Apple Foundation Models on-device model. `synthesis` is always Claude (validated). A router inside the chokepoint dispatches to the right adapter — `tokens` remains the only importer of `agent`, and every call (local included) is ledgered.
+- **Local calls are budget-exempt but fully observable (FR-78):** they never consume the day/week windows, are never deferred/denied/downgraded, and add no budget-guard pressure — budgets keep meaning Claude quota. Ledger rows carry provider-prefixed model strings with `cost_usd` null.
+- **Local fallback ladder (FR-79):** on a local transport failure or schema-invalid output (callers may attach `ValidateOutput`/`OutputSchema` to an `AgentCall`), the manager retries locally once, then per `models.local_fallback` either re-routes the same call to the cheapest Claude tier at/above the requested one through the normal budget-checked path (`claude`, the default) or fails visibly (`fail`). An input exceeding the Apple on-device context cap short-circuits straight to the fallback. Every failed local attempt still writes a `:failed` ledger row.
 - Defaults: **Haiku** for classification/triage/short labels; **Sonnet** for routine edits/daily logs; **Opus** for weekly synthesis/distillation. The work (enterprise) profile may pin synthesis→Sonnet to conserve the plan's limits.
-- `Authorize()`'s `downgrade` path can pick a cheaper/lighter model automatically when configured to.
+- `Authorize()`'s `downgrade` path can pick a cheaper/lighter model automatically when configured to — it only ever lands on Claude tiers (a local tier is neither a downgrade source nor target).
 
 ## 7. Compaction as a token strategy (FR-44)
 

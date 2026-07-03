@@ -4,11 +4,14 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/jandro-es/axon/internal/clients"
 	"github.com/jandro-es/axon/internal/config"
@@ -89,6 +92,8 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 	if cfg != nil {
 		if p, ok := cfg.Profiles[activeProfile]; ok {
 			checks = append(checks, embeddingsCheck(p))
+			// 4b. Locally-routed model tiers (ADR-015), only when configured.
+			checks = append(checks, localModelsCheck(p)...)
 			embChecked = true
 		}
 	}
@@ -134,6 +139,63 @@ func embeddingsCheck(p config.Profile) Check {
 	}
 	return binaryCheck("ollama", "ollama",
 		"Ollama found", "ollama not found on PATH (needed for local embeddings in Phase 2)")
+}
+
+// localModelsCheck reports the state of any locally-routed model tier
+// (ADR-015): the Ollama chat host/model for "ollama:" tiers, the compiled
+// Foundation Models helper for "apple". Informational (warnings only): a
+// broken local provider degrades to models.local_fallback at runtime.
+// Checks are stat/HTTP-based — core never imports agent (dependency rule:
+// tokens is the only importer).
+func localModelsCheck(p config.Profile) []Check {
+	var checks []Check
+	m := p.Models
+	tiers := []struct{ tier, value string }{
+		{"classify", m.Classify},
+		{"routine", m.Routine},
+	}
+	for _, t := range tiers {
+		ref := config.ParseModelRef(t.value)
+		name := "local-model:" + t.tier
+		switch ref.Provider {
+		case config.ProviderOllama:
+			host := m.OllamaHost
+			if host == "" {
+				host = "http://localhost:11434"
+			}
+			host = strings.TrimRight(host, "/")
+			ctx := context.Background()
+			if !ollamaReachable(ctx, host) {
+				checks = append(checks, Check{name, StatusWarn,
+					fmt.Sprintf("Ollama not reachable at %s — %s calls will use models.local_fallback (%s)", host, t.tier, m.Fallback())})
+				continue
+			}
+			if !ollamaModelPresent(ctx, host, ref.Model) {
+				checks = append(checks, Check{name, StatusWarn,
+					fmt.Sprintf("model %q not pulled — run `ollama pull %s` (until then %s calls use models.local_fallback: %s)", ref.Model, ref.Model, t.tier, m.Fallback())})
+				continue
+			}
+			checks = append(checks, Check{name, StatusOK,
+				fmt.Sprintf("ollama model %q available at %s", ref.Model, host)})
+		case config.ProviderApple:
+			if runtime.GOOS != "darwin" {
+				checks = append(checks, Check{name, StatusWarn,
+					fmt.Sprintf("tier configured as apple but this machine is not a mac — calls will use models.local_fallback (%s)", m.Fallback())})
+				continue
+			}
+			helper := m.AppleHelper
+			if helper == "" {
+				helper = config.DefaultAppleLMHelperPath()
+			}
+			if st, err := os.Stat(helper); err != nil || st.Mode()&0o111 == 0 {
+				checks = append(checks, Check{name, StatusWarn,
+					fmt.Sprintf("Apple Foundation Models helper not built at %s — run `axon init` or `axon configure models classify apple` (requires Xcode CLT)", helper)})
+				continue
+			}
+			checks = append(checks, Check{name, StatusOK, "Apple Foundation Models helper present: " + helper})
+		}
+	}
+	return checks
 }
 
 // interopCheck reports the optional external-MCP backend posture (FR-54). It is

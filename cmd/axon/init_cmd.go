@@ -65,12 +65,13 @@ func newInitCmd(gf *globalFlags) *cobra.Command {
 			}
 			binary, _ := os.Executable()
 			opts := core.InitOptions{
-				Config:      cfg,
-				ProfileName: name,
-				Profile:     profile,
-				Out:         out,
-				ConfigPath:  absCfg,
-				BinaryPath:  binary,
+				Config:          cfg,
+				ProfileName:     name,
+				Profile:         profile,
+				Out:             out,
+				ConfigPath:      absCfg,
+				BinaryPath:      binary,
+				ConvergeAppleLM: convergeAppleLM,
 			}
 			if asJSON {
 				opts.Out = nil // suppress streaming text; emit JSON only

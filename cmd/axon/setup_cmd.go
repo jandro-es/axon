@@ -141,6 +141,7 @@ func newSetupCmd(gf *globalFlags) *cobra.Command {
 			rep, err := core.Init(cmd.Context(), core.InitOptions{
 				Config: cfg, ProfileName: name, Profile: profile,
 				Out: out, ConfigPath: absCfg, BinaryPath: binary,
+				ConvergeAppleLM: convergeAppleLM,
 			})
 			if err != nil {
 				return err
