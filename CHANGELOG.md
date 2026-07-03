@@ -12,6 +12,17 @@ bypasses the token manager); the vault contract is unchanged.
 
 ### Added
 
+- **Universal capture (ADR-016, FR-26 + FR-81…FR-83)** — the new `capture`
+  automation turns `00-Inbox/` into a capture funnel: paste a URL on its own
+  line in any inbox note, or drop a PDF/file into the folder, and AXON ingests
+  it within minutes through the standard pipeline (egress-policied, deduped,
+  ledgered), files the result under `03-Resources/Knowledge/`, and moves the
+  original wikilink-safely to `04-Archive/Capture/YYYY-MM/` — nothing is ever
+  deleted, and inbox notes are never modified. Ticks are change-gated on the
+  inbox listing; failures are remembered (no retry spam) and surfaced once in
+  the review queue. Mobile capture works with zero mobile code via vault sync.
+  New optional config: `capture.enrich` (heuristic default | claude via the
+  chokepoint) and `capture.archive_dir`.
 - **Local model routing (ADR-015, FR-77…FR-80)** — the `classify` and
   `routine` tiers can now be served by local providers via provider-prefixed
   model strings: `models.classify: "ollama:qwen3:8b"` (local Ollama chat) or

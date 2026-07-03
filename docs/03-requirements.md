@@ -12,8 +12,9 @@ Requirements are the build contract. Each is testable. Priority: **M** (must, v1
 > One deliberate design deviation: FR-52's PostToolUse hook is a documented
 > no-op — every Claude round-trip is already ledgered at the token-manager
 > chokepoint, so a per-tool hook would double-count (see docs/08 §2). The
-> remaining **C** items (FR-26 capture-by-Inbox, FR-64 chart CSV/JSON export;
-> NFR-13 is done) are explicitly post-v1.
+> remaining **C** item (FR-64 chart CSV/JSON export; NFR-13 is done) is
+> explicitly post-v1. FR-26 capture-by-Inbox is implemented by the `capture`
+> automation (ADR-016).
 
 ## Functional requirements
 
@@ -49,7 +50,7 @@ Requirements are the build contract. Each is testable. Priority: **M** (must, v1
 | FR-23 | M | Chunk and **embed** via the embedding provider (Ollama default), upsert vectors into `sqlite-vec` and text into FTS5; store source + chunk metadata. |
 | FR-24 | M | Ingestion is idempotent on content hash; re-ingesting updates the note and re-embeds only changed chunks. |
 | FR-25 | M | **Hybrid search** (lexical FTS5 + semantic vector) with rank fusion, exposed via CLI and MCP, returning note refs + snippets + scores. |
-| FR-26 | C | Capture-by-Inbox: a special Inbox note/format where pasted URLs are auto-detected and queued for ingestion on the next ingestion tick. |
+| FR-26 | C | Capture-by-Inbox: a special Inbox note/format where pasted URLs are auto-detected and queued for ingestion on the next ingestion tick. **Implemented** by the `capture` automation (ADR-016; own-line URLs in any `00-Inbox` note, plus dropped files — FR-81…FR-83). |
 
 ### Automation engine
 
@@ -111,6 +112,22 @@ command, and the per-client `axon doctor` checks).
 | FR-74 | M | **Multi-client MCP wiring.** `axon mcp install --client <code\|desktop>` (and `--print`) generates/installs a client's MCP registration. For **Claude Desktop** it writes a profile-scoped `mcpServers` entry into `claude_desktop_config.json` **non-destructively**, so Desktop can use AXON's vault + knowledge + token tools. (Spec in Component 13.) |
 | FR-75 | S | **Client-capability honesty.** AXON documents and `axon doctor`-reports that Claude Desktop receives the MCP **tools** but not hooks/skills/subagents/headless automations. AXON's own tools remain wikilink-safe and path-sandboxed in the server, so vault safety for AXON operations does **not** depend on the client's `PreToolUse` hook. |
 | FR-76 | C | **Concurrent clients.** Multiple Claude clients (Code + Desktop) may target the same profile/vault; the daemon remains the single owner of scheduled writes, and the single-writer SQLite caveat is documented. |
+
+### Universal capture *(built)*
+
+FR-81…FR-83 are **implemented** (ADR-016; spec in
+`docs/superpowers/specs/2026-07-03-universal-capture-design.md`): the
+`capture` automation (registry + `*/5 * * * *` starter schedule), inbox
+listing change gate, failure memory in `automation_state`, archive-after-
+ingest via the wikilink-safe move, and the `capture.enrich` toggle. The same
+slice implements **FR-26 (capture-by-Inbox)**. Priorities are relative to
+this slice.
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-81 | M | **File-drop capture.** Non-markdown files dropped into `00-Inbox/` are ingested through the pipeline (`AllowLocalFiles`, sandboxed to files physically enumerated in the inbox listing — paths inside notes are never file targets) and, on success, the original is moved **wikilink-safely** to `capture.archive_dir` (default `04-Archive/Capture/YYYY-MM/`). Nothing is ever deleted. |
+| FR-82 | M | **Capture bookkeeping.** Ticks are change-gated on the inbox listing hash; failed items are remembered in automation state and skipped until they change, surfaced once in `.axon/review-queue.md`, and emitted as events; every capture ingest is observable through the standard run rows and `ingest.*` events. Inbox notes are never modified by capture (cardinal rule 2). |
+| FR-83 | S | **Capture enrichment toggle.** `capture.enrich: heuristic \| claude` (default `heuristic`, zero tokens). `claude` routes enrichment through the token-manager chokepoint on the `routine` tier (ADR-015 local routing and fallback apply) and degrades to heuristic under budget denial. |
 
 ### Local model routing *(built)*
 

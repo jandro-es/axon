@@ -79,6 +79,7 @@ profiles:
       link-suggester:    { enabled: true,  schedule: "0 1 * * *",       model: classify,  budget_tokens: 60_000 }
       memory-distill:    { enabled: true,  schedule: "0 5 * * *",       model: synthesis, budget_tokens: 120_000 }
       budget-guard:      { enabled: true,  schedule: "*/15 * * * *",    model: none,      budget_tokens: 0 }
+      capture:           { enabled: true,  schedule: "*/5 * * * *",     model: none,      budget_tokens: 0, catch_up: run-once }
 
     memory:
       inject: true

@@ -49,9 +49,13 @@ func (c *Config) Validate() error {
 	if _, ok := c.Profiles[c.ActiveProfile]; !ok {
 		return fmt.Errorf("active_profile %q is not defined in profiles", c.ActiveProfile)
 	}
-	// Local-model routing rules (ADR-015) on every profile's models block.
+	// Local-model routing (ADR-015) and capture (ADR-016) rules on every
+	// profile's respective blocks.
 	for name, p := range c.Profiles {
 		if err := validateLocalRouting(p.Models); err != nil {
+			return fmt.Errorf("config validation failed: profile %q: %w", name, err)
+		}
+		if err := validateCapture(p.Capture); err != nil {
 			return fmt.Errorf("config validation failed: profile %q: %w", name, err)
 		}
 	}
