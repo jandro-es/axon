@@ -8,7 +8,10 @@
 // deliberately small so a local-model adapter can satisfy it later.
 package agent
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+)
 
 // Usage is the post-hoc accounting reported for a single Claude call. On
 // subscription/enterprise these are token counts (cost is left to api_key
@@ -20,14 +23,21 @@ type Usage struct {
 	CacheWrite   int
 }
 
-// Request is one unit of work sent to Claude. Operation labels the call site
+// Request is one unit of work sent to a model. Operation labels the call site
 // (e.g. "ingest.enrich", "automation.daily-log") for ledgering. Model is the
-// resolved model string passed to `claude -p --model`.
+// resolved model string (passed to `claude -p --model`, or the Ollama model
+// tag, or the Apple model identifier).
 type Request struct {
 	Operation string
 	Model     string
 	System    string
 	Prompt    string
+	// JSONOutput hints JSON mode to providers that support it (Ollama
+	// format:"json"). Claude adapters ignore it.
+	JSONOutput bool
+	// OutputSchema optionally constrains output via guided generation
+	// (Apple Foundation Models). nil = plain text. Raw JSON Schema.
+	OutputSchema json.RawMessage
 }
 
 // Response is the result of a Claude call plus the usage to be ledgered.
