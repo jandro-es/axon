@@ -129,10 +129,13 @@ this slice.
 | FR-82 | M | **Capture bookkeeping.** Ticks are change-gated on the inbox listing hash; failed items are remembered in automation state and skipped until they change, surfaced once in `.axon/review-queue.md`, and emitted as events; every capture ingest is observable through the standard run rows and `ingest.*` events. Inbox notes are never modified by capture (cardinal rule 2). |
 | FR-83 | S | **Capture enrichment toggle.** `capture.enrich: heuristic \| claude` (default `heuristic`, zero tokens). `claude` routes enrichment through the token-manager chokepoint on the `routine` tier (ADR-015 local routing and fallback apply) and degrades to heuristic under budget denial. |
 
-### Proactive layer *(planned — spec approved 2026-07-04, not yet built)*
+### Proactive layer *(built)*
 
-FR-88…FR-90 trace to ADR-018 and the spec in
-`docs/superpowers/specs/2026-07-04-proactive-layer-design.md`. Priorities are
+FR-88…FR-90 are **implemented** (ADR-018; spec in
+`docs/superpowers/specs/2026-07-04-proactive-layer-design.md`): the
+`briefing` and `resurfacer` automations (`internal/automations/proactive.go`),
+the SessionStart pointer, and the shared `db.NoteMeanVectors`/`db.Cosine`
+similarity primitives (also backing the dashboard graph). Priorities are
 relative to this slice.
 
 | ID | Pri | Requirement |

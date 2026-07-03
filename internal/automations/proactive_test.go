@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
 )
 
@@ -201,5 +202,17 @@ func TestResurfacerDryRunWritesNothing(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(rc.Vault.Root(), ".axon", "review-queue.md")); !os.IsNotExist(err) {
 		t.Fatal("dry-run wrote the review queue")
+	}
+}
+
+func TestProactiveRegistered(t *testing.T) {
+	p := config.Profile{}
+	for _, name := range []string{"briefing", "resurfacer"} {
+		if _, err := Get(p, name); err != nil {
+			t.Fatalf("%s not registered: %v", name, err)
+		}
+		if Purpose(name) == "(no description)" {
+			t.Fatalf("%s has no catalog purpose", name)
+		}
 	}
 }

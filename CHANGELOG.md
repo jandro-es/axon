@@ -12,6 +12,15 @@ bypasses the token manager); the vault contract is unchanged.
 
 ### Added
 
+- **Proactive layer (ADR-018, FR-88…FR-90)** — AXON now comes to you. A daily
+  `briefing` automation writes an `axon:briefing` block into the daily note
+  (notes changed, new sources, automation activity, review queue, budget)
+  plus a short narrative on the routine tier — local-routable, budget-capped,
+  degrading to facts-only under pressure — and every Claude session opens
+  with a one-line pointer to it. A weekly `resurfacer` proposes review-queue
+  connections between what you're working on now and notes dormant for 90+
+  days, by mean-chunk-vector similarity (shared with the graph view), with
+  persistent proposal memory so nothing is suggested twice. Zero model calls.
 - **Agentic automations (ADR-017, FR-84…FR-87)** — knowledge-digest and
   compaction now run Claude headlessly **with AXON's read-only MCP tools**
   (vault/knowledge search, note reads, backlinks): the digest actually reads
