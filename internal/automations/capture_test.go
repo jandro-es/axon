@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/ingestion"
 )
 
@@ -287,5 +288,35 @@ func TestCaptureArchiveCollisionSuffix(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(pre, "notes-2.txt")); err != nil {
 		t.Fatalf("collision suffix missing: %v", err)
+	}
+}
+
+func TestCaptureRegisteredAndSchedulable(t *testing.T) {
+	profile := config.Profile{
+		Automations: map[string]config.Automation{
+			"capture": {Enabled: true, Schedule: "*/5 * * * *", CatchUp: "run-once"},
+		},
+	}
+	if _, err := Get(profile, "capture"); err != nil {
+		t.Fatalf("capture not in registry: %v", err)
+	}
+	if Purpose("capture") == "(no description)" {
+		t.Fatal("capture has no catalog purpose")
+	}
+	scheds := Schedulables(profile)
+	if len(scheds) != 1 || scheds[0].Automation.Name() != "capture" {
+		t.Fatalf("schedulables = %+v, want capture", scheds)
+	}
+}
+
+// TestInboxTriageIgnoresDroppedFiles is the spec's triage regression: a PDF in
+// the inbox must never be read as a note. vault.List is markdown-only, so this
+// documents the guarantee.
+func TestInboxTriageIgnoresDroppedFiles(t *testing.T) {
+	rc, _ := newRC(t, nil)
+	writeInbox(t, rc.Vault.Root(), map[string]string{"paper.pdf": "%PDF-not-markdown"})
+	items := inboxItems(context.Background(), rc)
+	if len(items) != 0 {
+		t.Fatalf("triage items = %v, want none for a dropped PDF", items)
 	}
 }

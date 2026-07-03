@@ -20,6 +20,7 @@ var purposes = map[string]string{
 	"compaction":        "Distills oversized notes into summary blocks, preserving the original prose.",
 	"knowledge-digest":  "Weekly synthesis of newly ingested sources: surfaces connections and proposes MOC additions.",
 	"memory-distill":    "Maintains the durable personal-memory note: distils new entries and compacts old ones.",
+	"capture":           "Ingests own-line URLs from Inbox notes and files dropped into 00-Inbox, archiving originals. The FR-26 capture funnel; no model call (enrichment optional via capture.enrich).",
 }
 
 // Purpose returns the human description for an automation, or a generic fallback.

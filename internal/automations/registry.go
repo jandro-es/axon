@@ -21,6 +21,7 @@ func Registry(profile config.Profile) map[string]Automation {
 		Compaction{}.Name():       Compaction{},
 		KnowledgeDigest{}.Name():  KnowledgeDigest{},
 		MemoryDistill{}.Name():    MemoryDistill{},
+		Capture{}.Name():          Capture{},
 	}
 	return reg
 }
