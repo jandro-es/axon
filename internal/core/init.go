@@ -64,6 +64,11 @@ type InitOptions struct {
 	// CheckEmbeddingModel optionally overrides the Ollama reachability probe so
 	// tests can run hermetically. If nil, a real short-timeout probe is used.
 	CheckEmbeddingModel func(ctx context.Context, e config.EmbeddingsConfig) StepResult
+	// ConvergeAppleLM compiles + probes the Apple Foundation Models helper when
+	// the classify tier is "apple" (ADR-015). It is injected by cmd/axon — the
+	// composer is the only place outside tokens allowed to import agent — so
+	// core stays agent-free. If nil, the step degrades to a stat-only check.
+	ConvergeAppleLM func(ctx context.Context, helperPath string) error
 	// OnStep, when set, receives every step result in order as it completes —
 	// the live-TUI hook. Plain text still streams to Out independently.
 	OnStep func(StepResult)
@@ -127,6 +132,13 @@ func Init(ctx context.Context, opts InitOptions) (InitReport, error) {
 		check = probeEmbeddingModel
 	}
 	add(check(ctx, opts.Profile.Embeddings))
+
+	// Step 5b — Apple Foundation Models helper, only when the classify tier is
+	// routed to the on-device model (ADR-015). Warnings only — a local provider
+	// that can't converge degrades to models.local_fallback at runtime.
+	if config.ParseModelRef(opts.Profile.Models.Classify).Provider == config.ProviderApple {
+		add(appleLMStep(ctx, opts))
+	}
 
 	// Step 6 — Vault scaffold (only where missing; never clobbers).
 	scaffoldStep, vfs := vaultScaffoldStep(paths)
@@ -368,6 +380,30 @@ func probeAppleEmbedding(ctx context.Context, e config.EmbeddingsConfig, d apple
 		return StepResult{"embeddings", StepDone, fmt.Sprintf("Apple helper compiled at %s (dim %d verified)", helper, e.Dim)}
 	}
 	return StepResult{"embeddings", StepDone, fmt.Sprintf("Apple helper ready (dim %d verified)", e.Dim)}
+}
+
+// appleLMStep converges the Apple Foundation Models helper (ADR-015). With
+// ConvergeAppleLM injected (the normal `axon init` path) it compiles the
+// helper and probes on-device availability; without it (library callers,
+// tests) it degrades to a stat-only report. Never blocks init.
+func appleLMStep(ctx context.Context, opts InitOptions) StepResult {
+	m := opts.Profile.Models
+	helper := m.AppleHelper
+	if helper == "" {
+		helper = config.DefaultAppleLMHelperPath()
+	}
+	if opts.ConvergeAppleLM != nil {
+		if err := opts.ConvergeAppleLM(ctx, helper); err != nil {
+			return StepResult{"local-models", StepWarn,
+				fmt.Sprintf("Apple Foundation Models helper not converged: %v — classify calls will use models.local_fallback (%s)", err, m.Fallback())}
+		}
+		return StepResult{"local-models", StepDone, "Apple Foundation Models helper ready at " + helper}
+	}
+	if st, err := os.Stat(helper); err != nil || st.Mode()&0o111 == 0 {
+		return StepResult{"local-models", StepWarn,
+			fmt.Sprintf("Apple Foundation Models helper not built at %s — run `axon init` (requires Xcode CLT)", helper)}
+	}
+	return StepResult{"local-models", StepAlready, "Apple Foundation Models helper present: " + helper}
 }
 
 // ollamaReachable reports whether the Ollama API answers at host.

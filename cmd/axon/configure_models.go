@@ -30,18 +30,12 @@ func convergeModelTier(ctx context.Context, out io.Writer, m config.ModelsConfig
 			fmt.Fprintln(out, "warning: apple tier configured on a non-mac — calls on this machine will use models.local_fallback")
 			return nil
 		}
-		if !agent.SwiftAvailable() {
-			return fmt.Errorf("swiftc not found — install Xcode Command Line Tools (xcode-select --install)")
-		}
 		helper := m.AppleHelper
 		if helper == "" {
 			helper = config.DefaultAppleLMHelperPath()
 		}
 		return tui.Spin(out, "compiling + probing the Apple Foundation Models helper…", func() (string, error) {
-			if _, err := agent.EnsureAppleLMHelper(ctx, helper); err != nil {
-				return "", err
-			}
-			if err := agent.NewAppleFM(helper).CheckAvailability(ctx); err != nil {
+			if err := convergeAppleLM(ctx, helper); err != nil {
 				return "", err
 			}
 			return "on-device model available", nil
@@ -49,4 +43,20 @@ func convergeModelTier(ctx context.Context, out io.Writer, m config.ModelsConfig
 	default:
 		return nil
 	}
+}
+
+// convergeAppleLM compiles + probes the Apple Foundation Models helper — the
+// compile-capable converge injected into core.Init as ConvergeAppleLM
+// (ADR-015; cmd is the composer allowed to import agent, core is not).
+func convergeAppleLM(ctx context.Context, helper string) error {
+	if runtime.GOOS != "darwin" {
+		return fmt.Errorf("apple foundation models: requires macOS")
+	}
+	if !agent.SwiftAvailable() {
+		return fmt.Errorf("swiftc not found — install Xcode Command Line Tools (xcode-select --install)")
+	}
+	if _, err := agent.EnsureAppleLMHelper(ctx, helper); err != nil {
+		return err
+	}
+	return agent.NewAppleFM(helper).CheckAvailability(ctx)
 }
