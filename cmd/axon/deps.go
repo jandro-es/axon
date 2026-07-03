@@ -79,12 +79,12 @@ func embeddingsProvider(profile config.Profile) embeddings.Provider {
 	return embeddings.NewOllama(e.Host, e.Model, e.Dim)
 }
 
-// agentAdapter builds the Claude adapter for this profile. In api_key mode it is
+// claudeAdapter builds the Claude adapter for this profile. In api_key mode it is
 // the direct Anthropic API adapter (ADR-008: the only path that bypasses Claude
 // Code, in exchange for exact count_tokens + per-token cost). Otherwise it is the
 // Claude Code (`claude -p`) adapter on the user's subscription/enterprise login,
 // resolving the optional OAuth token for headless automations.
-func (d *profileDeps) agentAdapter() agent.Agent {
+func (d *profileDeps) claudeAdapter() agent.Agent {
 	if d.profile.Claude.AuthMode == "api_key" {
 		// The key comes from ANTHROPIC_API_KEY (.env-backed) or a config secret ref.
 		key := os.Getenv("ANTHROPIC_API_KEY")
@@ -105,6 +105,32 @@ func (d *profileDeps) agentAdapter() agent.Agent {
 	})
 }
 
+// agentRouter composes the per-provider adapters for this profile (ADR-015).
+// Claude is always present; local adapters are constructed only when a
+// models.* tier references them. Construction is lazy (no network/subprocess),
+// matching embeddingsProvider.
+func (d *profileDeps) agentRouter() agent.Router {
+	r := agent.Router{Claude: d.claudeAdapter()}
+	models := d.profile.Models
+	for _, tier := range []string{models.Classify, models.Routine, models.Synthesis} {
+		switch config.ParseModelRef(tier).Provider {
+		case config.ProviderOllama:
+			if r.Ollama == nil {
+				r.Ollama = agent.NewOllama(models.OllamaHost)
+			}
+		case config.ProviderApple:
+			if r.Apple == nil {
+				helper := models.AppleHelper
+				if helper == "" {
+					helper = config.DefaultAppleLMHelperPath()
+				}
+				r.Apple = agent.NewAppleFM(helper)
+			}
+		}
+	}
+	return r
+}
+
 // services bundles the composed runtime services for a profile.
 type services struct {
 	manager  tokens.Manager
@@ -118,7 +144,7 @@ type services struct {
 // Requires the database to be open.
 func (d *profileDeps) buildServices(bus *events.Bus) services {
 	searcher := search.New(d.db, d.embedder)
-	mgr := tokens.New(d.db, d.agentAdapter(), searcher, bus, managerConfig(d.name, d.profile, d.cfg))
+	mgr := tokens.NewWithRouter(d.db, d.agentRouter(), searcher, bus, managerConfig(d.name, d.profile, d.cfg))
 	pipeline := &ingestion.Pipeline{
 		Vault: d.vault, DB: d.db, Embedder: d.embedder,
 		Enricher: ingestion.Heuristic{}, Fetcher: ingestion.NewHTTPFetcher(d.profile.Policy, d.profile.Ingestion.Auth...),
