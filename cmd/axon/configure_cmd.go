@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -98,7 +100,7 @@ func configureMenu(cmd *cobra.Command, gf *globalFlags) error {
 			if err != nil {
 				return err
 			}
-			model, err := tui.Input(out, in, "Model string for "+class, "claude-sonnet-4-6", currentModel(p, class))
+			model, err := askModelForClass(out, in, p, class)
 			if err != nil {
 				return err
 			}
@@ -106,6 +108,9 @@ func configureMenu(cmd *cobra.Command, gf *globalFlags) error {
 				return err
 			}
 			fmt.Fprintf(out, "%s models.%s = %s\n", ui.IconOK, class, model)
+			if err := convergeModelTier(cmd.Context(), out, p.Models, model); err != nil {
+				return err
+			}
 		case "limits":
 			window, err := tui.Select(out, in, "Which window?", []tui.Option{
 				{Label: "daily_tokens", Value: "daily", Hint: fmt.Sprintf("%d", p.Limits.DailyTokens.Int())},
@@ -157,6 +162,38 @@ func configureMenu(cmd *cobra.Command, gf *globalFlags) error {
 	}
 }
 
+// askModelForClass runs the provider-aware model prompt for one tier
+// (ADR-015): pick a provider, then a model string where one is needed.
+// synthesis is Claude-only; apple is offered for classify on macOS only.
+func askModelForClass(out io.Writer, in io.Reader, p config.Profile, class string) (string, error) {
+	if class == "synthesis" {
+		return tui.Input(out, in, "Model string for synthesis", "claude-opus-4-8", currentModel(p, class))
+	}
+	providers := []tui.Option{
+		{Label: "Claude", Value: "claude", Hint: "subscription/enterprise via claude -p (default)"},
+		{Label: "Ollama (local)", Value: "ollama", Hint: "free + offline; needs a pulled model"},
+	}
+	if class == "classify" && runtime.GOOS == "darwin" {
+		providers = append(providers, tui.Option{Label: "Apple on-device (local)", Value: "apple", Hint: "Foundation Models; zero install, classify only"})
+	}
+	provider, err := tui.Select(out, in, "Provider for "+class, providers)
+	if err != nil {
+		return "", err
+	}
+	switch provider {
+	case "apple":
+		return "apple", nil
+	case "ollama":
+		model, err := tui.Input(out, in, "Ollama model for "+class, "qwen3:8b", "")
+		if err != nil {
+			return "", err
+		}
+		return "ollama:" + model, nil
+	default:
+		return tui.Input(out, in, "Model string for "+class, "claude-sonnet-4-6", currentModel(p, class))
+	}
+}
+
 func currentModel(p config.Profile, class string) string {
 	switch class {
 	case "classify":
@@ -171,18 +208,31 @@ func currentModel(p config.Profile, class string) string {
 func newConfigureModelsCmd(gf *globalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "models <classify|routine|synthesis> <model>",
-		Short: "Set the Claude model for an operation class",
+		Short: "Set the model for an operation class (Claude string, ollama:<model>, or apple)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			class := args[0]
 			if class != "classify" && class != "routine" && class != "synthesis" {
 				return fmt.Errorf("class must be classify, routine or synthesis (got %q)", class)
 			}
+			// setConfigValue re-validates the whole config, so the ADR-015
+			// rules (no local synthesis, apple = classify only) reject here.
 			if err := setConfigValue(gf.configPath, gf.profile, "models."+class, args[1]); err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "%s models.%s = %s\n", ui.IconOK, class, args[1])
-			return nil
+
+			// Converge local providers with the NEW config (probe ollama /
+			// compile + probe the Apple helper).
+			cfg, err := config.Load(gf.configPath)
+			if err != nil {
+				return err
+			}
+			_, profile, err := cfg.ResolveProfile(gf.profile)
+			if err != nil {
+				return err
+			}
+			return convergeModelTier(cmd.Context(), cmd.OutOrStdout(), profile.Models, args[1])
 		},
 	}
 }
