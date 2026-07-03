@@ -129,6 +129,19 @@ this slice.
 | FR-82 | M | **Capture bookkeeping.** Ticks are change-gated on the inbox listing hash; failed items are remembered in automation state and skipped until they change, surfaced once in `.axon/review-queue.md`, and emitted as events; every capture ingest is observable through the standard run rows and `ingest.*` events. Inbox notes are never modified by capture (cardinal rule 2). |
 | FR-83 | S | **Capture enrichment toggle.** `capture.enrich: heuristic \| claude` (default `heuristic`, zero tokens). `claude` routes enrichment through the token-manager chokepoint on the `routine` tier (ADR-015 local routing and fallback apply) and degrades to heuristic under budget denial. |
 
+### Agentic automations *(planned — spec approved 2026-07-03, not yet built)*
+
+FR-84…FR-87 trace to ADR-017 and the spec in
+`docs/superpowers/specs/2026-07-03-agentic-automations-design.md`. Priorities
+are relative to this slice.
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-84 | M | **Agentic runner.** An automation may run Claude headlessly with AXON MCP tools: stream-json output, `--max-turns` cap, `--tools ""` (no built-in tools), `--strict-mcp-config` + inline `--mcp-config` launching `axon mcp`, explicit per-call `--allowedTools`. Claude provider only — the chokepoint rejects a tools call that resolves to a local provider. Every run enters through `tokens.Manager.Run` (cardinal rule 1). |
+| FR-85 | M | **Per-turn budget enforcement.** The adapter accumulates real usage from per-turn stream events and kills the run when `budget_tokens` is exceeded; accumulated **real** usage is ledgered on every path (completion, turn-limit, kill), with a `token.run_budget_kill` event on kill-switch trips. `automations.<name>.budget_tokens` is enforced at runtime (per-run total for agentic calls; pre-flight input cap for one-shot calls). |
+| FR-86 | M | **Dual tool allowlisting.** Agentic tool access is read-only in v1 (`vault_search`, `vault_read`, `vault_links`, `knowledge_search`, `tokens_status`) and enforced client-side (`--allowedTools`) **and** server-side (`axon mcp --tools <csv>` registers only the named tools). Model-calling and network tools are never allowlisted. |
+| FR-87 | S | **Agentic knowledge-digest + compaction.** Both run agentically by default (digest: search/read the week's sources, grounded wikilinks; compaction: read backlinks before distilling), keep their one-shot prompts as the `automations.<name>.agentic: false` fallback and the degradation path, and write results through the same deterministic wikilink-safe Go code as today. Dry-run remains Authorize-only. |
+
 ### Local model routing *(built)*
 
 FR-77…FR-80 are **implemented** (ADR-015; spec in
