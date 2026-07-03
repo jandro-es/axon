@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jandro-es/axon/internal/db"
 )
 
 func TestBriefingWritesBlockOncePerDay(t *testing.T) {
@@ -95,3 +97,109 @@ func TestBriefingCoexistsWithHeartbeat(t *testing.T) {
 }
 
 var _ = time.Now // used by later resurfacer tests
+
+func seedVecNote(t *testing.T, rc RunCtx, path, updated string, vec []float32) {
+	t.Helper()
+	ctx := context.Background()
+	res, err := rc.DB.ExecContext(ctx, `INSERT INTO notes (path, title, updated) VALUES (?, ?, ?)`, path, path, updated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	noteID, _ := res.LastInsertId()
+	cres, err := rc.DB.ExecContext(ctx, `INSERT INTO chunks (note_id, ordinal, text, token_count, content_hash) VALUES (?, 0, 'x', 1, ?)`, noteID, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunkID, _ := cres.LastInsertId()
+	if _, err := rc.DB.ExecContext(ctx, `INSERT INTO vec_chunks (chunk_id, dim, model, embedding) VALUES (?, ?, 'test', ?)`,
+		chunkID, len(vec), db.EncodeVector(vec)); err != nil {
+		t.Fatal(err)
+	}
+	// The vault note must exist for linkTargets reads.
+	full := filepath.Join(rc.Vault.Root(), filepath.FromSlash(path))
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(full, []byte("---\ntitle: "+path+"\n---\nbody\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestResurfacerProposesRecentDormantPairs(t *testing.T) {
+	rc, _ := newRC(t, nil)
+	ctx := context.Background()
+	recent := rc.now().UTC().AddDate(0, 0, -2).Format("2006-01-02")
+	dormant := rc.now().UTC().AddDate(0, 0, -200).Format("2006-01-02")
+	seedVecNote(t, rc, "01-Projects/current.md", recent, []float32{1, 0})
+	seedVecNote(t, rc, "03-Resources/ancient.md", dormant, []float32{0.95, 0.05})
+	seedVecNote(t, rc, "03-Resources/unrelated.md", dormant, []float32{0, 1})
+
+	ch, err := (Resurfacer{}).DetectChange(ctx, rc)
+	if err != nil || !ch.Changed {
+		t.Fatalf("detect = %+v err=%v", ch, err)
+	}
+	res, err := (Resurfacer{}).Run(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Changes) != 1 || !strings.Contains(res.Changes[0], "ancient") {
+		t.Fatalf("changes = %v, want the similar dormant note only", res.Changes)
+	}
+	q, _ := os.ReadFile(filepath.Join(rc.Vault.Root(), ".axon", "review-queue.md"))
+	if !strings.Contains(string(q), "resurface [[03-Resources/ancient]]") {
+		t.Fatalf("queue:\n%s", q)
+	}
+	if !strings.Contains(string(q), "dormant since "+dormant) {
+		t.Fatalf("queue missing dormant date:\n%s", q)
+	}
+
+	// Second run: proposal memory prevents re-proposing.
+	res2, err := (Resurfacer{}).Run(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res2.Changes) != 0 {
+		t.Fatalf("second run re-proposed: %v", res2.Changes)
+	}
+}
+
+func TestResurfacerSkipsAlreadyLinked(t *testing.T) {
+	rc, _ := newRC(t, nil)
+	recent := rc.now().UTC().AddDate(0, 0, -2).Format("2006-01-02")
+	dormant := rc.now().UTC().AddDate(0, 0, -200).Format("2006-01-02")
+	seedVecNote(t, rc, "01-Projects/current.md", recent, []float32{1, 0})
+	seedVecNote(t, rc, "03-Resources/ancient.md", dormant, []float32{0.99, 0.01})
+	// The recent note already links to the dormant one.
+	full := filepath.Join(rc.Vault.Root(), "01-Projects", "current.md")
+	if err := os.WriteFile(full, []byte("---\ntitle: c\n---\nsee [[03-Resources/ancient]]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := (Resurfacer{}).Run(context.Background(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Changes) != 0 {
+		t.Fatalf("already-linked pair proposed: %v", res.Changes)
+	}
+}
+
+func TestResurfacerDryRunWritesNothing(t *testing.T) {
+	rc, _ := newRC(t, nil)
+	rc.DryRun = true
+	recent := rc.now().UTC().AddDate(0, 0, -2).Format("2006-01-02")
+	dormant := rc.now().UTC().AddDate(0, 0, -200).Format("2006-01-02")
+	seedVecNote(t, rc, "a.md", recent, []float32{1, 0})
+	seedVecNote(t, rc, "b.md", dormant, []float32{0.9, 0.1})
+
+	res, err := (Resurfacer{}).Run(context.Background(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Changes) == 0 {
+		t.Fatal("dry-run should report would-propose pairs")
+	}
+	if _, err := os.Stat(filepath.Join(rc.Vault.Root(), ".axon", "review-queue.md")); !os.IsNotExist(err) {
+		t.Fatal("dry-run wrote the review queue")
+	}
+}
