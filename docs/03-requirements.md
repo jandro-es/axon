@@ -129,11 +129,15 @@ this slice.
 | FR-82 | M | **Capture bookkeeping.** Ticks are change-gated on the inbox listing hash; failed items are remembered in automation state and skipped until they change, surfaced once in `.axon/review-queue.md`, and emitted as events; every capture ingest is observable through the standard run rows and `ingest.*` events. Inbox notes are never modified by capture (cardinal rule 2). |
 | FR-83 | S | **Capture enrichment toggle.** `capture.enrich: heuristic \| claude` (default `heuristic`, zero tokens). `claude` routes enrichment through the token-manager chokepoint on the `routine` tier (ADR-015 local routing and fallback apply) and degrades to heuristic under budget denial. |
 
-### Agentic automations *(planned — spec approved 2026-07-03, not yet built)*
+### Agentic automations *(built)*
 
-FR-84…FR-87 trace to ADR-017 and the spec in
-`docs/superpowers/specs/2026-07-03-agentic-automations-design.md`. Priorities
-are relative to this slice.
+FR-84…FR-87 are **implemented** (ADR-017; spec in
+`docs/superpowers/specs/2026-07-03-agentic-automations-design.md`): the
+agentic adapter path (stream-json + kill-switch), the `axon mcp --tools`
+server-side filter, chokepoint tool semantics with real-usage failure
+ledgering, the runtime activation of `automations.<name>.budget_tokens`, and
+the agentic knowledge-digest + compaction with `agentic: false` fallbacks.
+Priorities are relative to this slice.
 
 | ID | Pri | Requirement |
 |----|-----|-------------|

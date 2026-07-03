@@ -12,6 +12,19 @@ bypasses the token manager); the vault contract is unchanged.
 
 ### Added
 
+- **Agentic automations (ADR-017, FR-84…FR-87)** — knowledge-digest and
+  compaction now run Claude headlessly **with AXON's read-only MCP tools**
+  (vault/knowledge search, note reads, backlinks): the digest actually reads
+  the week's sources instead of being told a count, and compaction checks
+  backlinks before distilling. Enforcement is structural: no built-in tools,
+  a per-call `--allowedTools` list **and** a server-side `axon mcp --tools`
+  filter, bounded turns, and a streaming kill-switch that terminates a run
+  the moment `automations.<name>.budget_tokens` is exceeded — with the real
+  accumulated usage ledgered on every path, including kills
+  (`token.run_budget_kill`). `agentic: false` per automation restores the
+  one-shot behavior, which also remains the automatic degradation path.
+  Note: `budget_tokens` was previously display-only and is now enforced for
+  all automations (one-shot calls defer when the estimated input exceeds it).
 - **Universal capture (ADR-016, FR-26 + FR-81…FR-83)** — the new `capture`
   automation turns `00-Inbox/` into a capture funnel: paste a URL on its own
   line in any inbox note, or drop a PDF/file into the folder, and AXON ingests
