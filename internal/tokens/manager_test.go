@@ -26,7 +26,7 @@ func testManager(t *testing.T, limits config.LimitsConfig, ag agent.Agent) *mana
 	fixed := time.Date(2026, 6, 28, 12, 0, 0, 0, time.UTC)
 	return &manager{
 		db:        d,
-		agent:     ag,
+		router:    agent.Router{Claude: ag},
 		estimator: newCachingEstimator(HeuristicEstimator{}),
 		cfg: Config{
 			Profile:  "test",

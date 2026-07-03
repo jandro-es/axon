@@ -54,6 +54,7 @@ type AgentCall struct {
 type Authorization struct {
 	Decision Decision
 	Model    string // resolved concrete model to use
+	Provider string // "claude" | "ollama" | "apple" (ADR-015)
 	EstInput int
 	Reason   string
 }
@@ -136,7 +137,7 @@ type Config struct {
 // manager is the concrete chokepoint.
 type manager struct {
 	db        *sql.DB
-	agent     agent.Agent      // may be nil for read-only use (Status/Authorize)
+	router    agent.Router     // per-provider adapters; Claude may be nil for read-only use
 	searcher  *search.Searcher // may be nil if BuildContext is unused
 	bus       *events.Bus
 	estimator Estimator
@@ -145,16 +146,22 @@ type manager struct {
 	now       func() time.Time
 }
 
-// New builds a Manager. agent and searcher may be nil for read-only callers;
-// Run requires a non-nil agent and BuildContext a non-nil searcher.
+// New builds a Manager around a single Claude adapter (the pre-ADR-015
+// shape). ag and searcher may be nil for read-only callers.
 func New(database *sql.DB, ag agent.Agent, searcher *search.Searcher, bus *events.Bus, cfg Config) Manager {
+	return NewWithRouter(database, agent.Router{Claude: ag}, searcher, bus, cfg)
+}
+
+// NewWithRouter builds a Manager that dispatches per-tier to the router's
+// adapters (ADR-015). Run requires the referenced adapters to be non-nil.
+func NewWithRouter(database *sql.DB, router agent.Router, searcher *search.Searcher, bus *events.Bus, cfg Config) Manager {
 	now := cfg.Now
 	if now == nil {
 		now = time.Now
 	}
 	return &manager{
 		db:        database,
-		agent:     ag,
+		router:    router,
 		searcher:  searcher,
 		bus:       bus,
 		estimator: newCachingEstimator(HeuristicEstimator{}),
@@ -200,6 +207,23 @@ func (m *manager) resolveModel(key string) string {
 	}
 }
 
+// resolveRef resolves a model key to (provider, concrete model) — ADR-015.
+func (m *manager) resolveRef(key string) config.ModelRef {
+	return config.ParseModelRef(m.resolveModel(key))
+}
+
+// downgradeClaudeKey returns the next cheaper tier whose provider is Claude,
+// or "". Local tiers are skipped: they are budget-exempt already and never
+// the target of a budget downgrade (FR-78).
+func (m *manager) downgradeClaudeKey(key string) string {
+	for k := downgradeKey(key); k != ""; k = downgradeKey(k) {
+		if m.resolveRef(k).Provider == config.ProviderClaude {
+			return k
+		}
+	}
+	return ""
+}
+
 // downgradeKey returns the next cheaper tier for a model key, or "" if already
 // at the cheapest (classify) or unknown. Downgrading conserves the plan's
 // limits (subscription) or dollar cost (api_key).
@@ -233,13 +257,16 @@ func (m *manager) estimateCall(call AgentCall) int {
 }
 
 // estimateInput returns the pre-flight input estimate for a call at a resolved
-// model. In api_key mode it uses the exact count_tokens endpoint (falling back
-// to the heuristic on error); otherwise it uses the local heuristic (FR-40).
-func (m *manager) estimateInput(ctx context.Context, model string, call AgentCall) int {
-	if m.cfg.AuthMode == "api_key" {
-		if c, ok := m.agent.(tokenCounter); ok {
-			if n, err := c.CountTokens(ctx, model, call.System, joinMessages(call.Messages)); err == nil {
-				return n
+// model ref. In api_key mode (Claude provider only) it uses the exact
+// count_tokens endpoint (falling back to the heuristic on error); otherwise it
+// uses the local heuristic (FR-40).
+func (m *manager) estimateInput(ctx context.Context, ref config.ModelRef, call AgentCall) int {
+	if m.cfg.AuthMode == "api_key" && ref.Provider == config.ProviderClaude {
+		if ag, err := m.router.Resolve(ref.Provider); err == nil {
+			if c, ok := ag.(tokenCounter); ok {
+				if n, err := c.CountTokens(ctx, ref.Model, call.System, joinMessages(call.Messages)); err == nil {
+					return n
+				}
 			}
 		}
 	}
@@ -249,9 +276,16 @@ func (m *manager) estimateInput(ctx context.Context, model string, call AgentCal
 // Authorize runs the pre-flight: estimate, resolve model, check per-call and
 // day/week windows, and decide proceed/downgrade/defer/deny (docs/07 §2).
 func (m *manager) Authorize(ctx context.Context, call AgentCall) (Authorization, error) {
-	model := m.resolveModel(call.ModelKey)
-	est := m.estimateInput(ctx, model, call)
-	auth := Authorization{Decision: DecisionProceed, Model: model, EstInput: est}
+	ref := m.resolveRef(call.ModelKey)
+	model := ref.Model
+	est := m.estimateInput(ctx, ref, call)
+	auth := Authorization{Decision: DecisionProceed, Model: model, Provider: ref.Provider, EstInput: est}
+
+	// Local providers are budget-exempt: no window checks, no defer/deny/
+	// downgrade (FR-78). Failure handling is Run's fallback ladder's job.
+	if ref.Provider != config.ProviderClaude {
+		return auth, nil
+	}
 
 	// Per-call input cap: too-large context can't be made to fit by switching
 	// models, so defer for the caller to shrink retrieval (unless essential).
@@ -284,9 +318,9 @@ func (m *manager) Authorize(ctx context.Context, call AgentCall) (Authorization,
 				auth.Reason = "over daily cost cap but essential; proceeding (surfaced)"
 				return auth, nil
 			}
-			if dk := downgradeKey(call.ModelKey); dk != "" {
+			if dk := m.downgradeClaudeKey(call.ModelKey); dk != "" {
 				auth.Decision = DecisionDowngrade
-				auth.Model = m.resolveModel(dk)
+				auth.Model = m.resolveRef(dk).Model
 				auth.Reason = fmt.Sprintf("over daily cost cap ($%.2f/$%.2f); downgraded %s -> %s", day.CostUsed, day.CostCap, call.ModelKey, dk)
 				return auth, nil
 			}
@@ -315,10 +349,10 @@ func (m *manager) Authorize(ctx context.Context, call AgentCall) (Authorization,
 		auth.Reason = fmt.Sprintf("over %s token window but essential; proceeding (surfaced)", which)
 		return auth, nil
 	}
-	// Try to downgrade to a cheaper model tier to conserve the plan/limits.
-	if dk := downgradeKey(call.ModelKey); dk != "" {
+	// Try to downgrade to a cheaper Claude tier to conserve the plan/limits.
+	if dk := m.downgradeClaudeKey(call.ModelKey); dk != "" {
 		auth.Decision = DecisionDowngrade
-		auth.Model = m.resolveModel(dk)
+		auth.Model = m.resolveRef(dk).Model
 		auth.Reason = fmt.Sprintf("over %s token window; downgraded %s -> %s", which, call.ModelKey, dk)
 		return auth, nil
 	}
@@ -354,13 +388,14 @@ func (m *manager) Run(ctx context.Context, call AgentCall) (AgentResult, error) 
 		m.emit(events.LevelInfo, "token.downgrade", call.Operation, auth, nil)
 	}
 
-	if m.agent == nil {
-		return res, fmt.Errorf("token manager: no agent adapter configured")
+	ag, err := m.router.Resolve(auth.Provider)
+	if err != nil {
+		return res, fmt.Errorf("token manager: %w", err)
 	}
 
 	// Redaction is enforced HERE, at the chokepoint, so no caller (automations
 	// building prompts from raw vault notes included) can forget it.
-	resp, err := m.agent.Run(ctx, agent.Request{
+	resp, err := ag.Run(ctx, agent.Request{
 		Operation: call.Operation,
 		Model:     auth.Model,
 		System:    m.applyRedaction(call.System),
@@ -434,9 +469,15 @@ func (m *manager) record(ctx context.Context, call AgentCall, auth Authorization
 		}
 	}()
 
+	// Ledger rows name the provider so local traffic is distinguishable
+	// (FR-77): "ollama:<model>" / "apple-foundation-v1" / bare Claude string.
+	ledgerModel := res.Model
+	if auth.Provider == config.ProviderOllama {
+		ledgerModel = config.ProviderOllama + ":" + res.Model
+	}
 	ledgerID, err := db.InsertLedger(ctx, tx, db.LedgerRow{
 		TS: ts.Format(time.RFC3339), Profile: m.cfg.Profile, Operation: call.Operation,
-		Model: res.Model, InputTokens: res.Usage.InputTokens, OutputTokens: res.Usage.OutputTokens,
+		Model: ledgerModel, InputTokens: res.Usage.InputTokens, OutputTokens: res.Usage.OutputTokens,
 		CacheRead: res.Usage.CacheRead, CacheWrite: res.Usage.CacheWrite,
 		EstInput: auth.EstInput, CostUSD: cost, RunID: call.RunID,
 	})
@@ -447,11 +488,15 @@ func (m *manager) record(ctx context.Context, call AgentCall, auth Authorization
 	if cost != nil {
 		costVal = *cost
 	}
-	if err := db.AddBudgetUsage(ctx, tx, m.cfg.Profile, "day", dayPeriod(ts), total, costVal); err != nil {
-		return 0, err
-	}
-	if err := db.AddBudgetUsage(ctx, tx, m.cfg.Profile, "week", weekPeriod(ts), total, costVal); err != nil {
-		return 0, err
+	// Local calls are budget-exempt (FR-78): ledgered above, but they never
+	// consume the day/week windows that protect the Claude quota.
+	if auth.Provider == "" || auth.Provider == config.ProviderClaude {
+		if err := db.AddBudgetUsage(ctx, tx, m.cfg.Profile, "day", dayPeriod(ts), total, costVal); err != nil {
+			return 0, err
+		}
+		if err := db.AddBudgetUsage(ctx, tx, m.cfg.Profile, "week", weekPeriod(ts), total, costVal); err != nil {
+			return 0, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return 0, err
