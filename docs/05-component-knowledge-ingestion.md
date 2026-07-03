@@ -61,6 +61,19 @@ Default impl: Ollama (`/api/embeddings`). Alternative impl: Apple on-device NLCo
 - `axon search <query> [--top-k] [--filter tag=…]` → hybrid search results.
 - MCP: `knowledge.ingest`, `knowledge.search` (contracts in Component 08).
 
+## 5b. Capture (FR-26, ADR-016)
+
+The `capture` automation is this pipeline's funnel front-end: every few
+minutes (change-gated on the `00-Inbox/` listing) it ingests **own-line URLs**
+found in inbox notes (never editing the note; already-known URLs skip with a
+DB lookup, no network) and **files dropped into the inbox** (sandboxed to the
+physical listing — paths inside notes are never file targets), then moves
+ingested originals wikilink-safely to `capture.archive_dir` (default
+`04-Archive/Capture/YYYY-MM/`). Failures are remembered in `automation_state`
+and surfaced once in `.axon/review-queue.md`. Enrichment follows
+`capture.enrich` (`heuristic` default; `claude` via the chokepoint on the
+routine tier). Spec: `docs/superpowers/specs/2026-07-03-universal-capture-design.md`.
+
 ## 6. Failure & edge handling
 
 - Unreachable/denied URL, empty extraction, scanned PDF → recorded `failed/redacted` with reason; never a half-written note.

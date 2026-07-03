@@ -12,8 +12,9 @@ Requirements are the build contract. Each is testable. Priority: **M** (must, v1
 > One deliberate design deviation: FR-52's PostToolUse hook is a documented
 > no-op — every Claude round-trip is already ledgered at the token-manager
 > chokepoint, so a per-tool hook would double-count (see docs/08 §2). The
-> remaining **C** items (FR-26 capture-by-Inbox, FR-64 chart CSV/JSON export;
-> NFR-13 is done) are explicitly post-v1.
+> remaining **C** item (FR-64 chart CSV/JSON export; NFR-13 is done) is
+> explicitly post-v1. FR-26 capture-by-Inbox is implemented by the `capture`
+> automation (ADR-016).
 
 ## Functional requirements
 
@@ -49,7 +50,7 @@ Requirements are the build contract. Each is testable. Priority: **M** (must, v1
 | FR-23 | M | Chunk and **embed** via the embedding provider (Ollama default), upsert vectors into `sqlite-vec` and text into FTS5; store source + chunk metadata. |
 | FR-24 | M | Ingestion is idempotent on content hash; re-ingesting updates the note and re-embeds only changed chunks. |
 | FR-25 | M | **Hybrid search** (lexical FTS5 + semantic vector) with rank fusion, exposed via CLI and MCP, returning note refs + snippets + scores. |
-| FR-26 | C | Capture-by-Inbox: a special Inbox note/format where pasted URLs are auto-detected and queued for ingestion on the next ingestion tick. |
+| FR-26 | C | Capture-by-Inbox: a special Inbox note/format where pasted URLs are auto-detected and queued for ingestion on the next ingestion tick. **Implemented** by the `capture` automation (ADR-016; own-line URLs in any `00-Inbox` note, plus dropped files — FR-81…FR-83). |
 
 ### Automation engine
 
@@ -112,12 +113,15 @@ command, and the per-client `axon doctor` checks).
 | FR-75 | S | **Client-capability honesty.** AXON documents and `axon doctor`-reports that Claude Desktop receives the MCP **tools** but not hooks/skills/subagents/headless automations. AXON's own tools remain wikilink-safe and path-sandboxed in the server, so vault safety for AXON operations does **not** depend on the client's `PreToolUse` hook. |
 | FR-76 | C | **Concurrent clients.** Multiple Claude clients (Code + Desktop) may target the same profile/vault; the daemon remains the single owner of scheduled writes, and the single-writer SQLite caveat is documented. |
 
-### Universal capture *(planned — spec approved 2026-07-03, not yet built)*
+### Universal capture *(built)*
 
-FR-81…FR-83 trace to ADR-016 and the spec in
-`docs/superpowers/specs/2026-07-03-universal-capture-design.md`; the same
-slice implements **FR-26 (capture-by-Inbox)** via the `capture` automation.
-Priorities are relative to this slice.
+FR-81…FR-83 are **implemented** (ADR-016; spec in
+`docs/superpowers/specs/2026-07-03-universal-capture-design.md`): the
+`capture` automation (registry + `*/5 * * * *` starter schedule), inbox
+listing change gate, failure memory in `automation_state`, archive-after-
+ingest via the wikilink-safe move, and the `capture.enrich` toggle. The same
+slice implements **FR-26 (capture-by-Inbox)**. Priorities are relative to
+this slice.
 
 | ID | Pri | Requirement |
 |----|-----|-------------|

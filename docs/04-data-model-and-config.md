@@ -208,6 +208,12 @@ profiles:
     # http://localhost:11434, independent of embeddings.host), local_fallback
     # (claude|fail, default claude — FR-79), apple_helper (helper path override).
     models:   { classify: claude-haiku-4-5, routine: claude-sonnet-4-6, synthesis: claude-opus-4-8 }
+    # capture: the FR-26 capture funnel (ADR-016). Optional; defaults shown.
+    # The capture automation itself is scheduled via automations.capture.
+    # enrich: heuristic (default, zero tokens) | claude (chokepoint, routine
+    # tier). archive_dir: vault-relative destination for ingested inbox
+    # originals (moved wikilink-safely, never deleted).
+    capture:  { enrich: heuristic, archive_dir: 04-Archive/Capture }
     limits:   { daily_tokens: 1_500_000, weekly_tokens: 8_000_000, guard_pause_at_pct: 80 }           # estimated tokens; no dollar cap here
     retrieval: { top_k: 8, max_context_tokens: 12_000 }
     policy:
