@@ -105,7 +105,7 @@ func (e *Engine) Run(ctx context.Context, a Automation, dryRun bool) (Outcome, e
 	}
 	out.RunID = runID
 
-	rc := e.runCtx(runID, dryRun)
+	rc := e.runCtx(name, runID, dryRun)
 	if cursor, cerr := db.GetCursor(ctx, e.deps.DB, name); cerr == nil {
 		rc.LastCursor = cursor
 	}
@@ -176,8 +176,8 @@ func (e *Engine) Run(ctx context.Context, a Automation, dryRun bool) (Outcome, e
 	return out, nil
 }
 
-func (e *Engine) runCtx(runID int64, dryRun bool) RunCtx {
-	return RunCtx{
+func (e *Engine) runCtx(name string, runID int64, dryRun bool) RunCtx {
+	rc := RunCtx{
 		Profile:  e.deps.Profile,
 		Config:   e.deps.Config,
 		DB:       e.deps.DB,
@@ -191,6 +191,13 @@ func (e *Engine) runCtx(runID int64, dryRun bool) RunCtx {
 		RunID:    runID,
 		Now:      e.now,
 	}
+	// Activate the automation's configured budget_tokens (FR-85): the
+	// per-call input cap for one-shot calls, the per-run total cap for
+	// agentic runs. Display-only before ADR-017.
+	if a, ok := e.deps.Config.Automations[name]; ok {
+		rc.BudgetTokens = int(a.BudgetTokens.Int())
+	}
+	return rc
 }
 
 // detachedDBCtx derives a context for terminal-state writes that survives the

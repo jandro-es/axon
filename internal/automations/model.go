@@ -19,6 +19,9 @@ import (
 // automation can degrade gracefully rather than fail.
 func runModel(ctx context.Context, rc RunCtx, call tokens.AgentCall) (text string, est int, deferred bool, err error) {
 	call.RunID = &rc.RunID
+	if call.BudgetTokens == 0 {
+		call.BudgetTokens = rc.BudgetTokens // activate config budget_tokens (FR-85)
+	}
 	if rc.DryRun {
 		auth, aerr := rc.Manager.Authorize(ctx, call)
 		if aerr != nil {
@@ -38,6 +41,30 @@ func runModel(ctx context.Context, rc RunCtx, call tokens.AgentCall) (text strin
 
 // today returns the run's UTC date string.
 func today(rc RunCtx) string { return rc.now().UTC().Format("2006-01-02") }
+
+// runAgentic executes a tool-using model call (ADR-017): read-only AXON MCP
+// tools, bounded turns, the configured budget_tokens as the per-run cap.
+// A budget defer/deny or a kill-switch trip returns degraded=true so the
+// automation can fall back to its one-shot path instead of failing the run.
+func runAgentic(ctx context.Context, rc RunCtx, call tokens.AgentCall, toolsAllow []string, maxTurns int) (text string, est int, degraded bool, err error) {
+	call.Tools = toolsAllow
+	call.MaxTurns = maxTurns
+	text, est, degraded, err = runModel(ctx, rc, call)
+	if err != nil && errors.Is(err, tokens.ErrRunBudgetExceeded) {
+		rc.Log.Warn("agentic run killed at budget; degrading", "operation", call.Operation)
+		return "", est, true, nil
+	}
+	return text, est, degraded, err
+}
+
+// agenticEnabled resolves automations.<name>.agentic against the
+// automation's own default.
+func agenticEnabled(rc RunCtx, name string, def bool) bool {
+	if a, ok := rc.Config.Automations[name]; ok && a.Agentic != nil {
+		return *a.Agentic
+	}
+	return def
+}
 
 // ---- heartbeat (essential, cheap; no model in Phase 4) ---------------------
 

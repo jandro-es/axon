@@ -51,6 +51,10 @@ type RunCtx struct {
 	RunID      int64
 	LastCursor string // cursor persisted by the previous successful run
 	Now        func() time.Time
+	// BudgetTokens is the automation's configured budget_tokens: the per-call
+	// input cap for one-shot calls, the per-run total cap for agentic runs
+	// (FR-85; wired by the engine, previously display-only).
+	BudgetTokens int
 }
 
 // now returns the run's clock (injectable for tests).
