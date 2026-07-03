@@ -33,6 +33,11 @@ var (
 	ErrDeferred = errors.New("call deferred: would exceed token budget")
 )
 
+// ErrRunBudgetExceeded re-exports the adapter's kill-switch sentinel so
+// automations can detect it without importing agent (dependency rule:
+// tokens is the only importer of agent).
+var ErrRunBudgetExceeded = agent.ErrRunBudgetExceeded
+
 // Message is one turn of an assembled prompt.
 type Message struct {
 	Role    string // "user" | "assistant"
@@ -57,6 +62,12 @@ type AgentCall struct {
 	// OutputSchema optionally carries a JSON Schema for providers with
 	// structured output (Apple guided generation; Ollama JSON mode).
 	OutputSchema json.RawMessage
+	// Tools + MaxTurns request an agentic run (ADR-017): Claude provider
+	// only; BudgetTokens becomes the per-run TOTAL cap enforced by the
+	// adapter's streaming kill-switch (for one-shot calls it remains the
+	// pre-flight input cap).
+	Tools    []string
+	MaxTurns int
 }
 
 // Authorization is the pre-flight result.
@@ -397,6 +408,13 @@ func (m *manager) Run(ctx context.Context, call AgentCall) (AgentResult, error) 
 		m.emit(events.LevelInfo, "token.downgrade", call.Operation, auth, nil)
 	}
 
+	// Agentic (tool-using) calls require the Claude provider — local models
+	// cannot drive MCP tools; never silently drop tools (ADR-017).
+	if len(call.Tools) > 0 && auth.Provider != "" && auth.Provider != config.ProviderClaude {
+		return res, fmt.Errorf("agentic call %q: tools require the claude provider, but %s resolves to %s (ADR-017)",
+			call.Operation, call.ModelKey, auth.Provider)
+	}
+
 	// Local providers get their own execution path: retry + fallback ladder
 	// instead of budget decisions (ADR-015, FR-79).
 	if auth.Provider != "" && auth.Provider != config.ProviderClaude {
@@ -413,12 +431,19 @@ func (m *manager) Run(ctx context.Context, call AgentCall) (AgentResult, error) 
 	resp, err := ag.Run(ctx, m.buildRequest(call, auth))
 	if err != nil {
 		// A failed call may still have consumed real tokens upstream — an
-		// adapter timeout that killed `claude -p` mid-generation, or garbled
-		// stdout after a completed run. Record a conservative ledger row from
-		// the pre-flight estimate so quota is never burned invisibly and the
-		// budget guard can still trip (cardinal rule 1: ledger on EVERY path).
+		// adapter timeout that killed `claude -p` mid-generation, garbled
+		// stdout, or an agentic run killed at its budget. When the adapter
+		// reported real accumulated usage, ledger THAT; otherwise fall back
+		// to the pre-flight estimate (cardinal rule 1: ledger on EVERY path).
+		if resp != nil {
+			res.Usage = resp.Usage
+		}
 		m.recordFailure(ctx, call, auth, res)
-		m.emit(events.LevelError, "token.error", call.Operation, auth, map[string]any{"error": err.Error()})
+		kind, level := "token.error", events.LevelError
+		if errors.Is(err, agent.ErrRunBudgetExceeded) {
+			kind, level = "token.run_budget_kill", events.LevelWarn
+		}
+		m.emit(level, kind, call.Operation, auth, map[string]any{"error": err.Error()})
 		return res, fmt.Errorf("agent run %q: %w", call.Operation, err)
 	}
 
@@ -462,7 +487,7 @@ const appleInputCapTokens = 3500
 
 // buildRequest assembles the (redacted) adapter request for a call.
 func (m *manager) buildRequest(call AgentCall, auth Authorization) agent.Request {
-	return agent.Request{
+	req := agent.Request{
 		Operation:    call.Operation,
 		Model:        auth.Model,
 		System:       m.applyRedaction(call.System),
@@ -470,6 +495,12 @@ func (m *manager) buildRequest(call AgentCall, auth Authorization) agent.Request
 		JSONOutput:   call.OutputSchema != nil,
 		OutputSchema: call.OutputSchema,
 	}
+	if len(call.Tools) > 0 {
+		req.Tools = call.Tools
+		req.MaxTurns = call.MaxTurns
+		req.RunBudgetTokens = call.BudgetTokens
+	}
+	return req
 }
 
 // fallbackClaudeKey returns the first tier at or above key whose provider is
@@ -497,7 +528,11 @@ func (m *manager) recordFailure(ctx context.Context, call AgentCall, auth Author
 	failed := call
 	failed.Operation = call.Operation + ":failed"
 	failedRes := res
-	failedRes.Usage.InputTokens = auth.EstInput
+	// Real accumulated usage (killed/partial agentic runs) beats the
+	// conservative pre-flight estimate (FR-85).
+	if failedRes.Usage.InputTokens+failedRes.Usage.OutputTokens == 0 {
+		failedRes.Usage.InputTokens = auth.EstInput
+	}
 	if _, lerr := m.record(ctx, failed, auth, failedRes); lerr != nil {
 		m.emit(events.LevelError, "token.error", call.Operation, auth,
 			map[string]any{"error": "ledger write after failed call: " + lerr.Error()})
