@@ -3,6 +3,7 @@ package tokens
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -48,6 +49,14 @@ type AgentCall struct {
 	BudgetTokens int  // per-call input cap (0 = none)
 	Essential    bool // surfaced, never silently blocked (budget-guard, heartbeat, interactive)
 	RunID        *int64
+	// ValidateOutput, when set, is applied to every response text. For local
+	// providers a failure triggers the retry/fallback ladder (FR-79); for
+	// Claude it fails the call (ledgered conservatively under the :failed
+	// operation label, like adapter errors).
+	ValidateOutput func(string) error
+	// OutputSchema optionally carries a JSON Schema for providers with
+	// structured output (Apple guided generation; Ollama JSON mode).
+	OutputSchema json.RawMessage
 }
 
 // Authorization is the pre-flight result.
@@ -388,6 +397,12 @@ func (m *manager) Run(ctx context.Context, call AgentCall) (AgentResult, error) 
 		m.emit(events.LevelInfo, "token.downgrade", call.Operation, auth, nil)
 	}
 
+	// Local providers get their own execution path: retry + fallback ladder
+	// instead of budget decisions (ADR-015, FR-79).
+	if auth.Provider != "" && auth.Provider != config.ProviderClaude {
+		return m.runLocal(ctx, call, auth)
+	}
+
 	ag, err := m.router.Resolve(auth.Provider)
 	if err != nil {
 		return res, fmt.Errorf("token manager: %w", err)
@@ -395,26 +410,14 @@ func (m *manager) Run(ctx context.Context, call AgentCall) (AgentResult, error) 
 
 	// Redaction is enforced HERE, at the chokepoint, so no caller (automations
 	// building prompts from raw vault notes included) can forget it.
-	resp, err := ag.Run(ctx, agent.Request{
-		Operation: call.Operation,
-		Model:     auth.Model,
-		System:    m.applyRedaction(call.System),
-		Prompt:    m.applyRedaction(joinMessages(call.Messages)),
-	})
+	resp, err := ag.Run(ctx, m.buildRequest(call, auth))
 	if err != nil {
 		// A failed call may still have consumed real tokens upstream — an
 		// adapter timeout that killed `claude -p` mid-generation, or garbled
 		// stdout after a completed run. Record a conservative ledger row from
 		// the pre-flight estimate so quota is never burned invisibly and the
 		// budget guard can still trip (cardinal rule 1: ledger on EVERY path).
-		failed := call
-		failed.Operation = call.Operation + ":failed"
-		failedRes := res
-		failedRes.Usage.InputTokens = auth.EstInput
-		if _, lerr := m.record(ctx, failed, auth, failedRes); lerr != nil {
-			m.emit(events.LevelError, "token.error", call.Operation, auth,
-				map[string]any{"error": "ledger write after failed call: " + lerr.Error()})
-		}
+		m.recordFailure(ctx, call, auth, res)
 		m.emit(events.LevelError, "token.error", call.Operation, auth, map[string]any{"error": err.Error()})
 		return res, fmt.Errorf("agent run %q: %w", call.Operation, err)
 	}
@@ -432,6 +435,17 @@ func (m *manager) Run(ctx context.Context, call AgentCall) (AgentResult, error) 
 		res.Usage.OutputTokens = HeuristicEstimator{}.Estimate(res.Text)
 	}
 
+	// Output validation at the chokepoint: a completed Claude call whose text
+	// fails the caller's validator is a failed call, not a silent success.
+	if call.ValidateOutput != nil {
+		if verr := call.ValidateOutput(res.Text); verr != nil {
+			m.recordFailure(ctx, call, auth, res)
+			m.emit(events.LevelError, "token.error", call.Operation, auth,
+				map[string]any{"error": "output validation: " + verr.Error()})
+			return res, fmt.Errorf("agent run %q: output validation: %w", call.Operation, verr)
+		}
+	}
+
 	// Post-hoc accounting: ledger + budget windows + event (FR-41, S4).
 	ledgerID, err := m.record(ctx, call, auth, res)
 	if err != nil {
@@ -439,6 +453,116 @@ func (m *manager) Run(ctx context.Context, call AgentCall) (AgentResult, error) 
 	}
 	res.LedgerID = ledgerID
 	return res, nil
+}
+
+// appleInputCapTokens is a conservative pre-flight cap for the Apple
+// on-device model, whose small context window is shared between prompt and
+// response. Oversized inputs skip straight to the fallback ladder.
+const appleInputCapTokens = 3500
+
+// buildRequest assembles the (redacted) adapter request for a call.
+func (m *manager) buildRequest(call AgentCall, auth Authorization) agent.Request {
+	return agent.Request{
+		Operation:    call.Operation,
+		Model:        auth.Model,
+		System:       m.applyRedaction(call.System),
+		Prompt:       m.applyRedaction(joinMessages(call.Messages)),
+		JSONOutput:   call.OutputSchema != nil,
+		OutputSchema: call.OutputSchema,
+	}
+}
+
+// fallbackClaudeKey returns the first tier at or above key whose provider is
+// Claude. Synthesis is always Claude (config-validated), so this terminates.
+func (m *manager) fallbackClaudeKey(key string) string {
+	order := []string{"classify", "routine", "synthesis"}
+	start := 0
+	switch key {
+	case "routine":
+		start = 1
+	case "synthesis":
+		start = 2
+	}
+	for _, k := range order[start:] {
+		if m.resolveRef(k).Provider == config.ProviderClaude {
+			return k
+		}
+	}
+	return "synthesis"
+}
+
+// recordFailure writes the conservative :failed ledger row for a call that
+// consumed (or may have consumed) work without a usable result.
+func (m *manager) recordFailure(ctx context.Context, call AgentCall, auth Authorization, res AgentResult) {
+	failed := call
+	failed.Operation = call.Operation + ":failed"
+	failedRes := res
+	failedRes.Usage.InputTokens = auth.EstInput
+	if _, lerr := m.record(ctx, failed, auth, failedRes); lerr != nil {
+		m.emit(events.LevelError, "token.error", call.Operation, auth,
+			map[string]any{"error": "ledger write after failed call: " + lerr.Error()})
+	}
+}
+
+// runLocal executes a call on a local provider: pre-flight input cap (apple),
+// one attempt + one retry, output validation, then the configured fallback —
+// fall forward to Claude through the normal budget path, or fail visibly
+// (FR-79). Every outcome is ledgered (FR-78).
+func (m *manager) runLocal(ctx context.Context, call AgentCall, auth Authorization) (AgentResult, error) {
+	res := AgentResult{Auth: auth, Model: auth.Model}
+
+	fallForward := func(cause error) (AgentResult, error) {
+		m.recordFailure(ctx, call, auth, res)
+		if m.cfg.Models.Fallback() == "fail" {
+			m.emit(events.LevelError, "token.error", call.Operation, auth, map[string]any{"error": cause.Error()})
+			return res, fmt.Errorf("local model %q failed (local_fallback: fail): %w", auth.Model, cause)
+		}
+		fb := call
+		fb.ModelKey = m.fallbackClaudeKey(call.ModelKey)
+		m.emit(events.LevelWarn, "token.local_fallback", call.Operation, auth,
+			map[string]any{"error": cause.Error(), "fallback_tier": fb.ModelKey})
+		return m.Run(ctx, fb) // resolves to Claude: normal budget-checked path
+	}
+
+	if auth.Provider == config.ProviderApple && auth.EstInput > appleInputCapTokens {
+		return fallForward(fmt.Errorf("estimated input %d exceeds the on-device context cap %d", auth.EstInput, appleInputCapTokens))
+	}
+	ag, err := m.router.Resolve(auth.Provider)
+	if err != nil {
+		return fallForward(err)
+	}
+
+	req := m.buildRequest(call, auth)
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ { // one attempt + one retry
+		resp, err := ag.Run(ctx, req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if call.ValidateOutput != nil {
+			if verr := call.ValidateOutput(resp.Text); verr != nil {
+				lastErr = fmt.Errorf("output validation: %w", verr)
+				continue
+			}
+		}
+		res.Text = resp.Text
+		res.Usage = resp.Usage
+		if resp.Model != "" {
+			res.Model = resp.Model
+		}
+		if res.Usage.InputTokens+res.Usage.OutputTokens == 0 {
+			res.Usage.InputTokens = auth.EstInput
+			res.Usage.OutputTokens = HeuristicEstimator{}.Estimate(res.Text)
+		}
+		ledgerID, err := m.record(ctx, call, auth, res)
+		if err != nil {
+			return res, err
+		}
+		res.LedgerID = ledgerID
+		return res, nil
+	}
+	return fallForward(lastErr)
 }
 
 // record writes the ledger row, updates day/week budgets and emits the event.

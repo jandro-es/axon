@@ -3,6 +3,7 @@ package tokens
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -124,6 +125,144 @@ func TestDowngradeSkipsLocalTiers(t *testing.T) {
 	}
 	if auth.Decision != DecisionDeny {
 		t.Fatalf("decision = %s, want deny (window exhausted, no claude tier below)", auth.Decision)
+	}
+}
+
+func TestLocalFallForwardToClaude(t *testing.T) {
+	ctx := context.Background()
+	broken := agent.NewFake()
+	broken.Err = errors.New("connection refused")
+	claude := agent.NewFake()
+	claude.Reply = "from-claude"
+	m := testManagerRouter(t, localTestConfig(), agent.Router{Claude: claude, Ollama: broken})
+
+	res, err := m.Run(ctx, AgentCall{
+		Operation: "test.local", ModelKey: "classify",
+		Messages: []Message{{Role: "user", Content: "hello"}},
+	})
+	if err != nil {
+		t.Fatalf("fall-forward should succeed: %v", err)
+	}
+	if res.Text != "from-claude" {
+		t.Fatalf("Text = %q, want from-claude", res.Text)
+	}
+	if broken.CallCount() != 2 { // one attempt + one retry (FR-79)
+		t.Fatalf("local attempts = %d, want 2", broken.CallCount())
+	}
+	if claude.CallCount() != 1 {
+		t.Fatalf("claude calls = %d, want 1", claude.CallCount())
+	}
+	// The Claude fallback consumed budget as a normal call.
+	st, _ := m.Status(ctx, "test")
+	if st.Day.Used == 0 {
+		t.Fatal("claude fallback should consume the day window")
+	}
+}
+
+func TestLocalFailModeSurfacesError(t *testing.T) {
+	ctx := context.Background()
+	cfg := localTestConfig()
+	cfg.Models.LocalFallback = "fail"
+	broken := agent.NewFake()
+	broken.Err = errors.New("connection refused")
+	claude := agent.NewFake()
+	m := testManagerRouter(t, cfg, agent.Router{Claude: claude, Ollama: broken})
+
+	_, err := m.Run(ctx, AgentCall{
+		Operation: "test.local", ModelKey: "classify",
+		Messages: []Message{{Role: "user", Content: "hello"}},
+	})
+	if err == nil {
+		t.Fatal("fail mode must surface the error")
+	}
+	if claude.CallCount() != 0 {
+		t.Fatalf("claude calls = %d, want 0 in fail mode", claude.CallCount())
+	}
+	// A :failed ledger row exists (standard failure accounting).
+	rows := ledgerRows(t, m.db)
+	if len(rows) == 0 || !strings.HasSuffix(rows[0][0], ":failed") {
+		t.Fatalf("rows = %v, want a :failed row", rows)
+	}
+}
+
+func TestLocalValidateOutputRetriesThenFallsForward(t *testing.T) {
+	ctx := context.Background()
+	junk := agent.NewFake()
+	junk.Reply = "not json"
+	claude := agent.NewFake()
+	claude.Reply = `{"ok":true}`
+	m := testManagerRouter(t, localTestConfig(), agent.Router{Claude: claude, Ollama: junk})
+
+	res, err := m.Run(ctx, AgentCall{
+		Operation: "test.local", ModelKey: "classify",
+		Messages: []Message{{Role: "user", Content: "hello"}},
+		ValidateOutput: func(s string) error {
+			if !strings.HasPrefix(strings.TrimSpace(s), "{") {
+				return errors.New("not a JSON object")
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if junk.CallCount() != 2 || claude.CallCount() != 1 {
+		t.Fatalf("calls local=%d claude=%d, want 2/1", junk.CallCount(), claude.CallCount())
+	}
+	if res.Text != `{"ok":true}` {
+		t.Fatalf("Text = %q", res.Text)
+	}
+}
+
+func TestClaudeValidateOutputFailsCall(t *testing.T) {
+	ctx := context.Background()
+	claude := agent.NewFake()
+	claude.Reply = "garbage"
+	cfg := localTestConfig()
+	cfg.Models.Classify = "claude-haiku-4-5" // all claude
+	m := testManagerRouter(t, cfg, agent.Router{Claude: claude})
+
+	_, err := m.Run(ctx, AgentCall{
+		Operation: "test.claude", ModelKey: "classify",
+		Messages: []Message{{Role: "user", Content: "hello"}},
+		ValidateOutput: func(s string) error {
+			return errors.New("bad output")
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "output validation") {
+		t.Fatalf("err = %v, want output-validation failure", err)
+	}
+	rows := ledgerRows(t, m.db)
+	if len(rows) != 1 || !strings.HasSuffix(rows[0][0], ":failed") {
+		t.Fatalf("rows = %v, want one :failed row", rows)
+	}
+}
+
+func TestAppleInputCapShortCircuits(t *testing.T) {
+	ctx := context.Background()
+	cfg := localTestConfig()
+	cfg.Models.Classify = "apple"
+	// Generous windows: this test exercises the apple input cap, and the
+	// Claude fallback for the oversized prompt must not itself be deferred.
+	cfg.Limits = config.LimitsConfig{DailyTokens: 1_000_000, WeeklyTokens: 1_000_000}
+	apple := agent.NewFake()
+	claude := agent.NewFake()
+	claude.Reply = "ok"
+	m := testManagerRouter(t, cfg, agent.Router{Claude: claude, Apple: apple})
+
+	big := strings.Repeat("word ", 8000) // ≫ appleInputCapTokens at ~4 chars/token
+	_, err := m.Run(ctx, AgentCall{
+		Operation: "test.apple", ModelKey: "classify",
+		Messages: []Message{{Role: "user", Content: big}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if apple.CallCount() != 0 {
+		t.Fatalf("apple calls = %d, want 0 (input cap short-circuit)", apple.CallCount())
+	}
+	if claude.CallCount() != 1 {
+		t.Fatalf("claude calls = %d, want 1 (fallback)", claude.CallCount())
 	}
 }
 
