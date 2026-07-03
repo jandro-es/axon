@@ -112,6 +112,19 @@ command, and the per-client `axon doctor` checks).
 | FR-75 | S | **Client-capability honesty.** AXON documents and `axon doctor`-reports that Claude Desktop receives the MCP **tools** but not hooks/skills/subagents/headless automations. AXON's own tools remain wikilink-safe and path-sandboxed in the server, so vault safety for AXON operations does **not** depend on the client's `PreToolUse` hook. |
 | FR-76 | C | **Concurrent clients.** Multiple Claude clients (Code + Desktop) may target the same profile/vault; the daemon remains the single owner of scheduled writes, and the single-writer SQLite caveat is documented. |
 
+### Universal capture *(planned — spec approved 2026-07-03, not yet built)*
+
+FR-81…FR-83 trace to ADR-016 and the spec in
+`docs/superpowers/specs/2026-07-03-universal-capture-design.md`; the same
+slice implements **FR-26 (capture-by-Inbox)** via the `capture` automation.
+Priorities are relative to this slice.
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-81 | M | **File-drop capture.** Non-markdown files dropped into `00-Inbox/` are ingested through the pipeline (`AllowLocalFiles`, sandboxed to files physically enumerated in the inbox listing — paths inside notes are never file targets) and, on success, the original is moved **wikilink-safely** to `capture.archive_dir` (default `04-Archive/Capture/YYYY-MM/`). Nothing is ever deleted. |
+| FR-82 | M | **Capture bookkeeping.** Ticks are change-gated on the inbox listing hash; failed items are remembered in automation state and skipped until they change, surfaced once in `.axon/review-queue.md`, and emitted as events; every capture ingest is observable through the standard run rows and `ingest.*` events. Inbox notes are never modified by capture (cardinal rule 2). |
+| FR-83 | S | **Capture enrichment toggle.** `capture.enrich: heuristic \| claude` (default `heuristic`, zero tokens). `claude` routes enrichment through the token-manager chokepoint on the `routine` tier (ADR-015 local routing and fallback apply) and degrades to heuristic under budget denial. |
+
 ### Local model routing *(built)*
 
 FR-77…FR-80 are **implemented** (ADR-015; spec in
