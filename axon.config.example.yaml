@@ -75,10 +75,16 @@ profiles:
       batch_size: 32
       # helper: "~/.axon/bin/axon-apple-embed"  # apple only: helper binary override
 
-    models:                                   # preferred Claude model per operation class.
-      classify:  claude-haiku-4-5             # passed to `claude -p --model`; actual availability
-      routine:   claude-sonnet-4-6            # depends on your plan tier (VERIFY current model strings).
-      synthesis: claude-opus-4-8
+    models:                                   # preferred model per operation class (ADR-015).
+      classify:  claude-haiku-4-5             # Claude string → `claude -p --model` (plan tier governs
+      routine:   claude-sonnet-4-6            # availability; VERIFY current model strings). Local options:
+      synthesis: claude-opus-4-8              # synthesis is ALWAYS Claude (validated).
+      # classify: "ollama:qwen3:8b"           # local Ollama /api/chat — free, offline, ledgered, budget-exempt
+      # classify: "apple"                     # Apple Foundation Models on-device (macOS 26+, classify only)
+      # ollama_host: "http://localhost:11434" # local chat host (independent of embeddings.host)
+      # local_fallback: claude                # claude (default): retry locally once, then fall forward
+                                              # through the budget path; fail: surface the error instead
+      # apple_helper: "~/.axon/bin/axon-apple-lm"  # Foundation Models helper binary override
 
     limits:                                   # token awareness on subscription = rate-limit / Agent-SDK-credit
       daily_tokens:  1_500_000                # ESTIMATED input+output; guards burn, not dollars

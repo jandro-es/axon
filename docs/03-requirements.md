@@ -112,11 +112,14 @@ command, and the per-client `axon doctor` checks).
 | FR-75 | S | **Client-capability honesty.** AXON documents and `axon doctor`-reports that Claude Desktop receives the MCP **tools** but not hooks/skills/subagents/headless automations. AXON's own tools remain wikilink-safe and path-sandboxed in the server, so vault safety for AXON operations does **not** depend on the client's `PreToolUse` hook. |
 | FR-76 | C | **Concurrent clients.** Multiple Claude clients (Code + Desktop) may target the same profile/vault; the daemon remains the single owner of scheduled writes, and the single-writer SQLite caveat is documented. |
 
-### Local model routing *(planned — spec approved 2026-07-03, not yet built)*
+### Local model routing *(built)*
 
-FR-77…FR-80 trace to ADR-015 and the spec in
-`docs/superpowers/specs/2026-07-03-local-model-routing-design.md`. Priorities
-are relative to this slice, not to v1 (which is complete).
+FR-77…FR-80 are **implemented** (ADR-015; spec in
+`docs/superpowers/specs/2026-07-03-local-model-routing-design.md`): the
+`agent` Router + Ollama/Apple adapters, the tokens-chokepoint provider
+routing with budget exemption and the fallback ladder, the provider-aware
+`axon configure models` flow, and doctor/init convergence. Priorities are
+relative to this slice, not to v1.
 
 | ID | Pri | Requirement |
 |----|-----|-------------|
