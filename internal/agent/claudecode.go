@@ -1,14 +1,28 @@
 package agent
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
+)
+
+// ErrRunBudgetExceeded reports an agentic run killed by the streaming budget
+// enforcer (ADR-017). The returned Response carries the real usage
+// accumulated up to the kill, which the token manager MUST ledger.
+var ErrRunBudgetExceeded = errors.New("agentic run exceeded its token budget")
+
+const (
+	defaultAgenticTurns   = 8
+	maxAgenticTurns       = 32
+	defaultAgenticTimeout = 10 * time.Minute
 )
 
 // ClaudeCode is the default agent adapter: it shells out to the Claude Code CLI
@@ -22,15 +36,21 @@ import (
 //
 // Cardinal rule: this is reached only via the token manager (Component 07).
 type ClaudeCode struct {
-	bin        string
-	configDir  string // CLAUDE_CONFIG_DIR (profile-isolated auth)
-	oauthToken string // resolved CLAUDE_CODE_OAUTH_TOKEN (may be empty: rely on `claude login`)
-	tokenErr   error  // why oauthToken is empty when the config named one (see Run)
-	authMode   string
-	timeout    time.Duration
+	bin            string
+	configDir      string // CLAUDE_CONFIG_DIR (profile-isolated auth)
+	oauthToken     string // resolved CLAUDE_CODE_OAUTH_TOKEN (may be empty: rely on `claude login`)
+	tokenErr       error  // why oauthToken is empty when the config named one (see Run)
+	authMode       string
+	timeout        time.Duration
+	agenticTimeout time.Duration
+	mcpCommand     string
+	mcpArgs        []string
 
 	// run executes the command; injectable so tests don't spawn the real CLI.
 	run func(ctx context.Context, bin string, args, env []string, stdin string) (stdout []byte, stderr []byte, err error)
+	// runStream executes the command feeding stdout lines to onLine; when
+	// onLine returns true the process group is killed (agentic budget kill).
+	runStream func(ctx context.Context, bin string, args, env []string, stdin string, onLine func(line []byte) (stop bool)) (stderr []byte, err error)
 }
 
 // ClaudeCodeOptions configures the adapter.
@@ -45,6 +65,13 @@ type ClaudeCodeOptions struct {
 	OAuthTokenErr error
 	AuthMode      string
 	Timeout       time.Duration // default 120s
+	// MCPCommand/MCPArgs launch the AXON MCP server for agentic runs
+	// (the axon binary + ["mcp", "--config", …, "--profile", …]); the
+	// per-call read-only tool filter is appended as --tools <csv>.
+	MCPCommand string
+	MCPArgs    []string
+	// AgenticTimeout bounds a tool-using run (default 10m; one-shot keeps Timeout).
+	AgenticTimeout time.Duration
 }
 
 // NewClaudeCode builds the adapter with the real subprocess executor.
@@ -57,14 +84,22 @@ func NewClaudeCode(opts ClaudeCodeOptions) *ClaudeCode {
 	if timeout == 0 {
 		timeout = 120 * time.Second
 	}
+	agenticTimeout := opts.AgenticTimeout
+	if agenticTimeout == 0 {
+		agenticTimeout = defaultAgenticTimeout
+	}
 	return &ClaudeCode{
-		bin:        bin,
-		configDir:  opts.ConfigDir,
-		oauthToken: opts.OAuthToken,
-		tokenErr:   opts.OAuthTokenErr,
-		authMode:   opts.AuthMode,
-		timeout:    timeout,
-		run:        execClaude,
+		bin:            bin,
+		configDir:      opts.ConfigDir,
+		oauthToken:     opts.OAuthToken,
+		tokenErr:       opts.OAuthTokenErr,
+		authMode:       opts.AuthMode,
+		timeout:        timeout,
+		agenticTimeout: agenticTimeout,
+		mcpCommand:     opts.MCPCommand,
+		mcpArgs:        opts.MCPArgs,
+		run:            execClaude,
+		runStream:      execClaudeStream,
 	}
 }
 
@@ -76,8 +111,12 @@ func (c *ClaudeCode) AuthMode() string {
 	return c.authMode
 }
 
-// Run executes one headless turn and returns the parsed result + usage.
+// Run executes one headless turn (or an agentic tool-using run when
+// req.Tools is set) and returns the parsed result + usage.
 func (c *ClaudeCode) Run(ctx context.Context, req Request) (*Response, error) {
+	if len(req.Tools) > 0 {
+		return c.runAgentic(ctx, req)
+	}
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
@@ -101,6 +140,9 @@ func (c *ClaudeCode) Run(ctx context.Context, req Request) (*Response, error) {
 // buildArgs assembles the headless argv. The prompt itself is passed on stdin
 // (avoids arg-length limits), so -p takes no positional prompt here.
 func (c *ClaudeCode) buildArgs(req Request) []string {
+	if len(req.Tools) > 0 {
+		return c.buildAgenticArgs(req)
+	}
 	args := []string{
 		"--print",
 		"--output-format", "json",
@@ -120,6 +162,158 @@ func (c *ClaudeCode) buildArgs(req Request) []string {
 		args = append(args, "--append-system-prompt", req.System)
 	}
 	return args
+}
+
+// buildAgenticArgs assembles the tool-using argv (ADR-017): stream-json for
+// per-turn usage (--verbose is mandatory with it in print mode), no built-in
+// tools, only the strict inline MCP config, an explicit per-call allowlist,
+// no session persistence, no settings/hooks. With --tools "" there are no
+// built-in tools for hooks to guard; the allowlisted read-only MCP set is the
+// entire callable surface.
+func (c *ClaudeCode) buildAgenticArgs(req Request) []string {
+	turns := req.MaxTurns
+	if turns <= 0 {
+		turns = defaultAgenticTurns
+	}
+	if turns > maxAgenticTurns {
+		turns = maxAgenticTurns
+	}
+	allowed := make([]string, len(req.Tools))
+	for i, t := range req.Tools {
+		allowed[i] = "mcp__axon__" + t
+	}
+	mcpCfg, _ := c.buildMCPConfig(req.Tools) // runAgentic validates before calling
+	args := []string{
+		"--print",
+		"--output-format", "stream-json",
+		"--verbose",
+		"--max-turns", strconv.Itoa(turns),
+		"--tools", "", // no built-in tools: the MCP allowlist is the whole surface
+		"--setting-sources", "",
+		"--strict-mcp-config",
+		"--mcp-config", mcpCfg,
+		"--allowedTools", strings.Join(allowed, ","),
+		"--no-session-persistence",
+	}
+	if req.Model != "" {
+		args = append(args, "--model", req.Model)
+	}
+	if req.System != "" {
+		args = append(args, "--append-system-prompt", req.System)
+	}
+	return args
+}
+
+// buildMCPConfig renders the inline --mcp-config JSON: the AXON binary
+// serving ONLY the call's tools (server-side enforcement, FR-86).
+func (c *ClaudeCode) buildMCPConfig(tools []string) (string, error) {
+	if c.mcpCommand == "" {
+		return "", fmt.Errorf("agentic run requested but no MCP command wired (ClaudeCodeOptions.MCPCommand)")
+	}
+	args := append(append([]string{}, c.mcpArgs...), "--tools", strings.Join(tools, ","))
+	cfg := map[string]any{
+		"mcpServers": map[string]any{
+			"axon": map[string]any{"command": c.mcpCommand, "args": args},
+		},
+	}
+	raw, err := json.Marshal(cfg)
+	return string(raw), err
+}
+
+// errKilledByBudget is what execClaudeStream reports after an onLine-requested
+// kill; runAgentic maps it onto ErrRunBudgetExceeded with context.
+var errKilledByBudget = errors.New("killed: run budget exceeded")
+
+// runAgentic executes a tool-using run with streaming per-turn budget
+// enforcement (ADR-017, FR-85): usage accumulates as turns complete; the
+// subprocess is killed the moment the cap is crossed, and the accumulated
+// REAL usage rides back with ErrRunBudgetExceeded so the chokepoint can
+// ledger actual spend, not an estimate.
+func (c *ClaudeCode) runAgentic(ctx context.Context, req Request) (*Response, error) {
+	if _, err := c.buildMCPConfig(req.Tools); err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.agenticTimeout)
+	defer cancel()
+
+	var acc Usage
+	var final *Response
+	onLine := func(line []byte) bool {
+		f, _ := accumulateStreamEvent(line, &acc)
+		if f != nil {
+			final = f
+		}
+		return req.RunBudgetTokens > 0 &&
+			acc.InputTokens+acc.OutputTokens > req.RunBudgetTokens
+	}
+
+	stderr, err := c.runStream(ctx, c.bin, c.buildArgs(req), c.buildEnv(), req.Prompt, onLine)
+	partial := &Response{Model: req.Model, Usage: acc}
+	if errors.Is(err, errKilledByBudget) {
+		return partial, fmt.Errorf("%w after %d tokens (cap %d)", ErrRunBudgetExceeded,
+			acc.InputTokens+acc.OutputTokens, req.RunBudgetTokens)
+	}
+	if err != nil {
+		// Turn-limit exhaustion or any other failure: surface with the
+		// partial usage so the ledger records real spend.
+		return partial, fmt.Errorf("claude -p agentic %q: %w: %s", req.Operation, err, failureOutput(nil, stderr))
+	}
+	if final == nil {
+		return partial, fmt.Errorf("claude -p agentic %q: stream ended without a result event", req.Operation)
+	}
+	final.Model = req.Model
+	return final, nil
+}
+
+// streamEvent mirrors the stream-json lines we consume (verified against the
+// live CLI; a schema change is a one-function fix, like parseClaudeJSON).
+type streamEvent struct {
+	Type     string       `json:"type"`
+	Result   string       `json:"result"`
+	NumTurns int          `json:"num_turns"`
+	Usage    *claudeUsage `json:"usage"`
+	Message  *struct {
+		Usage *claudeUsage `json:"usage"`
+	} `json:"message"`
+}
+
+type claudeUsage struct {
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+}
+
+func (u *claudeUsage) toUsage() Usage {
+	return Usage{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens,
+		CacheRead: u.CacheReadInputTokens, CacheWrite: u.CacheCreationInputTokens}
+}
+
+// accumulateStreamEvent folds one stream-json line into the running total and
+// returns the final Response when the line is the terminal result event.
+func accumulateStreamEvent(line []byte, acc *Usage) (*Response, bool) {
+	var ev streamEvent
+	if err := json.Unmarshal(bytes.TrimSpace(line), &ev); err != nil {
+		return nil, false // partial/non-JSON line: ignore
+	}
+	switch ev.Type {
+	case "assistant":
+		if ev.Message != nil && ev.Message.Usage != nil {
+			u := ev.Message.Usage.toUsage()
+			acc.InputTokens += u.InputTokens
+			acc.OutputTokens += u.OutputTokens
+			acc.CacheRead += u.CacheRead
+			acc.CacheWrite += u.CacheWrite
+			return nil, true
+		}
+	case "result":
+		resp := &Response{Text: ev.Result, Turns: ev.NumTurns, Usage: *acc}
+		if ev.Usage != nil {
+			resp.Usage = ev.Usage.toUsage() // cumulative from the CLI wins
+		}
+		return resp, false
+	}
+	return nil, false
 }
 
 // buildEnv returns the child environment: inherit the parent, isolate the
@@ -227,6 +421,48 @@ func execClaude(ctx context.Context, bin string, args, env []string, stdin strin
 	cmd.WaitDelay = 5 * time.Second
 	err := cmd.Run()
 	return stdout.Bytes(), stderr.Bytes(), err
+}
+
+// execClaudeStream runs the CLI and feeds stdout to onLine per line; when
+// onLine returns true it kills the process group (via the Cancel installed by
+// killProcessGroup) and reports errKilledByBudget.
+func execClaudeStream(ctx context.Context, bin string, args, env []string, stdin string, onLine func([]byte) bool) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd.Env = env
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	killProcessGroup(cmd)
+	cmd.WaitDelay = 5 * time.Second
+	if err := cmd.Start(); err != nil {
+		return stderr.Bytes(), err
+	}
+	killed := false
+	sc := bufio.NewScanner(stdout)
+	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024) // result events can be large
+	for sc.Scan() {
+		if onLine(sc.Bytes()) {
+			killed = true
+			if cmd.Cancel != nil {
+				_ = cmd.Cancel()
+			}
+			break
+		}
+	}
+	waitErr := cmd.Wait()
+	if killed {
+		return stderr.Bytes(), errKilledByBudget
+	}
+	if serr := sc.Err(); serr != nil && waitErr == nil {
+		waitErr = serr
+	}
+	return stderr.Bytes(), waitErr
 }
 
 // compile-time assertion that *ClaudeCode satisfies Agent.
