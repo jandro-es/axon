@@ -112,6 +112,19 @@ command, and the per-client `axon doctor` checks).
 | FR-75 | S | **Client-capability honesty.** AXON documents and `axon doctor`-reports that Claude Desktop receives the MCP **tools** but not hooks/skills/subagents/headless automations. AXON's own tools remain wikilink-safe and path-sandboxed in the server, so vault safety for AXON operations does **not** depend on the client's `PreToolUse` hook. |
 | FR-76 | C | **Concurrent clients.** Multiple Claude clients (Code + Desktop) may target the same profile/vault; the daemon remains the single owner of scheduled writes, and the single-writer SQLite caveat is documented. |
 
+### Local model routing *(planned — spec approved 2026-07-03, not yet built)*
+
+FR-77…FR-80 trace to ADR-015 and the spec in
+`docs/superpowers/specs/2026-07-03-local-model-routing-design.md`. Priorities
+are relative to this slice, not to v1 (which is complete).
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-77 | M | **Per-tier local provider routing.** The `models.classify` and `models.routine` config fields accept provider-prefixed strings — `ollama:<model>` (Ollama chat) or `apple` (Apple Foundation Models on-device, `classify` only) — resolved by the token manager's adapter router. `models.synthesis` always names a Claude model (validated). Every local call passes through the token-manager chokepoint and is recorded in `token_ledger` with the provider-identifying model string. |
+| FR-78 | M | **Budget exemption with full observability.** Local calls never consume the day/week token windows, are never deferred/denied/downgraded, and contribute nothing to budget-guard pressure — budgets continue to mean Claude quota. They are nonetheless fully ledgered (`cost_usd` null), emit the standard events, and appear on the dashboard. |
+| FR-79 | M | **Deterministic fallback.** `models.local_fallback: claude \| fail` (default `claude`). On local transport failure, schema-invalid output (after one local retry), or an input exceeding the Apple context cap: fall forward to Claude through the normal budget-checked path, or fail the run visibly with the standard `:failed` ledger row and event. |
+| FR-80 | S | **Apple Foundation Models adapter.** darwin/arm64, macOS 26+, Apple Intelligence enabled — availability doctor-checked via a `--check-availability` helper probe. Delivered with the ADR-013 compiled-at-init Swift helper pattern; uses guided generation when the call supplies an output schema. Configurable on the `classify` tier only. |
+
 ## Non-functional requirements
 
 | ID | Pri | Requirement |
