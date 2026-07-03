@@ -49,7 +49,7 @@ Callers **never** construct a raw Claude request; they call `Run()` (or `Authori
 
 ## 4. Budgets & guard (FR-42, FR-43)
 
-- Windows: rolling **day** and **week** per profile (in **tokens**, estimated), plus per-automation `budget_tokens`. On `api_key` mode a profile `daily_cost_usd` cap also applies; on subscription/enterprise the token windows stand in for "don't burn the plan's rate limit / Agent SDK credit".
+- Windows: rolling **day** and **week** per profile (in **tokens**, estimated), plus per-automation `budget_tokens` — **enforced at runtime (ADR-017)**: for one-shot calls it is the pre-flight input cap (`AgentCall.BudgetTokens`, defer when the estimate exceeds it); for agentic tool-using calls it is the **per-run total cap**, enforced live by the adapter's streaming kill-switch — the run is terminated the moment accumulated usage crosses it, a `token.run_budget_kill` event fires, and the **real accumulated usage** (not the estimate) is ledgered under the `:failed` operation label. On `api_key` mode a profile `daily_cost_usd` cap also applies; on subscription/enterprise the token windows stand in for "don't burn the plan's rate limit / Agent SDK credit".
 - `guard_pause_at_pct` (e.g. 80) triggers **budget-guard** (Component 06) to pause non-essential automations until the window resets — and is the right lever when Claude Code starts reporting rate-limit pressure.
 - `essential` operations (budget-guard, heartbeat status, interactive sessions) are **surfaced not silently blocked** — the user/dashboard always sees when the system is near/at cap.
 - `Status()` powers `axon status`, the `tokens.status` MCP tool, and the dashboard gauges.

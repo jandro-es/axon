@@ -38,6 +38,14 @@ type Request struct {
 	// OutputSchema optionally constrains output via guided generation
 	// (Apple Foundation Models). nil = plain text. Raw JSON Schema.
 	OutputSchema json.RawMessage
+	// Tools names AXON MCP tools for an agentic run (e.g. "vault_search").
+	// Empty = the classic one-shot text generation (ADR-017).
+	Tools []string
+	// MaxTurns caps agentic turns (clamped 1..32; default 8 when 0).
+	MaxTurns int
+	// RunBudgetTokens is the per-run total token cap enforced by the
+	// streaming kill-switch (0 = no cap; --max-turns still bounds the run).
+	RunBudgetTokens int
 }
 
 // Response is the result of a Claude call plus the usage to be ledgered.
@@ -45,6 +53,8 @@ type Response struct {
 	Text  string
 	Model string
 	Usage Usage
+	// Turns is the number of agentic turns a tool-using run took (0 one-shot).
+	Turns int
 }
 
 // Agent runs a single Claude turn. Implementations must be safe for concurrent

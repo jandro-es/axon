@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"os"
+	"path/filepath"
 
 	"github.com/jandro-es/axon/internal/agent"
 	"github.com/jandro-es/axon/internal/automations"
@@ -19,13 +20,14 @@ import (
 
 // profileDeps bundles the per-profile runtime objects a data command needs.
 type profileDeps struct {
-	cfg      *config.Config
-	name     string
-	profile  config.Profile
-	paths    config.ResolvedPaths
-	db       *sql.DB
-	vault    *vault.FS
-	embedder embeddings.Provider
+	cfg        *config.Config
+	name       string
+	profile    config.Profile
+	paths      config.ResolvedPaths
+	db         *sql.DB
+	vault      *vault.FS
+	embedder   embeddings.Provider
+	configPath string // absolute config path, for subprocess re-invocation (agentic MCP)
 }
 
 // loadProfileDeps loads + validates config, resolves the active profile, builds
@@ -42,13 +44,18 @@ func loadProfileDeps(gf *globalFlags, openDB bool) (*profileDeps, error) {
 		return nil, err
 	}
 	paths := profile.Paths()
+	absCfg, aerr := filepath.Abs(gf.configPath)
+	if aerr != nil {
+		absCfg = gf.configPath
+	}
 	d := &profileDeps{
-		cfg:      cfg,
-		name:     name,
-		profile:  profile,
-		paths:    paths,
-		vault:    vault.NewFS(paths.VaultPath),
-		embedder: embeddingsProvider(profile),
+		cfg:        cfg,
+		name:       name,
+		profile:    profile,
+		paths:      paths,
+		vault:      vault.NewFS(paths.VaultPath),
+		embedder:   embeddingsProvider(profile),
+		configPath: absCfg,
 	}
 	if openDB {
 		sqlDB, err := db.Open(paths.DBPath)
@@ -97,11 +104,16 @@ func (d *profileDeps) claudeAdapter() agent.Agent {
 	// session in the profile's config dir can still carry the call — but the
 	// error rides along so a subsequent auth failure explains itself.
 	oauth, oauthErr := config.ResolveSecret(d.profile.Claude.OAuthToken)
+	// Agentic runs (ADR-017) spawn this same binary as the MCP server; the
+	// adapter appends the per-call read-only --tools filter itself.
+	exe, _ := os.Executable()
 	return agent.NewClaudeCode(agent.ClaudeCodeOptions{
 		ConfigDir:     d.paths.ConfigDir,
 		OAuthToken:    oauth,
 		OAuthTokenErr: oauthErr,
 		AuthMode:      d.profile.Claude.AuthMode,
+		MCPCommand:    exe,
+		MCPArgs:       []string{"mcp", "--config", d.configPath, "--profile", d.name},
 	})
 }
 

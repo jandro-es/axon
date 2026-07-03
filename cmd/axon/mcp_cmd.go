@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -14,6 +15,7 @@ import (
 )
 
 func newMCPCmd(gf *globalFlags) *cobra.Command {
+	var toolsCSV string
 	cmd := &cobra.Command{
 		Use:   "mcp",
 		Short: "Run the AXON MCP server over stdio (launched by Claude clients)",
@@ -21,7 +23,9 @@ func newMCPCmd(gf *globalFlags) *cobra.Command {
 			"token status, automations, memory) to a Claude client over stdio. Claude Code\n" +
 			"and Claude Desktop both launch this per their generated config. Stdout/stdin\n" +
 			"carry the MCP protocol; do not run interactively. Use `axon mcp install` to\n" +
-			"register the server with a client.",
+			"register the server with a client. --tools restricts the server to the named\n" +
+			"tools only (how agentic automation runs enforce their read-only allowlist\n" +
+			"server-side, ADR-017).",
 		Args: cobra.NoArgs,
 		// Silence cobra's own stdout: the MCP protocol owns stdout.
 		SilenceUsage:  true,
@@ -32,9 +36,14 @@ func newMCPCmd(gf *globalFlags) *cobra.Command {
 				return err
 			}
 			defer deps.close()
-			return mcp.Serve(cmd.Context(), deps.mcpDeps(nil))
+			mcpDeps := deps.mcpDeps(nil)
+			if toolsCSV != "" {
+				mcpDeps.ToolFilter = strings.Split(toolsCSV, ",")
+			}
+			return mcp.Serve(cmd.Context(), mcpDeps)
 		},
 	}
+	cmd.Flags().StringVar(&toolsCSV, "tools", "", "comma-separated tool filter: serve ONLY these tools (agentic runs)")
 	cmd.AddCommand(newMCPInstallCmd(gf))
 	return cmd
 }

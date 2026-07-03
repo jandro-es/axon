@@ -78,6 +78,8 @@ CLAUDE_CONFIG_DIR=<profile>  CLAUDE_CODE_OAUTH_TOKEN=<from `claude setup-token`>
 ```
 It parses the JSON result for the final output and usage, feeds usage into the ledger, and applies any vault changes through AXON's wikilink-safe ops (the subagent is instructed to *propose* changes that AXON applies, or to use the AXON MCP tools which are already safe). On subscription/enterprise this draws on the plan's Agent SDK credit rather than per-token billing. The optional `auth_mode: api_key` install can instead use the in-process direct-API adapter for small single-shot tasks; the choice is per-automation config (`runner: claude_code | inprocess`), with `claude_code` the default and the only path available without API access.
 
+**Agentic mode (ADR-017, built):** an automation may declare AXON MCP tools + a turn cap in code (v1: knowledge-digest — `knowledge_search`/`vault_read`/`vault_links`, 8 turns; compaction — `vault_read`/`vault_links`, 4 turns/note). Config `automations.<name>.agentic: false` opts back into the one-shot path, which also remains the automatic degradation path when a run is budget-killed or deferred. **`budget_tokens` is enforced at runtime** (previously display-only): the pre-flight input cap for one-shot calls, the per-run total cap for agentic runs — enforced live by the adapter's streaming kill-switch, with real accumulated usage ledgered on every path. Dry-run stays Authorize-only for both shapes.
+
 > No `ANTHROPIC_API_KEY` in subscription/enterprise mode — it would divert Claude Code onto API billing. Verify current `claude -p` flags/JSON shape against the Claude Code docs at build time; isolate them in this adapter so a CLI change is a one-file fix.
 
 ## 5. Extensibility (NFR-12)

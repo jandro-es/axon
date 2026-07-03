@@ -256,6 +256,9 @@ type Automation struct {
 	BudgetTokens FlexInt `yaml:"budget_tokens"`
 	CatchUp      string  `yaml:"catch_up,omitempty"`
 	DryRun       bool    `yaml:"dry_run,omitempty"`
+	// Agentic opts a tool-using automation in/out of its agentic path
+	// (ADR-017). nil = the automation's own default; false = one-shot.
+	Agentic *bool `yaml:"agentic,omitempty"`
 }
 
 // Price is a per-model unit price table entry (api_key mode only).

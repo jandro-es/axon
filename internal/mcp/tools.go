@@ -35,6 +35,9 @@ type Deps struct {
 	Manager  tokens.Manager
 	Pipeline *ingestion.Pipeline
 	Engine   *automations.Engine
+	// ToolFilter, when non-empty, registers ONLY the named tools — the
+	// server-side half of ADR-017's dual allowlisting. Empty = all tools.
+	ToolFilter []string
 }
 
 // Tools holds the dependencies and implements each tool as a method.

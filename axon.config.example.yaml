@@ -117,7 +117,10 @@ profiles:
 
     automations:
       # schedule = cron (5-field). model = which `models:` class (or `none` for no Claude call).
-      # budget_tokens caps a single run (estimated). catch_up: skip = don't backfill missed runs.
+      # budget_tokens is ENFORCED at runtime (ADR-017): one-shot calls defer when the
+      # estimated input exceeds it; agentic runs are killed live when total usage crosses it.
+      # catch_up: skip = don't backfill missed runs.
+      # agentic: false opts knowledge-digest/compaction back to one-shot (no MCP tools).
       heartbeat:         { enabled: true,  schedule: "0 9,13,17 * * *", model: classify,  budget_tokens: 50_000,  catch_up: skip }
       daily-log:         { enabled: true,  schedule: "30 21 * * *",     model: routine,   budget_tokens: 120_000 }
       inbox-triage:      { enabled: true,  schedule: "*/30 * * * *",    model: classify,  budget_tokens: 80_000,  dry_run: false }
