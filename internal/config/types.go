@@ -46,6 +46,50 @@ type Profile struct {
 	Ingestion IngestionConfig `yaml:"ingestion"`
 	// Interop wires optional external/community MCP backends (FR-54). Optional.
 	Interop InteropConfig `yaml:"interop"`
+	// Capture tunes the capture automation (ADR-016). Optional: an absent block
+	// resolves to heuristic enrichment and the default archive folder.
+	Capture CaptureConfig `yaml:"capture"`
+}
+
+// CaptureConfig tunes the capture automation (ADR-016): the FR-26 funnel that
+// ingests own-line URLs from Inbox notes and files dropped into 00-Inbox.
+type CaptureConfig struct {
+	// Enrich selects metadata enrichment for captured items: "heuristic"
+	// (default, zero tokens) or "claude" (through the token-manager
+	// chokepoint on the routine tier).
+	Enrich string `yaml:"enrich,omitempty"`
+	// ArchiveDir is the vault-relative folder for ingested inbox originals.
+	// Default: 04-Archive/Capture.
+	ArchiveDir string `yaml:"archive_dir,omitempty"`
+}
+
+// EnrichMode returns the enrichment mode, defaulting to "heuristic".
+func (c CaptureConfig) EnrichMode() string {
+	if c.Enrich == "" {
+		return "heuristic"
+	}
+	return c.Enrich
+}
+
+// Archive returns the archive folder, defaulting to 04-Archive/Capture.
+func (c CaptureConfig) Archive() string {
+	if c.ArchiveDir == "" {
+		return "04-Archive/Capture"
+	}
+	return c.ArchiveDir
+}
+
+// validateCapture applies the capture-block rules struct tags can't express.
+func validateCapture(c CaptureConfig) error {
+	if c.Enrich != "" && c.Enrich != "heuristic" && c.Enrich != "claude" {
+		return fmt.Errorf("capture.enrich must be heuristic or claude (got %q)", c.Enrich)
+	}
+	if c.ArchiveDir != "" {
+		if strings.HasPrefix(c.ArchiveDir, "/") || strings.Contains(c.ArchiveDir, "..") {
+			return fmt.Errorf("capture.archive_dir must be a vault-relative path (got %q)", c.ArchiveDir)
+		}
+	}
+	return nil
 }
 
 // IngestionConfig configures URL-fetch behaviour for the ingestion pipeline.
