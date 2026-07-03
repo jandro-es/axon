@@ -293,61 +293,25 @@ func GraphData(ctx context.Context, q Queryer2, limit int, includeSimilar bool) 
 // per note. Brute-force O(n²) over note vectors — fine at personal-vault scale
 // (see docs/05 §7 / ADR-010); skipped entirely above simMaxNotes.
 func similarityEdges(ctx context.Context, q Queryer2, present map[int64]bool) ([]GraphEdge, error) {
-	rows, err := q.QueryContext(ctx,
-		`SELECT c.note_id, v.embedding FROM vec_chunks v
-		   JOIN chunks c ON c.id = v.chunk_id
-		  WHERE c.note_id IS NOT NULL;`)
+	means, err := NoteMeanVectors(ctx, q, present)
 	if err != nil {
-		return nil, fmt.Errorf("similarity vectors: %w", err)
-	}
-	defer rows.Close()
-
-	sums := map[int64][]float64{}
-	counts := map[int64]int{}
-	for rows.Next() {
-		var noteID int64
-		var blob []byte
-		if err := rows.Scan(&noteID, &blob); err != nil {
-			return nil, err
-		}
-		if !present[noteID] {
-			continue
-		}
-		vec, err := DecodeVector(blob)
-		if err != nil {
-			continue // skip undecodable vectors; similarity is best-effort
-		}
-		sum := sums[noteID]
-		if sum == nil {
-			sum = make([]float64, len(vec))
-			sums[noteID] = sum
-		}
-		if len(sum) != len(vec) {
-			continue // mixed dims (model change mid-reembed); skip mismatches
-		}
-		for i, f := range vec {
-			sum[i] += float64(f)
-		}
-		counts[noteID]++
-	}
-	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	if len(sums) < 2 || len(sums) > simMaxNotes {
+	if len(means) < 2 || len(means) > simMaxNotes {
 		return nil, nil
 	}
 
-	ids := make([]int64, 0, len(sums))
-	means := make(map[int64][]float32, len(sums))
-	for id, sum := range sums {
-		mean := make([]float32, len(sum))
-		for i, f := range sum {
-			mean[i] = float32(f / float64(counts[id]))
-		}
+	ids := make([]int64, 0, len(means))
+	for id := range means {
 		ids = append(ids, id)
-		means[id] = mean
 	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+
+	return similarityEdgesFromMeans(ids, means), nil
+}
+
+// similarityEdgesFromMeans is the O(n²) sweep over precomputed means.
+func similarityEdgesFromMeans(ids []int64, means map[int64][]float32) []GraphEdge {
 
 	type scored struct {
 		a, b int64
@@ -360,7 +324,7 @@ func similarityEdges(ctx context.Context, q Queryer2, present map[int64]bool) ([
 			if len(means[a]) != len(means[b]) {
 				continue
 			}
-			if s := cosine(means[a], means[b]); s >= simThreshold {
+			if s := Cosine(means[a], means[b]); s >= simThreshold {
 				candidates = append(candidates, scored{a, b, s})
 			}
 		}
@@ -386,7 +350,7 @@ func similarityEdges(ctx context.Context, q Queryer2, present map[int64]bool) ([
 		degree[c.b]++
 		out = append(out, GraphEdge{Source: c.a, Target: c.b, Kind: "similar", Sim: c.sim})
 	}
-	return out, nil
+	return out
 }
 
 // GrowthPoint is one cumulative vault-size sample (FR-60).
@@ -426,4 +390,61 @@ func VaultGrowth(ctx context.Context, q Queryer2) ([]GrowthPoint, error) {
 		out = append(out, GrowthPoint{Day: day, Notes: cumNotes, Words: cumWords})
 	}
 	return out, rows.Err()
+}
+
+// NoteMeanVectors returns each note's mean chunk vector. present (when
+// non-nil) filters which notes are included. Best-effort: undecodable
+// vectors and mixed-dimension chunks are skipped, mirroring the graph's
+// long-standing behavior. Shared by the graph's similarity edges and the
+// resurfacer (ADR-018).
+func NoteMeanVectors(ctx context.Context, q Queryer2, present map[int64]bool) (map[int64][]float32, error) {
+	rows, err := q.QueryContext(ctx,
+		`SELECT c.note_id, v.embedding FROM vec_chunks v
+		   JOIN chunks c ON c.id = v.chunk_id
+		  WHERE c.note_id IS NOT NULL;`)
+	if err != nil {
+		return nil, fmt.Errorf("note vectors: %w", err)
+	}
+	defer rows.Close()
+
+	sums := map[int64][]float64{}
+	counts := map[int64]int{}
+	for rows.Next() {
+		var noteID int64
+		var blob []byte
+		if err := rows.Scan(&noteID, &blob); err != nil {
+			return nil, err
+		}
+		if present != nil && !present[noteID] {
+			continue
+		}
+		vec, err := DecodeVector(blob)
+		if err != nil {
+			continue // skip undecodable vectors; similarity is best-effort
+		}
+		sum := sums[noteID]
+		if sum == nil {
+			sum = make([]float64, len(vec))
+			sums[noteID] = sum
+		}
+		if len(sum) != len(vec) {
+			continue // mixed dims (model change mid-reembed); skip mismatches
+		}
+		for i, f := range vec {
+			sum[i] += float64(f)
+		}
+		counts[noteID]++
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	means := make(map[int64][]float32, len(sums))
+	for id, sum := range sums {
+		mean := make([]float32, len(sum))
+		for i, f := range sum {
+			mean[i] = float32(f / float64(counts[id]))
+		}
+		means[id] = mean
+	}
+	return means, nil
 }
