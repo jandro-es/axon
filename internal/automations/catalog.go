@@ -21,6 +21,8 @@ var purposes = map[string]string{
 	"knowledge-digest":  "Weekly synthesis of newly ingested sources: surfaces connections and proposes MOC additions.",
 	"memory-distill":    "Maintains the durable personal-memory note: distils new entries and compacts old ones.",
 	"capture":           "Ingests own-line URLs from Inbox notes and files dropped into 00-Inbox, archiving originals. The FR-26 capture funnel; no model call (enrichment optional via capture.enrich).",
+	"briefing":          "Writes the morning axon:briefing block into the daily note: what changed, review queue, budget — plus a short routine-tier narrative. Facts are free; the narrative degrades on budget pressure.",
+	"resurfacer":        "Weekly vector resurfacing: proposes review-queue connections between recently-touched notes and dormant ones (90+ days). No model call.",
 }
 
 // Purpose returns the human description for an automation, or a generic fallback.

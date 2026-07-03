@@ -30,7 +30,9 @@ func DecodeVector(b []byte) ([]float32, error) {
 
 // cosine returns the cosine similarity of two equal-length vectors in [-1,1].
 // Returns 0 for a zero-magnitude vector or a length mismatch.
-func cosine(a, b []float32) float64 {
+// Cosine is the cosine similarity between two vectors (0 when dims differ or
+// either norm is zero). Exported for the resurfacer (ADR-018).
+func Cosine(a, b []float32) float64 {
 	if len(a) != len(b) {
 		return 0
 	}

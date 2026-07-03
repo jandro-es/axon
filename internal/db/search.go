@@ -150,7 +150,7 @@ func vectorCandidates(ctx context.Context, q DBTX, query []float32, limit int) (
 		if err != nil {
 			return nil, sims, err
 		}
-		s := cosine(query, v)
+		s := Cosine(query, v)
 		all = append(all, scored{id, s})
 		sims[id] = s
 	}

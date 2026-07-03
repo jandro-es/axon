@@ -129,6 +129,21 @@ this slice.
 | FR-82 | M | **Capture bookkeeping.** Ticks are change-gated on the inbox listing hash; failed items are remembered in automation state and skipped until they change, surfaced once in `.axon/review-queue.md`, and emitted as events; every capture ingest is observable through the standard run rows and `ingest.*` events. Inbox notes are never modified by capture (cardinal rule 2). |
 | FR-83 | S | **Capture enrichment toggle.** `capture.enrich: heuristic \| claude` (default `heuristic`, zero tokens). `claude` routes enrichment through the token-manager chokepoint on the `routine` tier (ADR-015 local routing and fallback apply) and degrades to heuristic under budget denial. |
 
+### Proactive layer *(built)*
+
+FR-88…FR-90 are **implemented** (ADR-018; spec in
+`docs/superpowers/specs/2026-07-04-proactive-layer-design.md`): the
+`briefing` and `resurfacer` automations (`internal/automations/proactive.go`),
+the SessionStart pointer, and the shared `db.NoteMeanVectors`/`db.Cosine`
+similarity primitives (also backing the dashboard graph). Priorities are
+relative to this slice.
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-88 | M | **Daily briefing.** A `briefing` automation writes an `axon:briefing` managed block into `Daily/<date>.md` at most once per day: deterministic facts (notes changed via `db.NotesUpdatedSince`, new sources, automation activity, review-queue pending, budget state) always; a short narrative via **one one-shot `routine`-tier chokepoint call** (local-routable per ADR-015, capped by `budget_tokens`), degrading to facts-only on budget defer. Dry-run writes nothing. |
+| FR-89 | S | **SessionStart briefing pointer.** When today's daily note contains an `axon:briefing` block, the SessionStart hook injects a single pointer line (`- Briefing: Daily/<date>.md (axon:briefing)`). Deterministic, no model call, silent on any error. |
+| FR-90 | M | **Resurfacer.** A weekly no-model automation proposes connections between recently-touched notes (≤7 days) and dormant notes (≥90 days) by mean-chunk-vector cosine (≥0.75, shared primitives with the dashboard graph), excluding already-linked pairs and previously-proposed pairs (persistent proposal memory in `automation_state`), appending at most 5 proposals per run to `.axon/review-queue.md`. |
+
 ### Agentic automations *(built)*
 
 FR-84…FR-87 are **implemented** (ADR-017; spec in

@@ -69,6 +69,12 @@ Vector-similarity sweep (no model needed for candidate generation; optional Haik
 ### budget-guard (essential, no model)
 Runs frequently; reads `budget_state`; when usage crosses `guard_pause_at_pct`, **pauses non-essential automations** for the rest of the window and emits a prominent dashboard event; resumes at window reset. Never blocks interactive use or essential automations silently — it surfaces, it doesn't hide.
 
+### briefing (daily, ADR-018)
+Writes the morning `axon:briefing` block into `Daily/<date>.md`, at most once per day: deterministic facts (notes changed, new sources, automation activity, review-queue pending, budget) always, plus a 2–4 sentence narrative from **one one-shot routine-tier call** (local-routable per ADR-015; degrades to facts-only on budget defer). SessionStart injects a one-line pointer when today's block exists (FR-89).
+
+### resurfacer (weekly, no model — ADR-018)
+Proposes review-queue connections between recently-touched notes (≤7 days) and dormant ones (≥90 days) by mean-chunk-vector cosine (≥0.75; primitives shared with the dashboard graph). Persistent proposal memory in `automation_state` means a pair is never re-proposed. The spaced-serendipity half of the proactive layer.
+
 ## 4. Agent adapter — Claude Code (`claude -p`) is the default path
 
 Automations reach Claude by shelling out to Claude Code, authenticated by the profile's subscription/enterprise login:

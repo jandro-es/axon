@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/identity"
@@ -107,6 +108,11 @@ func sessionStart(ctx context.Context, deps Deps) (Result, error) {
 		fmt.Fprintf(&b, "- Inbox: %d item(s) awaiting triage\n", inboxCount(ctx, deps.Vault))
 		if pending := reviewQueueCount(deps.Vault); pending > 0 {
 			fmt.Fprintf(&b, "- Review queue: %d pending suggestion(s) in .axon/review-queue.md\n", pending)
+		}
+		// Briefing pointer (FR-89): one deterministic line when today's
+		// briefing exists; any error means no line, never a broken hook.
+		if line := briefingPointer(deps.Vault); line != "" {
+			b.WriteString(line)
 		}
 	}
 	b.WriteString("- Conventions: never rename/move notes with raw file ops — use vault_move (wikilink-safe). Edit AXON output only inside axon:* managed blocks. See .claude/CLAUDE.md.\n")
@@ -295,4 +301,18 @@ func reviewQueueCount(v *vault.FS) int {
 		return 0
 	}
 	return strings.Count(string(data), "- [ ]")
+}
+
+// briefingPointer returns the one-line pointer to today's axon:briefing
+// block, or "" when the daily note or block is absent (FR-89).
+func briefingPointer(v *vault.FS) string {
+	date := time.Now().UTC().Format("2006-01-02")
+	data, err := os.ReadFile(filepath.Join(v.Root(), "Daily", date+".md"))
+	if err != nil {
+		return ""
+	}
+	if !strings.Contains(string(data), "<!-- axon:briefing:start -->") {
+		return ""
+	}
+	return "- Briefing: Daily/" + date + ".md (axon:briefing)\n"
 }

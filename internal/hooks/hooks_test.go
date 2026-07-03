@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jandro-es/axon/internal/agent"
 	"github.com/jandro-es/axon/internal/config"
@@ -229,5 +230,45 @@ func TestReviewQueueCount(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(root, ".axon", "review-queue.md"), []byte("- [ ] one\n- [ ] two\n- [x] done\n"), 0o644)
 	if n := reviewQueueCount(deps.Vault); n != 2 {
 		t.Errorf("reviewQueueCount = %d, want 2", n)
+	}
+}
+
+func TestSessionStartBriefingPointer(t *testing.T) {
+	deps, _ := testDeps(t)
+	today := time.Now().UTC().Format("2006-01-02")
+
+	// No daily note → no pointer.
+	res, err := Handle(context.Background(), SessionStart, nil, deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(res.Stdout), "Briefing:") {
+		t.Fatal("pointer must be absent without a briefing block")
+	}
+
+	// Daily note WITHOUT the block → still no pointer.
+	daily := filepath.Join(deps.Vault.Root(), "Daily")
+	if err := os.MkdirAll(daily, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(daily, today+".md"), []byte("---\ntitle: x\n---\nplain\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, _ = Handle(context.Background(), SessionStart, nil, deps)
+	if strings.Contains(string(res.Stdout), "Briefing:") {
+		t.Fatal("pointer must be absent without the axon:briefing block")
+	}
+
+	// Daily note WITH an axon:briefing block → pointer present.
+	body := "---\ntitle: x\n---\n<!-- axon:briefing:start -->\nhello\n<!-- axon:briefing:end -->\n"
+	if err := os.WriteFile(filepath.Join(daily, today+".md"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err = Handle(context.Background(), SessionStart, nil, deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(res.Stdout), "- Briefing: Daily/"+today+".md (axon:briefing)") {
+		t.Fatalf("pointer missing:\n%s", res.Stdout)
 	}
 }

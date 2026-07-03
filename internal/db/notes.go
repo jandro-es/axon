@@ -282,3 +282,53 @@ type Execer interface {
 type Queryer interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
+
+// NoteStamp is a light note reference for recency queries (ADR-018).
+type NoteStamp struct {
+	ID      int64
+	Path    string
+	Title   string
+	Updated string
+}
+
+// NotesUpdatedSince lists notes with updated >= sinceDate (YYYY-MM-DD),
+// newest first, capped at limit. Day-granular: `updated` comes from
+// frontmatter or file mtime at last reindex.
+func NotesUpdatedSince(ctx context.Context, q Queryer2, sinceDate string, limit int) ([]NoteStamp, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := q.QueryContext(ctx,
+		`SELECT id, path, COALESCE(title,''), COALESCE(updated,'')
+		   FROM notes WHERE updated >= ? ORDER BY updated DESC, path LIMIT ?;`, sinceDate, limit)
+	if err != nil {
+		return nil, fmt.Errorf("notes updated since: %w", err)
+	}
+	defer rows.Close()
+	return scanNoteStamps(rows)
+}
+
+// NotesUpdatedBefore lists notes last updated strictly before beforeDate
+// (YYYY-MM-DD), excluding notes with no updated stamp.
+func NotesUpdatedBefore(ctx context.Context, q Queryer2, beforeDate string) ([]NoteStamp, error) {
+	rows, err := q.QueryContext(ctx,
+		`SELECT id, path, COALESCE(title,''), COALESCE(updated,'')
+		   FROM notes WHERE updated != '' AND updated IS NOT NULL AND updated < ? ORDER BY updated, path;`, beforeDate)
+	if err != nil {
+		return nil, fmt.Errorf("notes updated before: %w", err)
+	}
+	defer rows.Close()
+	return scanNoteStamps(rows)
+}
+
+func scanNoteStamps(rows *sql.Rows) ([]NoteStamp, error) {
+	var out []NoteStamp
+	for rows.Next() {
+		var n NoteStamp
+		if err := rows.Scan(&n.ID, &n.Path, &n.Title, &n.Updated); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}

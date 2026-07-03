@@ -80,6 +80,8 @@ profiles:
       memory-distill:    { enabled: true,  schedule: "0 5 * * *",       model: synthesis, budget_tokens: 120_000 }
       budget-guard:      { enabled: true,  schedule: "*/15 * * * *",    model: none,      budget_tokens: 0 }
       capture:           { enabled: true,  schedule: "*/5 * * * *",     model: none,      budget_tokens: 0, catch_up: run-once }
+      briefing:          { enabled: true,  schedule: "0 6 * * *",       model: routine,   budget_tokens: 40_000, catch_up: run-once }
+      resurfacer:        { enabled: true,  schedule: "0 7 * * 1",       model: none,      budget_tokens: 0 }
 
     memory:
       inject: true
