@@ -68,6 +68,18 @@ func DefaultAppleHelperPath() string {
 	return filepath.Join(AxonHome(), "bin", "axon-apple-embed")
 }
 
+// AppleFoundationModel identifies the on-device Foundation Models system
+// model in ledger rows and ModelRefs (ADR-015). Versioned like the
+// embeddings identifier so a future model change is visible in the ledger.
+const AppleFoundationModel = "apple-foundation-v1"
+
+// DefaultAppleLMHelperPath is where `axon init` compiles the Foundation
+// Models helper: machine-level (outside profile isolation), like the
+// embeddings helper.
+func DefaultAppleLMHelperPath() string {
+	return filepath.Join(AxonHome(), "bin", "axon-apple-lm")
+}
+
 // ResolvedPaths holds the concrete, ~-expanded paths a running profile needs.
 type ResolvedPaths struct {
 	VaultPath string
