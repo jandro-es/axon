@@ -16,6 +16,7 @@ import (
 
 func newMCPCmd(gf *globalFlags) *cobra.Command {
 	var toolsCSV string
+	var dryRun bool
 	cmd := &cobra.Command{
 		Use:   "mcp",
 		Short: "Run the AXON MCP server over stdio (launched by Claude clients)",
@@ -40,10 +41,12 @@ func newMCPCmd(gf *globalFlags) *cobra.Command {
 			if toolsCSV != "" {
 				mcpDeps.ToolFilter = strings.Split(toolsCSV, ",")
 			}
+			mcpDeps.DryRun = dryRun
 			return mcp.Serve(cmd.Context(), mcpDeps)
 		},
 	}
 	cmd.Flags().StringVar(&toolsCSV, "tools", "", "comma-separated tool filter: serve ONLY these tools (agentic runs)")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "report-only: write tools validate and describe changes without mutating (agentic dry-runs)")
 	cmd.AddCommand(newMCPInstallCmd(gf))
 	return cmd
 }

@@ -71,7 +71,7 @@ func TestBuildArgsAgenticTurnClamp(t *testing.T) {
 
 func TestBuildMCPConfig(t *testing.T) {
 	c := agenticAdapter()
-	raw, err := c.buildMCPConfig([]string{"vault_search", "tokens_status"})
+	raw, err := c.buildMCPConfig([]string{"vault_search", "tokens_status"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

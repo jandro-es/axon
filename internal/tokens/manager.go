@@ -68,6 +68,10 @@ type AgentCall struct {
 	// pre-flight input cap).
 	Tools    []string
 	MaxTurns int
+	// DryRunTools requests report-only write tools for this agentic run
+	// (ADR-022 / FR-106). Set by an automation only when its own dry-run is
+	// active AND its tool allowlist includes a write tool.
+	DryRunTools bool
 }
 
 // Authorization is the pre-flight result.
@@ -499,6 +503,7 @@ func (m *manager) buildRequest(call AgentCall, auth Authorization) agent.Request
 		req.Tools = call.Tools
 		req.MaxTurns = call.MaxTurns
 		req.RunBudgetTokens = call.BudgetTokens
+		req.DryRunTools = call.DryRunTools
 	}
 	return req
 }
