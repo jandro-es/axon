@@ -1,8 +1,9 @@
 # Installing AXON
 
 AXON ships as a single self-contained binary (the dashboard is embedded — no
-Node needed at runtime). Everything below is driven by `make`; run `make` with
-no arguments for a categorised list of targets.
+Node needed at runtime). There are two paths: the **one-line release install**
+(no toolchain at all) and **building from source** (driven by `make`; run
+`make` with no arguments for a categorised list of targets).
 
 > Your Obsidian vault is the source of truth and is **never** modified by
 > install, update, or uninstall. The SQLite database is derived and rebuildable.
@@ -10,29 +11,96 @@ no arguments for a categorised list of targets.
 ## TL;DR
 
 ```bash
+# Release install — no Go/Node/repo needed:
+curl -fsSL https://raw.githubusercontent.com/jandro-es/axon/main/install.sh | bash
+
+# From source:
 make doctor     # check dependencies (and how to install any that are missing)
 make setup      # full install: binary + config + Ollama + daemon at login
 # … later …
-make update     # update an existing install (binary, DB schema, dashboard, daemon)
+axon update     # release installs: checksum-verified self-update
+make update     # from-source installs: rebuild + converge + restart
 make uninstall  # remove the daemon + binary (keeps ~/.axon)
 ```
+
+## Preparing a fresh machine
+
+AXON needs two runtime companions — the `claude` CLI (the brain) and Ollama
+(local embeddings, optional local models) — plus a build toolchain only if you
+build from source. On a machine that has none of it:
+
+**macOS**
+
+```bash
+# Homebrew (if missing): https://brew.sh
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+brew install ollama                       # local embeddings + optional local models
+ollama pull nomic-embed-text              # the default embedding model (768-dim)
+npm install -g @anthropic-ai/claude-code  # the claude CLI (or the installer at claude.com/claude-code)
+claude login                              # authenticate with your Claude subscription/enterprise account
+
+# Only if building from source:
+brew install go node git make
+```
+
+**Linux (Debian/Ubuntu shown)**
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh   # Ollama
+ollama pull nomic-embed-text
+npm install -g @anthropic-ai/claude-code        # the claude CLI (needs Node 18+)
+claude login
+
+# Only if building from source:
+sudo apt-get install -y golang-go nodejs npm git make   # Go must satisfy go.mod (1.26+)
+```
+
+For **headless automations** (the scheduler calling Claude with no terminal
+attached), also create a long-lived token once and put it in `~/.axon/.env`:
+
+```bash
+claude setup-token        # → CLAUDE_CODE_OAUTH_TOKEN=...
+```
+
+Everything is verifiable before and after: `make doctor` (from source) or
+`axon doctor` (any install) names anything missing **with the exact install
+command for your OS/package manager**, and never changes your system itself.
+AXON degrades gracefully — without Ollama, notes are still written and
+lexically searchable; vectors back-fill via `axon reindex --embeddings` later.
 
 ## Requirements
 
 | Tool | Required | Purpose |
 | --- | --- | --- |
-| **Go 1.26+** | yes (to build) | compiles the binary (matches the `go` directive in `go.mod`) |
-| **Node + npm** | optional | builds the dashboard SPA (a fallback page is served without it) |
 | **claude CLI** | recommended | automations + interactive use ([Claude Code](https://claude.com/claude-code)) |
-| **Ollama** | recommended | local embeddings + hybrid search |
-| **git / make** | recommended | version stamping + the build shortcuts |
+| **Ollama** | recommended | local embeddings + hybrid search; optional local models for cheap tiers |
+| **Go 1.26+** | source builds only | compiles the binary (matches the `go` directive in `go.mod`) |
+| **Node + npm** | optional | builds the dashboard SPA (a fallback page is served without it) |
+| **git / make** | source builds only | version stamping + the build shortcuts |
 
 `make doctor` inspects all of these and prints the exact install command for
 your OS/package manager for anything missing. It never changes your system.
 
 ## Install
 
-### macOS / Linux — one command
+### Release binary — one line, no toolchain
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jandro-es/axon/main/install.sh | bash
+```
+
+Downloads the latest release binary (SHA-256 verified) and hands over to the
+interactive **`axon setup`**, which asks for your vault path, profile and
+embeddings provider, then provisions everything. `--user` installs to
+`~/.local/bin` without sudo; `--no-setup` installs the binary only. `axon
+setup` is idempotent — re-run it any time; existing config and secrets are
+kept. Update later with **`axon update`** (checksum-verified self-update;
+`axon doctor` and the dashboard tell you when one is available); remove with
+**`axon uninstall`** (`--purge` also deletes `~/.axon`; the vault is never
+touched).
+
+### From source (macOS / Linux) — one command
 
 ```bash
 make setup

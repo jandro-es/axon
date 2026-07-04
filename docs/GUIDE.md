@@ -314,7 +314,10 @@ Re-running `axon init` is safe: it converges and reports "no changes".
 A typical loop:
 
 1. **Capture** — drop a thought into `00-Inbox/` or today's daily note (in
-   Obsidian, as normal). No AXON command needed.
+   Obsidian, as normal). No AXON command needed. The `capture` automation goes
+   further: a bare URL pasted into an inbox note is ingested automatically, and
+   a non-Markdown file dropped into `00-Inbox/` is ingested and archived —
+   the inbox is a funnel, not a graveyard.
 2. **Ingest** external material:
    ```bash
    axon ingest https://example.com/some-article
@@ -336,6 +339,12 @@ A typical loop:
    ```bash
    axon status
    ```
+7. **Review proposals** — automations queue suggestions (links, triage moves,
+   resurfaced connections) in `.axon/review-queue.md`; accept or dismiss them
+   with one click on the dashboard's **Review** tab (§10). Each morning the
+   `briefing` automation writes an orientation block into the daily note, and
+   the weekly `resurfacer` proposes connections between what you're working on
+   now and dormant notes that relate to it.
 
 ---
 
@@ -393,6 +402,24 @@ of the JavaScript app shell — which is why unauthenticated Confluence ingests
 used to come back empty. Wiki-style pages that the article extractor rejects
 also fall back to full-page conversion rather than yielding nothing.
 
+### Feed subscriptions (RSS / Atom)
+
+Standing sources feed the same pipeline. Subscribe from the CLI — the feed is
+fetched and parsed to verify it, its host checked against the ingest policy,
+and the config edited comment-preservingly:
+
+```bash
+axon subscribe https://example.com/feed.xml        # verify + add (refused if the host isn't allowed; --allow opts it in)
+axon subscribe list                                # feeds + seen-state
+axon subscribe remove https://example.com/feed.xml # drop feed + seen-state (re-subscribing re-baselines)
+```
+
+The `subscriptions` automation polls hourly: **subscribe-from-now** (no
+backfill flood), at most `max_per_tick` items per feed per tick, each item
+attempted once, and conditional GETs (`ETag`/`If-Modified-Since`) make an
+unchanged feed a free `304` skip. New items become ordinary knowledge notes —
+searched, resurfaced, and synthesized into the weekly digest.
+
 Search fuses **FTS5/bm25** (lexical) with **brute-force cosine** over embeddings
 (semantic), ranked by reciprocal-rank fusion:
 
@@ -445,15 +472,32 @@ The standard automations (each toggleable in config, gated by `allowed_automatio
 | Automation | Model? | What it does |
 |------------|--------|--------------|
 | `budget-guard` | no | Pauses non-essential automations near the budget cap; essential, never paused. |
-| `heartbeat` | no | Writes a compact status line (inbox, budget) into today's daily note. |
+| `heartbeat` | no* | Writes a compact status line (inbox, budget) into today's daily note. *Setting its `model:` adds an opt-in one-line synthesis when something is noteworthy. |
 | `knowledge-reindex` | no | Rebuilds notes/links and re-embeds pending chunks when the vault changes. |
 | `context-export` | no | Writes a portable snapshot bundle to `.axon/exports/`. |
-| `link-suggester` | no | Vector-similarity sweep proposing Zettelkasten links to the review queue. |
+| `link-suggester` | no | Vector-similarity sweep proposing Zettelkasten links to the review queue; remembers what it proposed, so a dismissed suggestion stays dismissed. |
+| `capture` | no* | The inbox funnel: ingests URLs pasted into inbox notes and files dropped into `00-Inbox/` (archives the originals). *`capture.enrich: claude` is optional. |
+| `resurfacer` | no | Weekly vector sweep proposing connections between recently-touched and dormant notes (with proposal memory). |
+| `subscriptions` | no* | Hourly RSS/Atom polling into the ingestion pipeline (§7). *`subscriptions.enrich: claude` is optional. |
+| `briefing` | yes | Morning orientation block in the daily note: deterministic facts + one short narrative (degrades to facts-only under budget pressure). |
 | `daily-log` | yes | Synthesises today's note into its `axon:summary` block. |
-| `inbox-triage` | yes | Classifies inbox items into PARA, proposes tags/links to the review queue. |
-| `compaction` | yes | Distils oversized notes into durable summaries. |
-| `knowledge-digest` | yes | Weekly digest of newly ingested sources. |
+| `inbox-triage` | yes | Classifies inbox items into PARA, proposes structured moves/tags to the review queue. |
+| `compaction` | yes | Distils oversized notes into durable summaries (agentic by default: checks backlinks, writes via `vault_patch`). |
+| `knowledge-digest` | yes | Weekly digest of newly ingested sources (agentic by default: reads the week's sources for grounded wikilinks). |
 | `memory-distill` | yes | Distils recent activity into durable entries in `MEMORY.md`'s managed block (§18). |
+| `session-distill` | yes | Distils finished Claude Code sessions (recorded by the Stop/SessionEnd hooks) into MEMORY entries — decisions, lessons, preferences (§18). |
+
+**Agentic runs.** `knowledge-digest` and `compaction` run *agentically* by
+default: Claude runs headlessly with a small allowlist of AXON's own MCP tools
+(read tools plus, for compaction, the managed-block-safe `vault_patch`),
+bounded turns, and a streaming kill-switch that terminates the run the moment
+its `budget_tokens` is exceeded. The allowlist is enforced on both sides of
+the wire — the subprocess MCP server physically lacks every unlisted tool.
+`automations.<name>.agentic: false` restores the plain one-shot path, which is
+also the automatic degradation on a budget kill. For a write-capable agentic
+automation, `axon run <name> --dry-run` spawns the agent with **report-only**
+write tools: every write validates and reports what it *would* change without
+mutating (a real preview at real token cost).
 
 Configure schedules and budgets per automation:
 
@@ -500,6 +544,16 @@ automations until the window resets. On subscription/enterprise these are *token
 windows (guarding plan rate-limit / Agent-SDK credit); `cost_usd` is populated
 only in `api_key` mode.
 
+**Local model routing.** The cheap tiers can route to local models instead of
+Claude — `models.classify: "ollama:qwen3:8b"` (any Ollama chat model) or
+`"apple"` (Apple Foundation Models on-device, macOS, classify tier only).
+Local calls go through the same chokepoint and are fully ledgered (`cost_usd`
+null) but are **budget-exempt**: they never consume the day/week windows and
+never trigger the guard. On a local failure the call falls forward to Claude
+(`models.local_fallback: claude`, the default) or fails visibly (`fail`).
+Synthesis is always Claude; agentic runs require Claude (local models cannot
+drive MCP tools). Switch any tier with `axon configure models <tier> <model>`.
+
 ---
 
 ## 10. The dashboard
@@ -513,10 +567,18 @@ Views (all live over SSE, updating within seconds):
 - **Tokens** — spend over time, stacked by automation × model.
 - **Usage & budget** — day/week gauges + guard state (matches `axon status`).
 - **Runs** — automation timeline with status/skip-reasons.
+- **Review** — every pending proposal (link suggestions, structured triage
+  moves, resurfaced connections) with one-click **accept / dismiss**. Accepts
+  are wikilink-safe by construction: links land in the note's `axon:links`
+  managed block, triage moves go through the link-rewriting `vault_move`.
+  This is the dashboard's only mutation surface; resolved entries compact
+  into `.axon/review-queue-archive.md` after a week.
 - **Ingestion** — sources and embedding-queue depth.
 - **Vault growth** — notes, links, words, inbox backlog.
 - **Knowledge graph** — notes + wikilinks, filterable by folder/tag.
 - **Activity feed** — the live event log.
+
+Every chart's dataset exports as CSV/JSON via per-card download links.
 
 There are also **in-vault Dataview dashboards** (`.axon/dashboards/`) you can open
 inside Obsidian for inbox/projects/knowledge/link-suggestions.
@@ -529,9 +591,9 @@ inside Obsidian for inbox/projects/knowledge/link-suggestions.
 
 - **MCP tools** (server `axon`, launched via `.claude/.mcp.json`):
   `vault_search`, `vault_read`, `vault_write`, `vault_patch`, `vault_move`
-  (wikilink-safe rename), `vault_links`, `daily_append`, `knowledge_ingest`,
-  `knowledge_search`, `tokens_status`, `automations_list`, `automations_run`.
-  There is no `vault_delete`.
+  (wikilink-safe rename), `vault_links`, `daily_append`, `memory_remember`,
+  `knowledge_ingest`, `knowledge_search`, `tokens_status`, `metrics_query`,
+  `automations_list`, `automations_run`. There is no `vault_delete`.
 - **Hooks** (`settings.json`, each a thin `axon hook` call):
   - `SessionStart` injects a budget + inbox + review-queue status block (no model
     call).
@@ -637,6 +699,9 @@ the vault is the source of truth, a full restore is: copy the vault back and run
 | `axon reindex [--embeddings]` | Rebuild notes mirror + link graph from the vault. |
 | `axon ingest <url\|path> [--dry-run] [--enrich] [--json]` | Run the ingestion pipeline; `--enrich` summarises with Claude (via the token manager) and reports tokens spent. |
 | `axon search <query> [--top-k N] [--json]` | Hybrid lexical + semantic search. |
+| `axon subscribe <url> [--allow] \| list \| remove <url>` | Manage RSS/Atom feed subscriptions (verified add, seen-state, re-baselining remove). |
+| `axon configure [section …]` | Interactive menu (or scripted subcommands) for common settings: embeddings provider, model tiers, limits, automation toggles. |
+| `axon vault move <new-path>` | Relocate the vault, updating every AXON-owned reference (config + `.claude/` wiring). |
 | `axon status [--json]` | Remaining day/week token budget + guard state (and why it's paused). |
 | `axon automations [--json]` | List automations: enabled state, purpose, schedule, and last run. |
 | `axon health [--json]` | Vault health score (0–100 + grade) across integrity, reliability, freshness. |
@@ -650,6 +715,9 @@ the vault is the source of truth, a full restore is: copy the vault back and run
 | `axon export [--out dir]` | Portable snapshot bundle. |
 | `axon profiles [--json]` | Show profiles' isolated paths/policy (no secrets). |
 | `axon version [--short]` | Print the version, commit, build date, and Go/OS/arch (`axon --version` also works). |
+| `axon setup` | Interactive first-run provisioning (vault path, profile, embeddings) — what the one-line installer hands over to. Idempotent. |
+| `axon update` | Checksum-verified self-update from GitHub Releases (release installs; from-source installs use `make update`). |
+| `axon uninstall [--purge]` | Remove daemon/service/binary; `--purge` also deletes `~/.axon` (confirmed). The vault is never touched. |
 
 Global flags: `--config <path>` (default `~/.axon/config.yaml`), `--profile <name>`,
 `--env <path>` (default `.env`, resolved from the current directory; secrets may
@@ -680,9 +748,11 @@ Logs: the daemon writes to stdout (and, under a service unit, to
 
 These are enforced in code and verified by tests — not left to good intentions:
 
-- **No Claude call bypasses the token manager** — every model call is estimated,
-  budget-checked, executed via `claude -p`, and ledgered. No secret is ever sent
-  to the model or written to the ledger/events/logs.
+- **No generative call bypasses the token manager** — every model call (Claude
+  via `claude -p`, a local Ollama/Apple model, or the optional `api_key`
+  direct-API mode) is estimated, budget-checked, executed through one
+  chokepoint, and ledgered. No secret is ever sent to the model or written to
+  the ledger/events/logs.
 - **No unsafe vault mutation** — renames go through `vault_move` (inbound links
   rewritten); edits land in `axon:*` managed blocks via `vault_patch`; new notes
   via `vault_write`; there is **no delete**. The vault filesystem is sandboxed
@@ -695,10 +765,12 @@ These are enforced in code and verified by tests — not left to good intentions
 - **The vault is recoverable** — the SQLite database is derived and disposable;
   `axon reindex` rebuilds it entirely from Markdown.
 
-## 18. Personal memory & identity (Phase 8)
+## 18. Personal memory & identity
 
 AXON keeps a first-class **identity layer** in the vault so the assistant knows
 who you are in every Claude Code session ([Component 12](12-component-personal-memory-and-onboarding.md)).
+
+![AXON personal memory & identity layer](diagrams/personal-memory.svg)
 
 Set it up once:
 
@@ -736,14 +808,26 @@ managed block). The optional `memory-distill` automation periodically distils
 recent daily notes into new entries and compacts an over-long block — through the
 token manager, like every other model call.
 
+**Session memory.** AXON also remembers what your sessions *decided*. The
+Stop/SessionEnd hooks record finished vault sessions (transcript paths only —
+never content, and only when `memory.capture_sessions` is on, the default);
+the `session-distill` automation then makes one cheap classify-tier call per
+session (redaction applied before the model sees any text) extracting up to
+three `decision` / `lesson` / `preference` entries into `MEMORY.md`, where the
+SessionStart injection surfaces them to every future session. A cleanly-ended
+session distills on the next tick; an abandoned one after a 30-minute idle
+threshold. Set `memory.capture_sessions: false` on stricter profiles.
+
 **Privacy (NFR-14).** The identity layer is local Markdown; it reaches the model
 only as the bounded session block (with `policy.redaction_rules` applied) and is
 never written to logs, events, the token ledger or `axon export` bundles.
 
-## 19. Use AXON from Claude Desktop (Phase 9)
+## 19. Use AXON from Claude Desktop
 
 AXON ships one MCP server (`axon mcp`); any MCP client can launch it. Register it
 with Claude Desktop ([Component 13](13-component-multi-client-claude-desktop.md)):
+
+![AXON multi-client wiring](diagrams/multi-client.svg)
 
 ```bash
 axon mcp install --client desktop          # merge into claude_desktop_config.json

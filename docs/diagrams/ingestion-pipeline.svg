@@ -3,7 +3,7 @@
 <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1e1e1e"/></marker></defs>
 <text x="28" y="24" font-size="20" font-weight="700" fill="#1e1e1e">AXON — knowledge ingestion pipeline</text>
 <rect x="28" y="64" width="360" height="52" rx="10" fill="#e9ecef" stroke="#1e1e1e" stroke-width="2"/>
-<text x="208" y="95.4" font-size="16" fill="#1e1e1e" text-anchor="middle">Input:  URL · PDF · local file</text>
+<text x="208" y="95.4" font-size="16" fill="#1e1e1e" text-anchor="middle">Input:  URL · PDF · file · inbox capture · feeds</text>
 <rect x="28" y="142" width="360" height="52" rx="10" fill="#ffc9c9" stroke="#1e1e1e" stroke-width="2"/>
 <text x="208" y="173.4" font-size="16" fill="#1e1e1e" text-anchor="middle">Policy check  (egress + redirects)</text>
 <rect x="28" y="220" width="360" height="52" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
