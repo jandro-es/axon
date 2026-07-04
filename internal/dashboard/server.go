@@ -1,8 +1,9 @@
 // Package dashboard is AXON's local operational observability surface (Component
 // 09): a localhost-bound HTTP server that serves the embedded SPA, exposes a
 // small REST API over the derived DB read-layer, and streams the live event bus
-// over SSE. It holds no secrets and binds to loopback only (FR-63). Reads only;
-// it never calls Claude and never writes the vault.
+// over SSE. It holds no secrets and binds to loopback only (FR-63). It never
+// calls Claude and never free-form writes; the only mutations are review-queue
+// resolutions applied through the vault's wikilink-safe ops (ADR-020).
 package dashboard
 
 import (
@@ -13,11 +14,14 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/events"
+	"github.com/jandro-es/axon/internal/review"
 	"github.com/jandro-es/axon/internal/tokens"
+	"github.com/jandro-es/axon/internal/vault"
 )
 
 // Config configures the dashboard server.
@@ -31,6 +35,9 @@ type Config struct {
 	Static  fs.FS          // embedded SPA assets (nil -> minimal built-in page)
 	// Health optionally supplies extra health detail (e.g. Ollama reachability).
 	Health func(ctx context.Context) map[string]any
+	// Vault enables the Review tab's accept/dismiss actions (ADR-020). nil
+	// disables the review endpoints (read-only deployments).
+	Vault *vault.FS
 }
 
 // Server is the dashboard HTTP server.
@@ -65,6 +72,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/vault", s.jsonHandler(s.dataVault))
 	mux.HandleFunc("GET /api/graph", s.jsonHandler(s.dataGraph))
 	mux.HandleFunc("GET /api/activity", s.jsonHandler(s.dataActivity))
+	mux.HandleFunc("GET /api/review", s.jsonHandler(s.dataReview))
+	mux.HandleFunc("POST /api/review/action", s.handleReviewAction)
+	mux.HandleFunc("GET /api/export", s.handleExport)
 	mux.Handle("/", s.staticHandler())
 	return s.guardHost(mux)
 }
@@ -197,6 +207,73 @@ func (s *Server) dataGraph(ctx context.Context, r *http.Request) (any, error) {
 
 func (s *Server) dataActivity(ctx context.Context, r *http.Request) (any, error) {
 	return db.RecentEvents(ctx, s.cfg.DB, queryInt(r, "limit", 200))
+}
+
+func (s *Server) dataReview(ctx context.Context, _ *http.Request) (any, error) {
+	if s.cfg.Vault == nil {
+		return map[string]any{"items": []review.Item{}, "pending": 0}, nil
+	}
+	items, err := review.Load(ctx, s.cfg.Vault)
+	if err != nil {
+		return nil, err
+	}
+	pending := 0
+	for _, it := range items {
+		if !it.Checked {
+			pending++
+		}
+	}
+	if items == nil {
+		items = []review.Item{}
+	}
+	return map[string]any{"items": items, "pending": pending}, nil
+}
+
+// handleReviewAction is the dashboard's only mutating endpoint (ADR-020).
+// The JSON content type + custom header force a CORS preflight that no
+// cross-origin page can pass (this server sends no CORS headers), on top of
+// the loopback bind and Host guard.
+func (s *Server) handleReviewAction(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Vault == nil {
+		http.Error(w, "review actions unavailable (no vault wired)", http.StatusServiceUnavailable)
+		return
+	}
+	if r.Header.Get("X-Axon-Review") != "1" ||
+		!strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var in struct {
+		ID     string `json:"id"`
+		Action string `json:"action"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	var item review.Item
+	var err error
+	switch in.Action {
+	case "accept":
+		item, err = review.Accept(r.Context(), s.cfg.Vault, in.ID)
+	case "dismiss":
+		item, err = review.Dismiss(r.Context(), s.cfg.Vault, in.ID)
+	default:
+		http.Error(w, "action must be accept or dismiss", http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if s.cfg.Bus != nil {
+		s.cfg.Bus.Publish(events.Event{
+			Level: events.LevelInfo, Kind: "review." + in.Action,
+			Message: in.Action + ": " + item.Line,
+			Data:    map[string]any{"profile": s.cfg.Profile, "id": item.ID, "kind": item.Kind},
+		})
+	}
+	writeJSON(w, map[string]any{"item": item})
 }
 
 func queryInt(r *http.Request, key string, def int) int {
