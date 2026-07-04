@@ -90,7 +90,7 @@ profiles:
       enrich: heuristic                       # heuristic (default, zero tokens) | claude (chokepoint, routine tier)
       archive_dir: "04-Archive/Capture"       # where ingested inbox originals are moved (never deleted)
 
-    # subscriptions:                          # RSS/Atom feeds polled hourly (ADR-019)
+    # subscriptions:                          # RSS/Atom feeds polled hourly (ADR-019); manage with axon subscribe
     #   enrich: heuristic                     # heuristic (default, zero tokens) | claude (chokepoint, routine tier)
     #   max_per_tick: 5                       # new items ingested per feed per tick
     #   feeds:                                # subscribe-from-now: existing entries are never backfilled

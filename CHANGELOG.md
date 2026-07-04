@@ -12,6 +12,16 @@ bypasses the token manager); the vault contract is unchanged.
 
 ### Added
 
+- **`axon subscribe` CLI (FR-100)** — manage feed subscriptions without
+  hand-editing config: `axon subscribe <url>` fetches the feed through the
+  egress-policied fetcher, parses it (gofeed), and appends it to
+  `subscriptions.feeds` via the comment-preserving editor with re-validation
+  and an atomic write (`--no-verify` skips the fetch); a host outside the
+  ingest policy is refused with guidance unless `--allow` explicitly opts it
+  into `ingest_domains_allow`. `subscribe list` shows each feed's seen-state;
+  `subscribe remove <url>` drops the feed and its seen entry so
+  re-subscribing re-baselines (subscribe-from-now). Closes ADR-019's noted
+  follow-up slice.
 - **Session memory capture (ADR-021, FR-97…FR-99)** — AXON now remembers
   what your sessions decided. The Stop hook records finished vault sessions
   (paths only, silently, gated by `memory.capture_sessions` — on by default,
