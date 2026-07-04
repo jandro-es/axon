@@ -38,3 +38,15 @@ func TestValidateCapture(t *testing.T) {
 		})
 	}
 }
+
+func TestSessionCaptureEnabledDefaultsOn(t *testing.T) {
+	var m MemoryConfig
+	if !m.SessionCaptureEnabled() {
+		t.Fatal("capture_sessions must default ON (pointer-nil)")
+	}
+	f := false
+	m.CaptureSessions = &f
+	if m.SessionCaptureEnabled() {
+		t.Fatal("explicit false must win")
+	}
+}

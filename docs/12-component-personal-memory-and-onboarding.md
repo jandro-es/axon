@@ -131,6 +131,22 @@ This is deterministic and free — it reuses the hook AXON already owns.
 Captured/distilled text is treated as **data, not instructions** (NFR-05): the
 distillation prompt fences source material and never executes it.
 
+### Session capture (ADR-021, FR-97…FR-99)
+
+Memory also grows from the sessions themselves. The Stop hook records each
+finished vault session — `{session_id → transcript_path, last_stop}` into
+`automation_state`, paths only, never content, every failure silent — and the
+`session-distill` automation later distills each session once it has been
+idle 30+ minutes: one classify-tier chokepoint call per session (local-routable
+under ADR-015), extracting up to 3 `decision | lesson | preference` items that
+land via `identity.Remember` as dated entries with `(source: session)`. The
+SessionStart injection then surfaces them to every future session, and
+`memory-distill`'s compaction curates them over time. Each session is distilled
+**once ever**; a budget defer leaves the remainder pending for the next tick.
+Recording is gated by `memory.capture_sessions` (on by default; a stricter
+profile sets it to `false`), only vault sessions are wired to the hook, and
+profile redaction rules apply before any transcript text reaches the model.
+
 ## 5. Safety & privacy (NFR-14)
 
 This is the most personal data in the vault, so:

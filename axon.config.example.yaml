@@ -141,6 +141,7 @@ profiles:
       briefing:          { enabled: true,  schedule: "0 6 * * *",       model: routine,   budget_tokens: 40_000, catch_up: run-once }
       resurfacer:        { enabled: true,  schedule: "0 7 * * 1",       model: none,      budget_tokens: 0 }
       subscriptions:     { enabled: true,  schedule: "0 * * * *",       model: routine,   budget_tokens: 60_000, catch_up: skip }
+      session-distill:   { enabled: true,  schedule: "15 */2 * * *",    model: classify,  budget_tokens: 30_000, catch_up: skip }
 
     # Personal identity & memory layer (Component 12). Injected at SessionStart so
     # the assistant knows you. Optional block — these are the defaults.
@@ -148,6 +149,7 @@ profiles:
       inject: true            # inject USER/SOUL/recent MEMORY at session start (no model call)
       session_tokens: 1500    # token ceiling for the injected profile block
       recent_entries: 10      # how many newest MEMORY entries to inject
+      # capture_sessions: false  # disable Stop-hook session recording (ADR-021; on by default)
 
     # Optional interop (FR-54): register a community Obsidian MCP server alongside
     # AXON's own when running `axon mcp install`. AXON's server stays the default

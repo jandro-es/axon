@@ -272,3 +272,55 @@ func TestSessionStartBriefingPointer(t *testing.T) {
 		t.Fatalf("pointer missing:\n%s", res.Stdout)
 	}
 }
+
+func stopPayload(session, transcript string) []byte {
+	b, _ := json.Marshal(map[string]any{
+		"hook_event_name": "Stop", "session_id": session, "transcript_path": transcript,
+	})
+	return b
+}
+
+func TestStopRecordsSession(t *testing.T) {
+	deps, _ := testDeps(t)
+	res, err := Handle(context.Background(), Stop, stopPayload("sess-abc", "/tmp/t.jsonl"), deps)
+	if err != nil || res.ExitCode != 0 {
+		t.Fatalf("stop: %v %d", err, res.ExitCode)
+	}
+	if !strings.Contains(string(res.Stdout), "Reminder") {
+		t.Fatal("advisory line lost")
+	}
+	pending, _ := db.LoadPendingSessions(context.Background(), deps.DB)
+	p, ok := pending["sess-abc"]
+	if !ok || p.TranscriptPath != "/tmp/t.jsonl" || p.LastStop == "" {
+		t.Fatalf("pending = %+v", pending)
+	}
+
+	// Second Stop for the same session upserts (fresher LastStop, same size).
+	if _, err := Handle(context.Background(), Stop, stopPayload("sess-abc", "/tmp/t.jsonl"), deps); err != nil {
+		t.Fatal(err)
+	}
+	pending, _ = db.LoadPendingSessions(context.Background(), deps.DB)
+	if len(pending) != 1 {
+		t.Fatalf("upsert broke: %d entries", len(pending))
+	}
+}
+
+func TestStopRespectsToggleAndMissingFields(t *testing.T) {
+	deps, _ := testDeps(t)
+	f := false
+	deps.Memory.CaptureSessions = &f
+	_, _ = Handle(context.Background(), Stop, stopPayload("sess-off", "/tmp/t.jsonl"), deps)
+	pending, _ := db.LoadPendingSessions(context.Background(), deps.DB)
+	if len(pending) != 0 {
+		t.Fatal("toggle off must not record")
+	}
+
+	deps2, _ := testDeps(t)
+	_, _ = Handle(context.Background(), Stop, stopPayload("", "/tmp/t.jsonl"), deps2)
+	_, _ = Handle(context.Background(), Stop, stopPayload("sess-x", ""), deps2)
+	_, _ = Handle(context.Background(), Stop, nil, deps2) // garbage stdin tolerated
+	pending2, _ := db.LoadPendingSessions(context.Background(), deps2.DB)
+	if len(pending2) != 0 {
+		t.Fatalf("incomplete payloads recorded: %v", pending2)
+	}
+}

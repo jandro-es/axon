@@ -24,6 +24,7 @@ var purposes = map[string]string{
 	"briefing":          "Writes the morning axon:briefing block into the daily note: what changed, review queue, budget — plus a short routine-tier narrative. Facts are free; the narrative degrades on budget pressure.",
 	"resurfacer":        "Weekly vector resurfacing: proposes review-queue connections between recently-touched notes and dormant ones (90+ days). No model call.",
 	"subscriptions":     "Polls configured RSS/Atom feeds hourly and ingests new items through the pipeline (subscribe-from-now, per-tick caps). Enrichment optional via subscriptions.enrich.",
+	"session-distill":   "Distills finished vault sessions into durable MEMORY entries (decisions, lessons, preferences) — one classify-tier call per session, once ever. Gated by memory.capture_sessions.",
 }
 
 // Purpose returns the human description for an automation, or a generic fallback.
