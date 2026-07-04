@@ -277,3 +277,16 @@ body {
   .signal-line, .brand-mark, .chip.live .dot { animation: none !important; }
   .card { transition: none; }
 }
+
+/* ── review tab (ADR-020) ─────────────────────────────────────────────── */
+.review-item { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.review-item .kind { font-size: 11px; color: #616d83; min-width: 110px; }
+.review-actions { margin-left: auto; display: flex; gap: 6px; }
+.review-actions button { cursor: pointer; }
+.review-actions .ghost { opacity: .6; }
+.review-err { flex-basis: 100%; color: #fb6f6f; font-size: 12px; }
+.li.dim { opacity: .45; }
+.list.resolved { margin-top: 14px; border-top: 1px solid rgba(255,255,255,.06); padding-top: 8px; }
+.export-links { display: inline-flex; gap: 10px; font-size: 12px; }
+.export-links a { color: #5bb6f0; text-decoration: none; }
+.export-row { grid-column: span 12; display: flex; justify-content: flex-end; gap: 12px; }
