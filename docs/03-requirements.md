@@ -129,6 +129,19 @@ this slice.
 | FR-82 | M | **Capture bookkeeping.** Ticks are change-gated on the inbox listing hash; failed items are remembered in automation state and skipped until they change, surfaced once in `.axon/review-queue.md`, and emitted as events; every capture ingest is observable through the standard run rows and `ingest.*` events. Inbox notes are never modified by capture (cardinal rule 2). |
 | FR-83 | S | **Capture enrichment toggle.** `capture.enrich: heuristic \| claude` (default `heuristic`, zero tokens). `claude` routes enrichment through the token-manager chokepoint on the `routine` tier (ADR-015 local routing and fallback apply) and degrades to heuristic under budget denial. |
 
+### Review actions *(planned — spec approved 2026-07-04, not yet built)*
+
+FR-94…FR-96 trace to ADR-020 and the spec in
+`docs/superpowers/specs/2026-07-04-review-actions-design.md`; the same slice
+implements **FR-64** (chart export), the last unbuilt v1 requirement.
+Priorities are relative to this slice.
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-94 | M | **Review API + tab.** The dashboard parses `.axon/review-queue.md` into typed items (`GET /api/review`) and resolves them (`POST /api/review/action`, accept/dismiss). Mutation POSTs require JSON content type + an `X-Axon-Review` header (CORS-preflight-forcing) atop the loopback bind and Host-guard; every action emits a `review.accept`/`review.dismiss` event. |
+| FR-95 | M | **Wikilink-safe accepts.** Link/pair/resurface accepts append to the target note's `axon:links` managed block (prose never touched); triage accepts — now structured JSON proposals validated at the chokepoint — perform the wikilink-safe `vault.Move`; queue lines are resolved via `vault.RewriteSystemFile`, which refuses any path outside `.axon/`. |
+| FR-96 | S | **Chart export (delivers FR-64).** `GET /api/export?dataset=…&format=csv\|json` serializes every chart dataset with per-card download links in the SPA. |
+
 ### Subscriptions *(built)*
 
 FR-91…FR-93 are **implemented** (ADR-019; spec in
