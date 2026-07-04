@@ -12,6 +12,18 @@ bypasses the token manager); the vault contract is unchanged.
 
 ### Added
 
+- **Agentic write tools (ADR-022, FR-105…FR-107)** — opted-in agentic
+  automations may now call the managed-block-safe write tools (`vault_patch`,
+  `vault_write`, `daily_append`, `memory_remember`; never `vault_move`),
+  enforced by the same dual allowlist as reads (client `--allowedTools` +
+  server `axon mcp --tools`). `axon run <name> --dry-run` spawns the agent
+  with **server-enforced report-only** write tools — each validates and
+  reports what it would change without mutating (a real preview at real token
+  cost). A mid-run budget kill leaves a prefix of per-tool-atomic, idempotent
+  writes — never a half-edited note; a re-run converges. Compaction is the
+  first user: its agentic path writes `axon:summary` via `vault_patch`
+  (archive-first and the `agentic:false` deterministic write unchanged).
+  Closes ADR-017's two reasons for deferring write tools.
 - **Heartbeat synthesis (opt-in)** — setting `automations.heartbeat.model`
   (e.g. `classify`, local-routable per ADR-015) adds one budget-checked,
   single-line synthesis to the heartbeat block when something is noteworthy
