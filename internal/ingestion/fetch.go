@@ -3,6 +3,7 @@ package ingestion
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -36,6 +37,9 @@ type HTTPFetcher struct {
 // (network blips, 429, 5xx). Small on purpose: ingestion is interactive.
 const fetchRetries = 2
 const fetchBackoff = 700 * time.Millisecond
+
+// errNotModified marks a 304 inside the retry loop: success, not failure.
+var errNotModified = errors.New("not modified")
 
 // authHeaderTransport attaches configured per-domain auth headers. It runs on
 // EVERY request the client makes — including each redirect hop — and matches
@@ -138,29 +142,47 @@ func (f *HTTPFetcher) Fetch(ctx context.Context, url string) (*Document, error) 
 		// to the regular page fetch below.
 	}
 
+	doc, _, err := f.fetchWithRetry(ctx, url, Validators{})
+	return doc, err
+}
+
+// FetchConditional implements ConditionalFetcher. The Confluence API path
+// is skipped — it never applies to feed URLs, the only recurring callers.
+func (f *HTTPFetcher) FetchConditional(ctx context.Context, url string, v Validators) (*Document, bool, error) {
+	return f.fetchWithRetry(ctx, url, v)
+}
+
+// fetchWithRetry is the bounded retry loop shared by Fetch and
+// FetchConditional; a 304 short-circuits as (nil, true, nil).
+func (f *HTTPFetcher) fetchWithRetry(ctx context.Context, url string, v Validators) (*Document, bool, error) {
 	var lastErr error
 	for attempt := 0; attempt <= fetchRetries; attempt++ {
 		if attempt > 0 {
 			select {
 			case <-ctx.Done():
-				return nil, ctx.Err()
+				return nil, false, ctx.Err()
 			case <-time.After(time.Duration(attempt) * fetchBackoff):
 			}
 		}
-		doc, retryable, err := f.fetchOnce(ctx, url)
+		doc, retryable, err := f.fetchOnce(ctx, url, v)
 		if err == nil {
-			return doc, nil
+			return doc, false, nil
+		}
+		if errors.Is(err, errNotModified) {
+			return nil, true, nil
 		}
 		lastErr = err
 		if !retryable {
 			break
 		}
 	}
-	return nil, lastErr
+	return nil, false, lastErr
 }
 
 // fetchOnce is a single GET; the bool reports whether the failure is transient.
-func (f *HTTPFetcher) fetchOnce(ctx context.Context, url string) (*Document, bool, error) {
+// Non-empty validators make the request conditional (If-None-Match /
+// If-Modified-Since); a 304 surfaces as errNotModified.
+func (f *HTTPFetcher) fetchOnce(ctx context.Context, url string, v Validators) (*Document, bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, false, err
@@ -168,11 +190,21 @@ func (f *HTTPFetcher) fetchOnce(ctx context.Context, url string) (*Document, boo
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.5")
 	req.Header.Set("Accept-Language", "en")
+	if v.ETag != "" {
+		req.Header.Set("If-None-Match", v.ETag)
+	}
+	if v.LastModified != "" {
+		req.Header.Set("If-Modified-Since", v.LastModified)
+	}
 	resp, err := f.client.Do(req)
 	if err != nil {
 		return nil, true, fmt.Errorf("fetch %q: %w", url, err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotModified {
+		return nil, false, errNotModified
+	}
 
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
@@ -199,10 +231,12 @@ func (f *HTTPFetcher) fetchOnce(ctx context.Context, url string) (*Document, boo
 	}
 
 	return &Document{
-		URL:         url,
-		ContentType: resp.Header.Get("Content-Type"),
-		Body:        body,
-		FetchedAt:   time.Now().UTC(),
+		URL:          url,
+		ContentType:  resp.Header.Get("Content-Type"),
+		Body:         body,
+		FetchedAt:    time.Now().UTC(),
+		ETag:         resp.Header.Get("ETag"),
+		LastModified: resp.Header.Get("Last-Modified"),
 	}, false, nil
 }
 
