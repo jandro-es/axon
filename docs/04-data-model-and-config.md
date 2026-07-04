@@ -224,6 +224,7 @@ profiles:
       redaction_rules: []
       allowed_automations: ["*"]
     automations:
+      # heartbeat.model is opt-in: set → one budget-checked single-line synthesis when noteworthy (docs/06); unset → zero model work
       heartbeat:        { enabled: true, schedule: "0 9,13,17 * * *", model: classify,  budget_tokens: 50_000, catch_up: skip }
       daily-log:        { enabled: true, schedule: "30 21 * * *",     model: routine,   budget_tokens: 120_000 }
       inbox-triage:     { enabled: true, schedule: "*/30 * * * *",    model: routine,   budget_tokens: 80_000 }

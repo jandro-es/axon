@@ -25,7 +25,7 @@ flowchart LR
 ## 2. Stage detail
 
 1. **Resolve + policy.** Classify input. Enforce `policy.egress_allowlist` and `ingest_domains_allow/deny`. A denied domain fails fast with a clear message; nothing is fetched. (Work profile is deny-by-default.)
-2. **Fetch/read.** HTTP GET with a sane UA and timeout for URLs (stdlib `net/http` with a `context` deadline); read bytes for PDFs/files. No JS execution. Respect robots where reasonable; cap response size.
+2. **Fetch/read.** HTTP GET with a sane UA and timeout for URLs (stdlib `net/http` with a `context` deadline); read bytes for PDFs/files. No JS execution. Respect robots where reasonable; cap response size. Resolved-IP pinning across the dial was evaluated and closed as covered: the dialer's `Control` hook validates the concrete resolved IP on every connection attempt, so a DNS-rebinding flip to an internal address is refused at dial time regardless of what the name resolved to earlier.
 3. **Extract.** HTML → main-content extraction (`go-shiori/go-readability`, a Readability port). PDF → text layer (built with `ledongthuc/pdf`; parsing is panic-guarded so a malformed PDF errors cleanly); a scanned/empty PDF yields an empty extraction and is reported as such (OCR is out of v1 scope — a `C` follow-up).
 4. **Clean → Markdown.** Convert to Markdown (`JohannesKaufmann/html-to-markdown`); strip nav/ads/scripts; preserve headings, lists, code, links, basic tables. Normalise whitespace.
 5. **Redact.** Apply `policy.redaction_rules` to the cleaned text **before** it can reach the model. Record `status=redacted` if anything matched.
