@@ -82,6 +82,7 @@ profiles:
       capture:           { enabled: true,  schedule: "*/5 * * * *",     model: none,      budget_tokens: 0, catch_up: run-once }
       briefing:          { enabled: true,  schedule: "0 6 * * *",       model: routine,   budget_tokens: 40_000, catch_up: run-once }
       resurfacer:        { enabled: true,  schedule: "0 7 * * 1",       model: none,      budget_tokens: 0 }
+      subscriptions:     { enabled: true,  schedule: "0 * * * *",       model: routine,   budget_tokens: 60_000, catch_up: skip }
 
     memory:
       inject: true

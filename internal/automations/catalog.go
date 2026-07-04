@@ -23,6 +23,7 @@ var purposes = map[string]string{
 	"capture":           "Ingests own-line URLs from Inbox notes and files dropped into 00-Inbox, archiving originals. The FR-26 capture funnel; no model call (enrichment optional via capture.enrich).",
 	"briefing":          "Writes the morning axon:briefing block into the daily note: what changed, review queue, budget — plus a short routine-tier narrative. Facts are free; the narrative degrades on budget pressure.",
 	"resurfacer":        "Weekly vector resurfacing: proposes review-queue connections between recently-touched notes and dormant ones (90+ days). No model call.",
+	"subscriptions":     "Polls configured RSS/Atom feeds hourly and ingests new items through the pipeline (subscribe-from-now, per-tick caps). Enrichment optional via subscriptions.enrich.",
 }
 
 // Purpose returns the human description for an automation, or a generic fallback.

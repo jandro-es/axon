@@ -225,3 +225,18 @@ func TestSubscriptionsDetectChange(t *testing.T) {
 		t.Fatal("feeds configured: want changed")
 	}
 }
+
+func TestSubscriptionsRegistered(t *testing.T) {
+	p := config.Profile{Automations: map[string]config.Automation{
+		"subscriptions": {Enabled: true, Schedule: "0 * * * *"},
+	}}
+	if _, err := Get(p, "subscriptions"); err != nil {
+		t.Fatalf("not registered: %v", err)
+	}
+	if Purpose("subscriptions") == "(no description)" {
+		t.Fatal("no catalog purpose")
+	}
+	if s := Schedulables(p); len(s) != 1 || s[0].Automation.Name() != "subscriptions" {
+		t.Fatalf("schedulables = %+v", s)
+	}
+}

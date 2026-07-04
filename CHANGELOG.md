@@ -12,6 +12,14 @@ bypasses the token manager); the vault contract is unchanged.
 
 ### Added
 
+- **RSS/feed subscriptions (ADR-019, FR-91…FR-93)** — declare feeds in
+  `subscriptions.feeds` and AXON polls them hourly through the same
+  egress-policied fetcher as every ingest, feeding new items into the
+  standard pipeline (deduped, redacted, ledgered, optionally enriched on the
+  routine tier). Volume is structural: subscribe-from-now (no backfill
+  floods), at most `max_per_tick` items per feed per tick, one attempt per
+  item. The agentic weekly digest now synthesizes across your subscriptions.
+  New dependency: `mmcdole/gofeed` (feed parsing; ADR-justified).
 - **Proactive layer (ADR-018, FR-88…FR-90)** — AXON now comes to you. A daily
   `briefing` automation writes an `axon:briefing` block into the daily note
   (notes changed, new sources, automation activity, review queue, budget)
