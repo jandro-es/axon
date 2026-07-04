@@ -196,3 +196,76 @@ func contains(s, sub string) bool {
 	}
 	return false
 }
+
+// newDryTools builds a Tools over a temp vault with report-only writes on.
+func newDryTools(t *testing.T) (*Tools, *vault.FS, string) {
+	t.Helper()
+	dir := t.TempDir()
+	v := vault.NewFS(dir)
+	return NewTools(Deps{Vault: v, DryRun: true}), v, dir
+}
+
+func TestReportOnlyWriteDoesNotMutate(t *testing.T) {
+	ctx := context.Background()
+	tl, v, dir := newDryTools(t)
+
+	// Seed a managed note so Patch has a target.
+	if _, err := v.Create("Note.md", "---\ntitle: n\n---\nprose\n\n<!-- axon:summary:start -->\nold\n<!-- axon:summary:end -->\n"); err != nil {
+		t.Fatal(err)
+	}
+	before := snapshot(t, dir)
+
+	pOut, err := tl.Patch(ctx, PatchIn{Path: "Note.md", Marker: "summary", Content: "new summary"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pOut.Applied || pOut.Would == "" {
+		t.Fatalf("patch dry-run = %+v, want Applied=false and a Would", pOut)
+	}
+	wOut, err := tl.Write(ctx, WriteIn{Path: "New.md", Body: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wOut.Applied || wOut.Would == "" {
+		t.Fatalf("write dry-run = %+v", wOut)
+	}
+	dOut, err := tl.DailyAppend(ctx, DailyAppendIn{Content: "log line"}, "2026-07-04")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dOut.Applied || dOut.Would == "" {
+		t.Fatalf("daily dry-run = %+v", dOut)
+	}
+
+	if after := snapshot(t, dir); !equalMaps(before, after) {
+		t.Fatalf("vault mutated under report-only:\nbefore=%v\nafter=%v", before, after)
+	}
+}
+
+func equalMaps(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+// snapshot returns a stable map of vault-relative path → content.
+func snapshot(t *testing.T, root string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	_ = filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		b, _ := os.ReadFile(p)
+		rel, _ := filepath.Rel(root, p)
+		out[rel] = string(b)
+		return nil
+	})
+	return out
+}
