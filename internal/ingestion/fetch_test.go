@@ -256,3 +256,60 @@ func TestFetchRefusesLocalhostHostname(t *testing.T) {
 		t.Fatal("Fetch to localhost succeeded, want dial-time SSRF refusal")
 	}
 }
+
+// TestFetchConditional: first fetch captures validators without sending
+// conditional headers; a conditional refetch sends them and maps 304 to
+// (nil, notModified, nil) with no retries; plain Fetch never sends them.
+func TestFetchConditional(t *testing.T) {
+	const lastMod = "Fri, 04 Jul 2026 10:00:00 GMT"
+	var calls int
+	var gotINM, gotIMS string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		gotINM = r.Header.Get("If-None-Match")
+		gotIMS = r.Header.Get("If-Modified-Since")
+		if gotINM == `"abc"` {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		w.Header().Set("ETag", `"abc"`)
+		w.Header().Set("Last-Modified", lastMod)
+		w.Header().Set("Content-Type", "application/rss+xml")
+		_, _ = w.Write([]byte(`<?xml version="1.0"?><rss version="2.0"><channel><title>t</title></channel></rss>`))
+	}))
+	defer srv.Close()
+	f := plainFetcher()
+	ctx := context.Background()
+
+	// Unconditional (empty validators): no conditional headers, validators captured.
+	doc, notModified, err := f.FetchConditional(ctx, srv.URL, Validators{})
+	if err != nil || notModified {
+		t.Fatalf("first fetch: doc=%v notModified=%v err=%v", doc, notModified, err)
+	}
+	if gotINM != "" || gotIMS != "" {
+		t.Errorf("empty validators must send no conditional headers: INM=%q IMS=%q", gotINM, gotIMS)
+	}
+	if doc.ETag != `"abc"` || doc.LastModified != lastMod {
+		t.Errorf("validators not captured: %q %q", doc.ETag, doc.LastModified)
+	}
+
+	// Conditional: headers sent, 304 → notModified, success, NOT retried.
+	doc2, nm2, err2 := f.FetchConditional(ctx, srv.URL, Validators{ETag: `"abc"`, LastModified: lastMod})
+	if err2 != nil || !nm2 || doc2 != nil {
+		t.Fatalf("304: doc=%v notModified=%v err=%v", doc2, nm2, err2)
+	}
+	if gotIMS != lastMod {
+		t.Errorf("If-Modified-Since = %q, want %q", gotIMS, lastMod)
+	}
+	if calls != 2 {
+		t.Errorf("calls = %d, want 2 (304 must not retry)", calls)
+	}
+
+	// Plain Fetch: no conditional headers ever.
+	if _, err := f.Fetch(ctx, srv.URL); err != nil {
+		t.Fatal(err)
+	}
+	if gotINM != "" || gotIMS != "" {
+		t.Errorf("plain Fetch sent conditional headers: INM=%q IMS=%q", gotINM, gotIMS)
+	}
+}
