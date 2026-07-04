@@ -38,6 +38,7 @@ const SSE_KINDS = [
   'ingest.done', 'ingest.skip', 'ingest.enrich',
   'ingest.embed.fail', 'ingest.embed.skip', 'ingest.review_queue.fail',
   'token.ledger', 'token.deny', 'token.defer', 'token.downgrade', 'token.error',
+  'review.accept', 'review.dismiss',
 ]
 
 function useSSE() {
@@ -605,9 +606,87 @@ function ActivityCard({ live, initial, span }) {
   )
 }
 
+
+/* ── review tab (ADR-020) ────────────────────────────────────────────────── */
+function postReviewAction(id, action) {
+  return fetch('/api/review/action', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Axon-Review': '1' },
+    body: JSON.stringify({ id, action }),
+  }).then(async (r) => {
+    if (!r.ok) throw new Error(await r.text())
+    return r.json()
+  })
+}
+
+function ExportLinks({ dataset }) {
+  return (
+    <span className="export-links">
+      <a href={`/api/export?dataset=${dataset}&format=csv`}>⤓ csv</a>
+      <a href={`/api/export?dataset=${dataset}&format=json`}>⤓ json</a>
+    </span>
+  )
+}
+
+const KIND_LABEL = { link: 'Link suggestion', pair: 'Link suggestion', triage: 'Inbox triage', resurface: 'Resurfaced', info: 'Record' }
+
+function ReviewTab({ span }) {
+  const [nonce, setNonce] = useState(0)
+  const { data, error } = useFetch(`/api/review?n=${nonce}`, 5000)
+  const [busy, setBusy] = useState(null)
+  const [errs, setErrs] = useState({})
+  const items = data?.items || []
+  const pending = items.filter((it) => !it.checked)
+  const resolved = items.filter((it) => it.checked).slice(-15)
+
+  const act = (id, action) => {
+    setBusy(id)
+    postReviewAction(id, action)
+      .then(() => setErrs((e) => ({ ...e, [id]: null })))
+      .catch((err) => setErrs((e) => ({ ...e, [id]: String(err.message || err) })))
+      .finally(() => { setBusy(null); setNonce((n) => n + 1) })
+  }
+
+  const describe = (it) => {
+    if (it.kind === 'triage') return <>move <b>[[{it.note}]]</b> → <b>{it.folder}</b>{it.tags?.length ? ` (${it.tags.join(', ')})` : ''}</>
+    if (it.kind === 'link' || it.kind === 'pair') return <>link <b>[[{it.note}]]</b> → <b>[[{it.target}]]</b></>
+    if (it.kind === 'resurface') return <>resurface <b>[[{it.target}]]</b> for <b>[[{it.note}]]</b></>
+    return it.line.replace(/^- \[.\] /, '')
+  }
+
+  return (
+    <Card title="Review queue" meta={`${pending.length} pending`} span={span}>
+      {error && <Empty>daemon unreachable</Empty>}
+      <div className="list">
+        {pending.map((it) => (
+          <div className="li review-item" key={it.id}>
+            <span className={`kind kind-${it.kind}`}>{KIND_LABEL[it.kind] || it.kind}</span>
+            <span className="msg">{describe(it)}</span>
+            <span className="review-actions">
+              {it.kind !== 'info' && (
+                <button disabled={busy === it.id} onClick={() => act(it.id, 'accept')}>accept</button>
+              )}
+              <button className="ghost" disabled={busy === it.id} onClick={() => act(it.id, 'dismiss')}>dismiss</button>
+            </span>
+            {errs[it.id] && <span className="review-err">{errs[it.id]}</span>}
+          </div>
+        ))}
+        {pending.length === 0 && !error && <Empty>Queue is clear. Automations append proposals here for your review.</Empty>}
+      </div>
+      {resolved.length > 0 && (
+        <div className="list resolved">
+          {resolved.map((it) => (
+            <div className="li dim" key={it.id}><span className="msg">{it.line.replace(/^- \[.\] /, '')}</span></div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 /* ── app shell ───────────────────────────────────────────────────────────── */
 const TABS = [
-  ['overview', 'Overview'], ['tokens', 'Tokens'], ['automations', 'Automations'],
+  ['overview', 'Overview'], ['tokens', 'Tokens'], ['automations', 'Automations'], ['review', 'Review'],
   ['knowledge', 'Knowledge'], ['graph', 'Graph'], ['activity', 'Activity'],
 ]
 
@@ -623,6 +702,7 @@ export default function App() {
   const { data: graph } = useFetch(simEdges ? '/api/graph?similar=1' : '/api/graph', 15000)
   const { data: activity } = useFetch('/api/activity', 15000)
   const { events, connected } = useSSE()
+  const { data: reviewMeta } = useFetch('/api/review', 15000)
 
   const healthy = health?.status === 'ok'
   const apiDown = healthErr || usageErr
@@ -649,7 +729,7 @@ export default function App() {
 
       <nav className="nav">
         {TABS.map(([id, label]) => (
-          <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>{label}</button>
+          <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>{label}{id === 'review' && reviewMeta?.pending ? ` · ${reviewMeta.pending}` : ''}</button>
         ))}
       </nav>
 
@@ -679,11 +759,13 @@ export default function App() {
               </div>
             </Card>
             <TokensByOpModel tokens={tokens} span="span-12" />
+            <div className="export-row"><ExportLinks dataset="tokens" /></div>
           </>}
 
           {tab === 'automations' && <>
             <RunStats runs={runs} span="span-12" />
             <RunsList runs={runs} span="span-12" limit={40} title="Run history" />
+            <div className="export-row"><ExportLinks dataset="runs" /></div>
           </>}
 
           {tab === 'knowledge' && <>
@@ -691,11 +773,17 @@ export default function App() {
             <GrowthCard vault={vault} span="span-7" />
             <FoldersCard graph={graph} span="span-5" />
             <IngestTrend ingestion={ingestion} span="span-12" />
+            <div className="export-row"><ExportLinks dataset="ingestion" /><ExportLinks dataset="vault" /></div>
           </>}
+
+          {tab === 'review' && <ReviewTab span="span-12" />}
 
           {tab === 'graph' && <GraphCard graph={graph} simEdges={simEdges} onToggleSim={setSimEdges} span="span-12" />}
 
-          {tab === 'activity' && <ActivityCard live={events} initial={activity} span="span-12" />}
+          {tab === 'activity' && <>
+            <ActivityCard live={events} initial={activity} span="span-12" />
+            <div className="export-row"><ExportLinks dataset="activity" /></div>
+          </>}
         </main>
       </ErrorBoundary>
     </div>

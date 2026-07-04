@@ -12,9 +12,9 @@ Requirements are the build contract. Each is testable. Priority: **M** (must, v1
 > One deliberate design deviation: FR-52's PostToolUse hook is a documented
 > no-op — every Claude round-trip is already ledgered at the token-manager
 > chokepoint, so a per-tool hook would double-count (see docs/08 §2). The
-> remaining **C** item (FR-64 chart CSV/JSON export; NFR-13 is done) is
-> explicitly post-v1. FR-26 capture-by-Inbox is implemented by the `capture`
-> automation (ADR-016).
+> C items are now implemented too — FR-26 (capture, ADR-016) and FR-64
+> (chart export, ADR-020); FR-76 (concurrent clients) remains a documented
+> caveat. NFR-13 is done.
 
 ## Functional requirements
 
@@ -93,7 +93,7 @@ Requirements are the build contract. Each is testable. Priority: **M** (must, v1
 | FR-61 | M | An interactive **knowledge graph** view: nodes = notes, edges = wikilinks plus high-similarity vector neighbours (toggle), with basic filtering by folder/tag. |
 | FR-62 | M | A structured **event log/activity feed** of runs, ingests, skips, budget events and errors, filterable, streamed live. |
 | FR-63 | M | Dashboard reads only from the daemon API; it never holds secrets and binds to localhost by default. |
-| FR-64 | C | Export any chart's underlying data as CSV/JSON. |
+| FR-64 | C | Export any chart's underlying data as CSV/JSON. **Implemented** (FR-96/ADR-020): `GET /api/export` + per-card download links. |
 
 ### Personal memory, identity & multi-client *(Phases 8–9 — built)*
 
@@ -128,6 +128,21 @@ this slice.
 | FR-81 | M | **File-drop capture.** Non-markdown files dropped into `00-Inbox/` are ingested through the pipeline (`AllowLocalFiles`, sandboxed to files physically enumerated in the inbox listing — paths inside notes are never file targets) and, on success, the original is moved **wikilink-safely** to `capture.archive_dir` (default `04-Archive/Capture/YYYY-MM/`). Nothing is ever deleted. |
 | FR-82 | M | **Capture bookkeeping.** Ticks are change-gated on the inbox listing hash; failed items are remembered in automation state and skipped until they change, surfaced once in `.axon/review-queue.md`, and emitted as events; every capture ingest is observable through the standard run rows and `ingest.*` events. Inbox notes are never modified by capture (cardinal rule 2). |
 | FR-83 | S | **Capture enrichment toggle.** `capture.enrich: heuristic \| claude` (default `heuristic`, zero tokens). `claude` routes enrichment through the token-manager chokepoint on the `routine` tier (ADR-015 local routing and fallback apply) and degrades to heuristic under budget denial. |
+
+### Review actions *(built)*
+
+FR-94…FR-96 are **implemented** (ADR-020; spec in
+`docs/superpowers/specs/2026-07-04-review-actions-design.md`): the
+`internal/review` package, the dashboard Review tab + `/api/review` +
+`/api/export`, structured triage proposals, and `vault.RewriteSystemFile`.
+The same slice implemented **FR-64** (chart export), the last unbuilt v1
+requirement. Priorities are relative to this slice.
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-94 | M | **Review API + tab.** The dashboard parses `.axon/review-queue.md` into typed items (`GET /api/review`) and resolves them (`POST /api/review/action`, accept/dismiss). Mutation POSTs require JSON content type + an `X-Axon-Review` header (CORS-preflight-forcing) atop the loopback bind and Host-guard; every action emits a `review.accept`/`review.dismiss` event. |
+| FR-95 | M | **Wikilink-safe accepts.** Link/pair/resurface accepts append to the target note's `axon:links` managed block (prose never touched); triage accepts — now structured JSON proposals validated at the chokepoint — perform the wikilink-safe `vault.Move`; queue lines are resolved via `vault.RewriteSystemFile`, which refuses any path outside `.axon/`. |
+| FR-96 | S | **Chart export (delivers FR-64).** `GET /api/export?dataset=…&format=csv\|json` serializes every chart dataset with per-card download links in the SPA. |
 
 ### Subscriptions *(built)*
 

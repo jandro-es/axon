@@ -164,7 +164,7 @@ func TestDailyLogChangeGate(t *testing.T) {
 func TestInboxTriageProposesToReviewQueue(t *testing.T) {
 	rc, fake := newRC(t, map[string]string{"00-Inbox/idea.md": "a half-formed project idea about vectors"})
 	fake.RespondFn = func(r agent.Request) (*agent.Response, error) {
-		return &agent.Response{Text: "01-Projects, tags: vectors", Model: r.Model, Usage: agent.Usage{InputTokens: 30, OutputTokens: 8}}, nil
+		return &agent.Response{Text: `{"folder":"01-Projects","tags":["vectors"]}`, Model: r.Model, Usage: agent.Usage{InputTokens: 30, OutputTokens: 8}}, nil
 	}
 	ctx := context.Background()
 

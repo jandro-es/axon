@@ -107,6 +107,7 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 					Manager: svc.manager,
 					Bus:     bus,
 					Static:  web.Assets(),
+					Vault:   deps.vault,
 					Health: func(context.Context) map[string]any {
 						h := map[string]any{
 							"embeddings_provider": deps.profile.Embeddings.Provider,

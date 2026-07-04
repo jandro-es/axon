@@ -413,3 +413,16 @@ func reassemble(fm, body string) string {
 
 // compile-time assertion that *FS satisfies Vault.
 var _ Vault = (*FS)(nil)
+
+// RewriteSystemFile atomically replaces the content of an AXON system file
+// under .axon/ (temp+rename, NFR-06). It REFUSES any other path: general
+// note rewriting must go through Write/Patch/Move (cardinal rule 2); this
+// exists solely so review-queue resolutions can flip their own checkbox
+// lines (ADR-020).
+func (v *FS) RewriteSystemFile(rel, content string) error {
+	clean := filepath.ToSlash(filepath.Clean(rel))
+	if !strings.HasPrefix(clean, ".axon/") {
+		return fmt.Errorf("rewrite %q: only .axon/ system files may be rewritten", rel)
+	}
+	return v.writeRaw(rel, content)
+}

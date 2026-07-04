@@ -12,6 +12,18 @@ bypasses the token manager); the vault contract is unchanged.
 
 ### Added
 
+- **Review-queue actions on the dashboard (ADR-020, FR-94…FR-96)** — a new
+  Review tab lists every pending proposal (link suggestions, structured
+  inbox-triage moves, resurfaced connections, capture records) with one-click
+  accept/dismiss. Accepts are wikilink-safe by construction: links land in
+  the note's `axon:links` managed block, triage moves go through the
+  link-rewriting `vault.Move`, and the queue file itself is only touched by
+  the new `.axon/`-guarded rewriter. The dashboard's mutation surface is
+  exactly these resolutions (JSON + custom-header guard forcing a CORS
+  preflight; loopback + Host-guard unchanged). Inbox-triage now emits
+  structured JSON proposals so its accepts actually move notes. Also ships
+  **FR-64** — every chart's data exports as CSV/JSON — closing the final
+  open requirement of the original v1 contract.
 - **RSS/feed subscriptions (ADR-019, FR-91…FR-93)** — declare feeds in
   `subscriptions.feeds` and AXON polls them hourly through the same
   egress-policied fetcher as every ingest, feeding new items into the
