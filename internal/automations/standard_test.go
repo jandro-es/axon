@@ -483,3 +483,23 @@ func TestValidateHeartbeatLine(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateAgenticTools(t *testing.T) {
+	if err := validateAgenticTools([]string{"vault_read", "vault_links", "vault_patch"}); err != nil {
+		t.Fatalf("valid set rejected: %v", err)
+	}
+	for _, bad := range [][]string{{"vault_move"}, {"knowledge_ingest"}, {"automations_run"}, {"not_a_tool"}} {
+		if err := validateAgenticTools(bad); err == nil {
+			t.Fatalf("expected %v to be rejected", bad)
+		}
+	}
+}
+
+func TestAgenticContainsWriteTool(t *testing.T) {
+	if !agenticContainsWriteTool([]string{"vault_read", "vault_patch"}) {
+		t.Fatal("vault_patch should be detected as a write tool")
+	}
+	if agenticContainsWriteTool([]string{"vault_read", "vault_links"}) {
+		t.Fatal("read-only set must not be flagged as write-capable")
+	}
+}

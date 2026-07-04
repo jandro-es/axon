@@ -14,6 +14,41 @@ import (
 	"github.com/jandro-es/axon/internal/vault"
 )
 
+// agenticWriteTools is the fixed set of managed-block-safe write tools an
+// agentic automation may request (ADR-022 / FR-105). vault_move and every
+// other mutating/model/network tool are deliberately absent.
+var agenticWriteTools = map[string]bool{
+	"vault_patch": true, "vault_write": true, "daily_append": true, "memory_remember": true,
+}
+
+// agenticReadTools is the read surface agentic runs have always had (ADR-017).
+var agenticReadTools = map[string]bool{
+	"vault_search": true, "vault_read": true, "vault_links": true,
+	"knowledge_search": true, "tokens_status": true,
+}
+
+// validateAgenticTools rejects any tool outside the read + managed-block-safe
+// write allowlists, so a stray vault_move or typo fails a run (and its tests)
+// instead of silently granting a capability.
+func validateAgenticTools(tools []string) error {
+	for _, name := range tools {
+		if !agenticReadTools[name] && !agenticWriteTools[name] {
+			return fmt.Errorf("tool %q is not permitted in an agentic automation allowlist (ADR-022)", name)
+		}
+	}
+	return nil
+}
+
+// agenticContainsWriteTool reports whether an allowlist includes any write tool.
+func agenticContainsWriteTool(tools []string) bool {
+	for _, name := range tools {
+		if agenticWriteTools[name] {
+			return true
+		}
+	}
+	return false
+}
+
 // runModel executes a model call through the token manager, or — under dry-run —
 // only pre-flights it (Authorize) and returns the estimate without spending
 // tokens. A budget defer/deny is returned as deferred=true (not an error) so the
@@ -23,7 +58,7 @@ func runModel(ctx context.Context, rc RunCtx, call tokens.AgentCall) (text strin
 	if call.BudgetTokens == 0 {
 		call.BudgetTokens = rc.BudgetTokens // activate config budget_tokens (FR-85)
 	}
-	if rc.DryRun {
+	if rc.DryRun && !call.DryRunTools {
 		auth, aerr := rc.Manager.Authorize(ctx, call)
 		if aerr != nil {
 			return "", 0, false, aerr
@@ -48,8 +83,17 @@ func today(rc RunCtx) string { return rc.now().UTC().Format("2006-01-02") }
 // A budget defer/deny or a kill-switch trip returns degraded=true so the
 // automation can fall back to its one-shot path instead of failing the run.
 func runAgentic(ctx context.Context, rc RunCtx, call tokens.AgentCall, toolsAllow []string, maxTurns int) (text string, est int, degraded bool, err error) {
+	if verr := validateAgenticTools(toolsAllow); verr != nil {
+		return "", 0, false, verr
+	}
 	call.Tools = toolsAllow
 	call.MaxTurns = maxTurns
+	// A write-capable agentic dry-run runs the agent with report-only write
+	// tools (server-enforced) instead of the Authorize-only short-circuit,
+	// so the operator sees what would be written (FR-106).
+	if rc.DryRun && agenticContainsWriteTool(toolsAllow) {
+		call.DryRunTools = true
+	}
 	text, est, degraded, err = runModel(ctx, rc, call)
 	if err != nil && errors.Is(err, tokens.ErrRunBudgetExceeded) {
 		rc.Log.Warn("agentic run killed at budget; degrading", "operation", call.Operation)
