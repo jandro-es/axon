@@ -67,10 +67,11 @@ is a free skip — no body, no parse, no seen-state churn (RFC 9110 §13).
   `304 → (nil, notModified=true, nil)` — success, never retried, body
   never read. `Fetch` delegates to the same path with empty validators;
   its behavior is byte-identical to today.
-- `ingestion.Fake` implements `ConditionalFetcher`: new field
-  `ETags map[string]string`; `FetchConditional` returns `notModified=true`
-  when `v.ETag` matches `ETags[url]`, else falls through to `Fetch` and
-  reports `ETags[url]` as the document's new ETag.
+- The automations test fetcher (`subscriptions_test.go`'s `urlFetcher`)
+  implements `ConditionalFetcher` (etag map → 304); `ingestion.Fake` is
+  unchanged — no consumer needs a conditional fake. *(Amended at plan
+  time: the subscriptions tests use their own fetcher, so implementing
+  this on `Fake` would be consumer-less code.)*
 
 ### Subscriptions automation (`internal/automations/subscriptions.go`)
 

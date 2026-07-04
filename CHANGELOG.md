@@ -12,6 +12,13 @@ bypasses the token manager); the vault contract is unchanged.
 
 ### Added
 
+- **Conditional feed polling (FR-101)** — the subscriptions automation now
+  stores each feed's `ETag`/`Last-Modified` and polls with
+  `If-None-Match`/`If-Modified-Since`; a `304 Not Modified` is a free skip
+  (no download, no parse, no state churn), reported as "N unchanged (304)"
+  in the run summary. Validators live in `automation_state` and prune
+  automatically when feeds are removed. Closes ADR-019's remaining
+  optimization note.
 - **`axon subscribe` CLI (FR-100)** — manage feed subscriptions without
   hand-editing config: `axon subscribe <url>` fetches the feed through the
   egress-policied fetcher, parses it (gofeed), and appends it to
