@@ -46,6 +46,10 @@ type Request struct {
 	// RunBudgetTokens is the per-run total token cap enforced by the
 	// streaming kill-switch (0 = no cap; --max-turns still bounds the run).
 	RunBudgetTokens int
+	// DryRunTools spawns the subprocess MCP server in report-only mode
+	// (axon mcp --tools <csv> --dry-run): write tools validate and report,
+	// never mutate (ADR-022 / FR-106). Ignored for non-agentic calls.
+	DryRunTools bool
 }
 
 // Response is the result of a Claude call plus the usage to be ledgered.

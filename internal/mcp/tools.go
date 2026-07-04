@@ -38,6 +38,10 @@ type Deps struct {
 	// ToolFilter, when non-empty, registers ONLY the named tools — the
 	// server-side half of ADR-017's dual allowlisting. Empty = all tools.
 	ToolFilter []string
+	// DryRun puts the write tools in report-only mode (ADR-022 / FR-106):
+	// each validates and computes its change, returns Applied=false with a
+	// Would string, and performs no vault mutation. Read tools are unaffected.
+	DryRun bool
 }
 
 // Tools holds the dependencies and implements each tool as a method.
@@ -112,8 +116,10 @@ type WriteIn struct {
 }
 
 type WriteOut struct {
-	OK   bool   `json:"ok"`
-	Path string `json:"path"`
+	OK      bool   `json:"ok"`
+	Path    string `json:"path"`
+	Applied bool   `json:"applied"`
+	Would   string `json:"would,omitempty"`
 }
 
 // Write creates a new note (or overwrites with force). It refuses to clobber an
@@ -134,10 +140,14 @@ func (t *Tools) Write(ctx context.Context, in WriteIn) (WriteOut, error) {
 			return WriteOut{}, fmt.Errorf("note %q is not AXON-managed; force-overwrite is only allowed on notes with `axon_managed: true` frontmatter — use vault_patch for managed-block edits, or vault_move to archive it", in.Path)
 		}
 	}
+	if t.deps.DryRun {
+		return WriteOut{OK: true, Path: in.Path, Applied: false,
+			Would: fmt.Sprintf("create %s (%d bytes)", in.Path, len(in.Body))}, nil
+	}
 	if err := t.deps.Vault.Write(ctx, in.Path, &vault.Note{Body: in.Body}); err != nil {
 		return WriteOut{}, err
 	}
-	return WriteOut{OK: true, Path: in.Path}, nil
+	return WriteOut{OK: true, Path: in.Path, Applied: true}, nil
 }
 
 // isAxonManaged reports whether a note's frontmatter marks it AXON-authored.
@@ -176,7 +186,9 @@ type PatchIn struct {
 }
 
 type PatchOut struct {
-	OK bool `json:"ok"`
+	OK      bool   `json:"ok"`
+	Applied bool   `json:"applied"`
+	Would   string `json:"would,omitempty"`
 }
 
 // Patch edits only the content of an axon:<marker> managed block, never human
@@ -185,10 +197,14 @@ func (t *Tools) Patch(ctx context.Context, in PatchIn) (PatchOut, error) {
 	if err := guardAgentPath(in.Path); err != nil {
 		return PatchOut{}, err
 	}
+	if t.deps.DryRun {
+		return PatchOut{OK: true, Applied: false,
+			Would: fmt.Sprintf("patch axon:%s in %s (%d chars)", in.Marker, in.Path, len(in.Content))}, nil
+	}
 	if err := t.deps.Vault.Patch(ctx, in.Path, in.Marker, in.Content); err != nil {
 		return PatchOut{}, err
 	}
-	return PatchOut{OK: true}, nil
+	return PatchOut{OK: true, Applied: true}, nil
 }
 
 // --- move (wikilink-safe) ---------------------------------------------------
@@ -259,8 +275,10 @@ type DailyAppendIn struct {
 }
 
 type DailyAppendOut struct {
-	OK   bool   `json:"ok"`
-	Path string `json:"path"`
+	OK      bool   `json:"ok"`
+	Path    string `json:"path"`
+	Applied bool   `json:"applied"`
+	Would   string `json:"would,omitempty"`
 }
 
 // DailyAppend appends content to a daily note, creating it if absent.
@@ -270,6 +288,10 @@ func (t *Tools) DailyAppend(ctx context.Context, in DailyAppendIn, today string)
 		date = today
 	}
 	path := "Daily/" + date + ".md"
+	if t.deps.DryRun {
+		return DailyAppendOut{OK: true, Path: path, Applied: false,
+			Would: fmt.Sprintf("append %d byte(s) to %s", len(in.Content), path)}, nil
+	}
 	if !t.deps.Vault.Exists(path) {
 		if _, err := t.deps.Vault.Create(path, "---\ntitle: \""+date+"\"\ntype: daily\ntags: [daily]\n---\n\n## Log\n"); err != nil {
 			return DailyAppendOut{}, err
@@ -278,7 +300,7 @@ func (t *Tools) DailyAppend(ctx context.Context, in DailyAppendIn, today string)
 	if err := t.deps.Vault.Append(path, strings.TrimRight(in.Content, "\n")+"\n"); err != nil {
 		return DailyAppendOut{}, err
 	}
-	return DailyAppendOut{OK: true, Path: path}, nil
+	return DailyAppendOut{OK: true, Path: path, Applied: true}, nil
 }
 
 // --- memory.remember --------------------------------------------------------
@@ -290,9 +312,11 @@ type RememberIn struct {
 }
 
 type RememberOut struct {
-	OK    bool   `json:"ok"`
-	Entry string `json:"entry"`
-	Path  string `json:"path"`
+	OK      bool   `json:"ok"`
+	Entry   string `json:"entry"`
+	Path    string `json:"path"`
+	Applied bool   `json:"applied"`
+	Would   string `json:"would,omitempty"`
 }
 
 // Remember appends a dated entry to the personal MEMORY note's axon:memory
@@ -300,13 +324,17 @@ type RememberOut struct {
 // This is how durable memory grows during interactive work (FR-73). today is the
 // UTC date the server stamps the entry with.
 func (t *Tools) Remember(ctx context.Context, in RememberIn, today string) (RememberOut, error) {
+	if t.deps.DryRun {
+		return RememberOut{OK: true, Path: identity.MemoryPath, Applied: false,
+			Would: fmt.Sprintf("remember %s: %s", in.Kind, in.Text)}, nil
+	}
 	line, err := identity.Remember(ctx, t.deps.Vault, identity.Entry{
 		Text: in.Text, Kind: in.Kind, Source: in.Source, Date: today,
 	})
 	if err != nil {
 		return RememberOut{}, err
 	}
-	return RememberOut{OK: true, Entry: line, Path: identity.MemoryPath}, nil
+	return RememberOut{OK: true, Entry: line, Path: identity.MemoryPath, Applied: true}, nil
 }
 
 // --- knowledge.ingest -------------------------------------------------------

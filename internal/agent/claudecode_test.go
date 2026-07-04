@@ -177,3 +177,23 @@ func TestClaudeCodeRunUsesInjectedExecutor(t *testing.T) {
 		t.Error("no args built")
 	}
 }
+
+func TestBuildMCPConfigDryRunFlag(t *testing.T) {
+	c := &ClaudeCode{mcpCommand: "axon", mcpArgs: []string{"mcp"}}
+
+	dry, err := c.buildMCPConfig([]string{"vault_patch"}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(dry, "--dry-run") || !strings.Contains(dry, "vault_patch") {
+		t.Fatalf("dry-run config missing flag/tool: %s", dry)
+	}
+
+	live, err := c.buildMCPConfig([]string{"vault_patch"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(live, "--dry-run") {
+		t.Fatalf("live config must not carry --dry-run: %s", live)
+	}
+}

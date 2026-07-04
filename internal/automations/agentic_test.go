@@ -202,7 +202,16 @@ func TestCompactionAgenticTools(t *testing.T) {
 	if _, err := (Compaction{WordThreshold: 5}).Run(context.Background(), rc); err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Tools) != 2 || got.MaxTurns != 4 {
-		t.Fatalf("compaction request tools=%v turns=%d, want [vault_read vault_links] / 4", got.Tools, got.MaxTurns)
+	if len(got.Tools) != 3 || got.MaxTurns != 4 {
+		t.Fatalf("compaction request tools=%v turns=%d, want [vault_read vault_links vault_patch] / 4", got.Tools, got.MaxTurns)
+	}
+	var hasPatch bool
+	for _, tn := range got.Tools {
+		if tn == "vault_patch" {
+			hasPatch = true
+		}
+	}
+	if !hasPatch {
+		t.Fatalf("compaction agentic path must include vault_patch (ADR-022); got %v", got.Tools)
 	}
 }

@@ -182,7 +182,7 @@ func (c *ClaudeCode) buildAgenticArgs(req Request) []string {
 	for i, t := range req.Tools {
 		allowed[i] = "mcp__axon__" + t
 	}
-	mcpCfg, _ := c.buildMCPConfig(req.Tools) // runAgentic validates before calling
+	mcpCfg, _ := c.buildMCPConfig(req.Tools, req.DryRunTools) // runAgentic validates before calling
 	args := []string{
 		"--print",
 		"--output-format", "stream-json",
@@ -206,11 +206,14 @@ func (c *ClaudeCode) buildAgenticArgs(req Request) []string {
 
 // buildMCPConfig renders the inline --mcp-config JSON: the AXON binary
 // serving ONLY the call's tools (server-side enforcement, FR-86).
-func (c *ClaudeCode) buildMCPConfig(tools []string) (string, error) {
+func (c *ClaudeCode) buildMCPConfig(tools []string, dryRun bool) (string, error) {
 	if c.mcpCommand == "" {
 		return "", fmt.Errorf("agentic run requested but no MCP command wired (ClaudeCodeOptions.MCPCommand)")
 	}
 	args := append(append([]string{}, c.mcpArgs...), "--tools", strings.Join(tools, ","))
+	if dryRun {
+		args = append(args, "--dry-run")
+	}
 	cfg := map[string]any{
 		"mcpServers": map[string]any{
 			"axon": map[string]any{"command": c.mcpCommand, "args": args},
@@ -230,7 +233,7 @@ var errKilledByBudget = errors.New("killed: run budget exceeded")
 // REAL usage rides back with ErrRunBudgetExceeded so the chokepoint can
 // ledger actual spend, not an estimate.
 func (c *ClaudeCode) runAgentic(ctx context.Context, req Request) (*Response, error) {
-	if _, err := c.buildMCPConfig(req.Tools); err != nil {
+	if _, err := c.buildMCPConfig(req.Tools, req.DryRunTools); err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, c.agenticTimeout)
