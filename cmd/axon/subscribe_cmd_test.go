@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jandro-es/axon/internal/config"
+	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/ingestion"
 )
 
@@ -285,4 +286,82 @@ func slicesContains(list []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func seedSeenState(t *testing.T, cfgPath, jsonValue string) {
+	t.Helper()
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, p, err := cfg.ResolveProfile("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := p.Paths()
+	if err := os.MkdirAll(filepath.Dir(paths.DBPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := db.Open(paths.DBPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+	if _, err := db.Migrate(sqlDB); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetCursor(context.Background(), sqlDB, "subscriptions:seen", jsonValue, "2026-07-04T00:00:00Z"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSubscribeList(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeSubscribeConfig(t, dir, "")
+	stubFetcher(t, nil)
+	for _, u := range []string{"https://feeds.example.com/a.xml", "https://feeds.example.com/b.xml"} {
+		if _, err := run(t, "subscribe", u, "--no-verify", "--config", cfgPath); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seedSeenState(t, cfgPath, `{"https://feeds.example.com/a.xml":["u1","u2","u3"]}`)
+
+	out, err := run(t, "subscribe", "list", "--config", cfgPath)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "a.xml") || !strings.Contains(out, "3 entr") {
+		t.Errorf("polled feed must show its seen count:\n%s", out)
+	}
+	if !strings.Contains(out, "b.xml") || !strings.Contains(out, "pending first poll") {
+		t.Errorf("unpolled feed must show pending:\n%s", out)
+	}
+}
+
+func TestSubscribeListDegradesWithoutDB(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeSubscribeConfig(t, dir, "")
+	stubFetcher(t, nil)
+	if _, err := run(t, "subscribe", "https://feeds.example.com/a.xml", "--no-verify", "--config", cfgPath); err != nil {
+		t.Fatal(err)
+	}
+	out, err := run(t, "subscribe", "list", "--config", cfgPath) // data dir never created
+	if err != nil {
+		t.Fatalf("list must not error without a DB: %v", err)
+	}
+	if !strings.Contains(out, "pending first poll") {
+		t.Errorf("out = %q", out)
+	}
+}
+
+func TestSubscribeListEmpty(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeSubscribeConfig(t, dir, "")
+	out, err := run(t, "subscribe", "list", "--config", cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "no feeds subscribed") {
+		t.Errorf("out = %q", out)
+	}
 }

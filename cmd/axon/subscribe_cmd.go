@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -12,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/jandro-es/axon/internal/config"
+	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/ingestion"
 )
 
@@ -39,7 +42,64 @@ func newSubscribeCmd(gf *globalFlags) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&noVerify, "no-verify", false, "skip fetching the URL to verify it parses as a feed")
 	cmd.Flags().BoolVar(&allow, "allow", false, "add the feed's host to policy.ingest_domains_allow if the policy refuses it")
+	cmd.AddCommand(newSubscribeListCmd(gf))
 	return cmd
+}
+
+func newSubscribeListCmd(gf *globalFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List subscribed feeds and their poll state",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			out := cmd.OutOrStdout()
+			cfg, err := config.Load(gf.configPath)
+			if err != nil {
+				return err
+			}
+			_, profile, err := cfg.ResolveProfile(gf.profile)
+			if err != nil {
+				return err
+			}
+			feeds := profile.Subscriptions.Feeds
+			if len(feeds) == 0 {
+				fmt.Fprintln(out, "no feeds subscribed — add one with `axon subscribe <url>`")
+				return nil
+			}
+			seen := loadSeenState(cmd.Context(), profile)
+			for _, f := range feeds {
+				state := "pending first poll"
+				if items, ok := seen[f.URL]; ok {
+					state = fmt.Sprintf("%d entr(ies) seen", len(items))
+				}
+				fmt.Fprintf(out, "%s — %s\n", f.URL, state)
+			}
+			return nil
+		},
+	}
+}
+
+// loadSeenState reads the subscriptions automation's seen-state row
+// ("subscriptions:seen", map[feedURL][]itemURL). Any failure — no data dir,
+// no DB, no row, bad JSON — degrades to an empty map; list/remove never
+// error on state.
+func loadSeenState(ctx context.Context, profile config.Profile) map[string][]string {
+	seen := map[string][]string{}
+	dbPath := profile.Paths().DBPath
+	if _, err := os.Stat(dbPath); err != nil {
+		return seen
+	}
+	sqlDB, err := db.Open(dbPath)
+	if err != nil {
+		return seen
+	}
+	defer sqlDB.Close()
+	raw, err := db.GetCursor(ctx, sqlDB, "subscriptions:seen")
+	if err != nil || raw == "" {
+		return seen
+	}
+	_ = json.Unmarshal([]byte(raw), &seen)
+	return seen
 }
 
 func subscribeAdd(cmd *cobra.Command, gf *globalFlags, feedURL string, noVerify, allow bool) error {
