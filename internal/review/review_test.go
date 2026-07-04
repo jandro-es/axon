@@ -2,10 +2,12 @@ package review
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jandro-es/axon/internal/vault"
 )
@@ -191,5 +193,121 @@ func TestLoadMissingFileIsEmpty(t *testing.T) {
 	items, err := Load(context.Background(), v)
 	if err != nil || len(items) != 0 {
 		t.Fatalf("items=%v err=%v", items, err)
+	}
+}
+
+func TestCompact(t *testing.T) {
+	now := time.Date(2026, 7, 4, 12, 0, 0, 0, time.UTC)
+	old := now.AddDate(0, 0, -10).Format("2006-01-02")  // archivable
+	fresh := now.AddDate(0, 0, -2).Format("2006-01-02") // kept
+	content := fmt.Sprintf(`
+## Link suggestions (2026-06-20 01:00)
+- [x] [[a]] ↔ [[b]] — ✓ applied %s
+- [x] [[c]] ↔ [[d]] — ✗ dismissed %s
+
+## Inbox triage (2026-06-25 12:30)
+- [x] triage [[00-Inbox/idea]] → 02-Areas (tags: t) — ✓ applied %s
+- [ ] triage [[00-Inbox/next]] → 02-Areas (tags: t)
+
+## Capture (2026-07-03 22:38)
+- [x] captured meeting-notes.txt → [[03-Resources/Knowledge/meeting-notes]] (original: x.txt)
+`, old, fresh, old)
+
+	kept, archived := compact(content, now)
+
+	// The Link suggestions header stays: its fresh dismissal is still kept.
+	for _, want := range []string{"✗ dismissed " + fresh, "- [ ] triage [[00-Inbox/next]]", "captured meeting-notes.txt", "## Link suggestions", "## Inbox triage", "## Capture"} {
+		if !strings.Contains(kept, want) {
+			t.Errorf("kept missing %q\nkept:\n%s", want, kept)
+		}
+	}
+	if strings.Contains(kept, "✓ applied "+old) {
+		t.Errorf("kept still contains old resolution\nkept:\n%s", kept)
+	}
+	// Archived lines carry their section headers.
+	for _, want := range []string{"## Link suggestions (2026-06-20 01:00)", "[[a]] ↔ [[b]] — ✓ applied " + old, "## Inbox triage (2026-06-25 12:30)", "triage [[00-Inbox/idea]]"} {
+		if !strings.Contains(archived, want) {
+			t.Errorf("archived missing %q\narchived:\n%s", want, archived)
+		}
+	}
+	// The resolved-but-dateless capture line is never archived (no guesswork).
+	if strings.Contains(archived, "captured meeting-notes.txt") {
+		t.Error("dateless resolved line must not be archived")
+	}
+}
+
+func TestCompactNothingToArchive(t *testing.T) {
+	now := time.Date(2026, 7, 4, 12, 0, 0, 0, time.UTC)
+	content := "\n## Link suggestions (2026-07-04 01:00)\n- [ ] [[a]] ↔ [[b]]\n"
+	_, archived := compact(content, now)
+	if archived != "" {
+		t.Fatalf("archived should be empty, got %q", archived)
+	}
+}
+
+// TestDismissCompactsOldResolved: resolving an item also archives resolved
+// lines past the threshold, drops their emptied section, and leaves the
+// remaining items' IDs stable (FR-103).
+func TestDismissCompactsOldResolved(t *testing.T) {
+	v := vault.NewFS(t.TempDir())
+	if err := os.MkdirAll(filepath.Join(v.Root(), ".axon"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().UTC().AddDate(0, 0, -10).Format("2006-01-02")
+	queue := fmt.Sprintf(`
+## Link suggestions (2026-06-20 01:00)
+- [x] [[old-a]] ↔ [[old-b]] — ✓ applied %s
+
+## Resurfaced connections (2026-07-04 07:00)
+- [ ] resurface [[dormant]] — related to recent [[current]] (sim 0.82, dormant since 2026-01-14)
+- [ ] resurface [[other]] — related to recent [[current]] (sim 0.80, dormant since 2026-02-01)
+`, old)
+	if err := os.WriteFile(filepath.Join(v.Root(), ".axon", "review-queue.md"), []byte(queue), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	items := mustLoad(t, v)
+	target := findKind(items, "resurface")
+	if target == nil {
+		t.Fatal("no pending resurface item")
+	}
+	other := ""
+	for _, it := range items {
+		if it.Kind == "resurface" && it.ID != target.ID {
+			other = it.ID
+		}
+	}
+
+	if _, err := Dismiss(context.Background(), v, target.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Old resolved line + its section moved to the archive.
+	arch, err := os.ReadFile(filepath.Join(v.Root(), ".axon", "review-queue-archive.md"))
+	if err != nil {
+		t.Fatalf("archive not written: %v", err)
+	}
+	if !strings.Contains(string(arch), "[[old-a]] ↔ [[old-b]]") || !strings.Contains(string(arch), "## Link suggestions (2026-06-20 01:00)") {
+		t.Fatalf("archive content wrong:\n%s", arch)
+	}
+	qdata, _ := os.ReadFile(filepath.Join(v.Root(), ".axon", "review-queue.md"))
+	if strings.Contains(string(qdata), "old-a") || strings.Contains(string(qdata), "## Link suggestions (2026-06-20 01:00)") {
+		t.Fatalf("queue not compacted:\n%s", qdata)
+	}
+	// The just-dismissed line (today's date, < 7 days) is still visible.
+	if !strings.Contains(string(qdata), "✗ dismissed") {
+		t.Fatalf("fresh resolution vanished:\n%s", qdata)
+	}
+
+	// The surviving pending item keeps its identity across the compaction.
+	after := mustLoad(t, v)
+	found := false
+	for _, it := range after {
+		if it.ID == other && !it.Checked {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("pending item lost or ID changed after compaction: %+v", after)
 	}
 }
