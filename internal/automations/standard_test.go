@@ -503,3 +503,54 @@ func TestAgenticContainsWriteTool(t *testing.T) {
 		t.Fatal("read-only set must not be flagged as write-capable")
 	}
 }
+
+// TestCompactionAgenticWritesSummary: on the agentic path the distilled
+// summary lands in axon:summary and the original is archived first (FR-44).
+// (newRC's fake agent returns text but does not itself call MCP tools, so the
+// summary lands via the verify-and-fallback Go Patch — outcome is what's under
+// test; a real agent tool call is covered by the Task 5 smoke + agentic e2e.)
+func TestCompactionAgenticWritesSummary(t *testing.T) {
+	seed := map[string]string{
+		"03-Resources/long.md": "---\ntitle: long\n---\n" + strings.Repeat("Sentence about vectors. ", 80) + "\n",
+	}
+	rc, fake := newRC(t, seed)
+	ctx := context.Background()
+	fake.Reply = "- vectors summary\n- second point"
+	mustReindex(t, rc)
+
+	res, err := (Compaction{WordThreshold: 50}).Run(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Changes) == 0 {
+		t.Fatalf("no note compacted; res=%+v", res)
+	}
+	n, _ := rc.Vault.Read(ctx, "03-Resources/long.md")
+	if !strings.Contains(n.Body, "axon:summary:start") || !strings.Contains(n.Body, "vectors summary") {
+		t.Fatalf("summary not written:\n%s", n.Body)
+	}
+	entries, _ := os.ReadDir(filepath.Join(rc.Vault.Root(), ".axon", "archive"))
+	if len(entries) == 0 {
+		t.Fatal("original not archived before compaction (FR-44)")
+	}
+}
+
+func TestCompactionAgenticDryRunNoMutation(t *testing.T) {
+	seed := map[string]string{
+		"03-Resources/long.md": "---\ntitle: long\n---\n" + strings.Repeat("Sentence about vectors. ", 80) + "\n",
+	}
+	rc, fake := newRC(t, seed)
+	ctx := context.Background()
+	fake.Reply = "- summary"
+	mustReindex(t, rc)
+	rc.DryRun = true
+
+	before, _ := rc.Vault.Read(ctx, "03-Resources/long.md")
+	if _, err := (Compaction{WordThreshold: 50}).Run(ctx, rc); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := rc.Vault.Read(ctx, "03-Resources/long.md")
+	if before.Body != after.Body {
+		t.Fatalf("dry-run mutated the note:\n%s", after.Body)
+	}
+}
