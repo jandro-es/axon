@@ -2,6 +2,7 @@ package automations
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -283,6 +284,88 @@ func mustReindex(t *testing.T, rc RunCtx) {
 	t.Helper()
 	if _, err := (KnowledgeReindex{}).Run(context.Background(), rc); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestLinkSuggesterProposalMemory proves a proposed pair is never re-queued
+// (FR-102): the second run finds nothing new, and the memory row persists.
+func TestLinkSuggesterProposalMemory(t *testing.T) {
+	rc, _ := newRC(t, nil)
+	ctx := context.Background()
+	dir := t.TempDir()
+	for name, body := range map[string]string{
+		"a.md": "# Vector Databases\n\nVector databases index embeddings for similarity search.\n",
+		"b.md": "# Semantic Search\n\nSemantic search uses embeddings and vector databases.\n",
+	} {
+		f := filepath.Join(dir, name)
+		_ = os.WriteFile(f, []byte(body), 0o644)
+		if _, err := rc.Pipeline.Ingest(ctx, f, ingestion.IngestOptions{AllowLocalFiles: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustReindex(t, rc)
+
+	res, err := LinkSuggester{}.Run(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Changes) == 0 {
+		t.Fatal("first run should propose at least one link")
+	}
+	raw, err := db.GetCursor(ctx, rc.DB, "link-suggester:proposed")
+	if err != nil || raw == "" {
+		t.Fatalf("proposal memory not persisted: %q, %v", raw, err)
+	}
+
+	res2, err := LinkSuggester{}.Run(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res2.Changes) != 0 {
+		t.Fatalf("second run re-proposed: %v", res2.Changes)
+	}
+}
+
+// TestLinkSuggesterDryRunPersistsNothing: dry-run proposes but leaves no
+// memory row, so a later real run still queues the pairs.
+func TestLinkSuggesterDryRunPersistsNothing(t *testing.T) {
+	rc, _ := newRC(t, nil)
+	ctx := context.Background()
+	dir := t.TempDir()
+	for name, body := range map[string]string{
+		"a.md": "# Vector Databases\n\nVector databases index embeddings for similarity search.\n",
+		"b.md": "# Semantic Search\n\nSemantic search uses embeddings and vector databases.\n",
+	} {
+		f := filepath.Join(dir, name)
+		_ = os.WriteFile(f, []byte(body), 0o644)
+		if _, err := rc.Pipeline.Ingest(ctx, f, ingestion.IngestOptions{AllowLocalFiles: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustReindex(t, rc)
+
+	rc.DryRun = true
+	if _, err := (LinkSuggester{}).Run(ctx, rc); err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := db.GetCursor(ctx, rc.DB, "link-suggester:proposed"); raw != "" {
+		t.Fatalf("dry-run persisted memory: %q", raw)
+	}
+}
+
+// TestProposalMemoryCap: the shared helper keeps at most proposalMemoryCap
+// keys (lexicographic tail, matching the resurfacer's existing behaviour).
+func TestProposalMemoryCap(t *testing.T) {
+	rc, _ := newRC(t, nil)
+	ctx := context.Background()
+	m := map[string]bool{}
+	for i := 0; i < proposalMemoryCap+50; i++ {
+		m[fmt.Sprintf("pair-%04d", i)] = true
+	}
+	saveProposalMemory(ctx, rc, "test:proposed", m)
+	got := loadProposalMemory(ctx, rc, "test:proposed")
+	if len(got) != proposalMemoryCap {
+		t.Fatalf("cap not enforced: got %d keys", len(got))
 	}
 }
 
