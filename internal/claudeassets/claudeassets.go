@@ -179,6 +179,7 @@ func (p Params) settingsJSON() string {
 			"PreToolUse":   pre,
 			"PostToolUse":  post,
 			"Stop":         mk("Stop"),
+			"SessionEnd":   mk("SessionEnd"),
 		},
 	}
 	b, _ := json.MarshalIndent(doc, "", "  ")

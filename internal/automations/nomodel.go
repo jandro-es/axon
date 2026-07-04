@@ -149,6 +149,10 @@ func (ContextExport) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 
 // ---- link-suggester (no model for candidate generation) --------------------
 
+// linkSuggesterProposedState is the automation_state row remembering every
+// pair the link-suggester has ever queued (FR-102).
+const linkSuggesterProposedState = "link-suggester:proposed"
+
 // LinkSuggester proposes Zettelkasten links between semantically close notes
 // that aren't yet linked, via a vector-similarity sweep (no model needed). It
 // writes ranked suggestions to .axon/review-queue.md.
@@ -185,6 +189,10 @@ func (l LinkSuggester) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 	}
 	sort.Strings(paths)
 
+	// Proposal memory (FR-102): pairs already queued once — accepted or
+	// dismissed — are never re-proposed. Unordered: direction is noise.
+	proposed := loadProposalMemory(ctx, rc, linkSuggesterProposedState)
+
 	type suggestion struct{ from, to string }
 	var suggestions []suggestion
 	seen := map[string]bool{}
@@ -206,8 +214,8 @@ func (l LinkSuggester) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 			if h.Path == "" || h.Path == p {
 				continue
 			}
-			key := p + "->" + h.Path
-			if seen[key] || existing[stripExt(h.Path)] || existing[base(h.Path)] {
+			key := pairKey(p, h.Path)
+			if seen[key] || proposed[key] || existing[stripExt(h.Path)] || existing[base(h.Path)] {
 				continue
 			}
 			seen[key] = true
@@ -237,5 +245,9 @@ func (l LinkSuggester) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 	if err := rc.Vault.Append(".axon/review-queue.md", b.String()); err != nil {
 		return RunResult{}, err
 	}
+	for _, s := range suggestions {
+		proposed[pairKey(s.from, s.to)] = true
+	}
+	saveProposalMemory(ctx, rc, linkSuggesterProposedState, proposed)
 	return RunResult{Summary: fmt.Sprintf("proposed %d link(s) in review queue", len(suggestions)), Changes: changes}, nil
 }

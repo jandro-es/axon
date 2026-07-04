@@ -60,6 +60,11 @@ func (SessionDistill) readySessions(ctx context.Context, rc RunCtx) ([]string, m
 	cutoff := rc.now().UTC().Add(-sessionIdleMinutes * time.Minute)
 	var ready []string
 	for id, p := range pending {
+		if p.Ended {
+			// SessionEnd fired (FR-104): no idle wait.
+			ready = append(ready, id)
+			continue
+		}
 		if t, terr := time.Parse(time.RFC3339, p.LastStop); terr == nil && t.Before(cutoff) {
 			ready = append(ready, id)
 		}

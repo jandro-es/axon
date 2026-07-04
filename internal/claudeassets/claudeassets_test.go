@@ -88,7 +88,7 @@ func TestSettingsJSONHasAllHooks(t *testing.T) {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatalf("settings.json invalid: %v", err)
 	}
-	for _, ev := range []string{"SessionStart", "PreToolUse", "PostToolUse", "Stop"} {
+	for _, ev := range []string{"SessionStart", "PreToolUse", "PostToolUse", "Stop", "SessionEnd"} {
 		if _, ok := doc.Hooks[ev]; !ok {
 			t.Errorf("missing hook %q", ev)
 		}

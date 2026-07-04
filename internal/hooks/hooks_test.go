@@ -324,3 +324,37 @@ func TestStopRespectsToggleAndMissingFields(t *testing.T) {
 		t.Fatalf("incomplete payloads recorded: %v", pending2)
 	}
 }
+
+// TestSessionEndRecordsEnded: SessionEnd records like Stop but with a sticky
+// ended flag (FR-104); the capture_sessions gate applies.
+func TestSessionEndRecordsEnded(t *testing.T) {
+	deps, _ := testDeps(t)
+	res, err := Handle(context.Background(), SessionEnd, stopPayload("sess-end", "/tmp/t.jsonl"), deps)
+	if err != nil || res.ExitCode != 0 {
+		t.Fatalf("session end: %v %d", err, res.ExitCode)
+	}
+	pending, _ := db.LoadPendingSessions(context.Background(), deps.DB)
+	p, ok := pending["sess-end"]
+	if !ok || !p.Ended || p.TranscriptPath != "/tmp/t.jsonl" {
+		t.Fatalf("pending = %+v", pending)
+	}
+
+	// A later Stop refreshes LastStop but never clears the end marker.
+	if _, err := Handle(context.Background(), Stop, stopPayload("sess-end", "/tmp/t.jsonl"), deps); err != nil {
+		t.Fatal(err)
+	}
+	pending, _ = db.LoadPendingSessions(context.Background(), deps.DB)
+	if !pending["sess-end"].Ended {
+		t.Fatal("Ended must be sticky across a later Stop")
+	}
+
+	// Toggle off: SessionEnd records nothing.
+	deps2, _ := testDeps(t)
+	f := false
+	deps2.Memory.CaptureSessions = &f
+	_, _ = Handle(context.Background(), SessionEnd, stopPayload("sess-off", "/tmp/t.jsonl"), deps2)
+	pending2, _ := db.LoadPendingSessions(context.Background(), deps2.DB)
+	if len(pending2) != 0 {
+		t.Fatal("toggle off must not record")
+	}
+}

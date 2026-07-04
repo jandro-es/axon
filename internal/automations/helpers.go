@@ -4,8 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"sort"
 	"strings"
+	"time"
 
+	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/tokens"
 	"github.com/jandro-es/axon/internal/vault"
 )
@@ -85,3 +89,45 @@ func stripExt(p string) string { return vault.RelNoExt(p) }
 
 // base is the basename of a vault path without ".md".
 func base(p string) string { return vault.BaseNoExt(p) }
+
+// ---- proposal memory (shared by resurfacer + link-suggester, FR-90/FR-102) --
+
+// proposalMemoryCap bounds each automation's persistent proposal memory.
+const proposalMemoryCap = 500
+
+// loadProposalMemory reads an automation's proposed-pair memory from its
+// automation_state row (empty on any problem — worst case a pair is
+// proposed twice).
+func loadProposalMemory(ctx context.Context, rc RunCtx, stateKey string) map[string]bool {
+	out := map[string]bool{}
+	raw, err := db.GetCursor(ctx, rc.DB, stateKey)
+	if err != nil || raw == "" {
+		return out
+	}
+	var keys []string
+	_ = json.Unmarshal([]byte(raw), &keys)
+	for _, k := range keys {
+		out[k] = true
+	}
+	return out
+}
+
+// saveProposalMemory persists proposal memory beside the engine cursor,
+// capped at the newest entries.
+func saveProposalMemory(ctx context.Context, rc RunCtx, stateKey string, proposed map[string]bool) {
+	keys := make([]string, 0, len(proposed))
+	for k := range proposed {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	if len(keys) > proposalMemoryCap {
+		keys = keys[len(keys)-proposalMemoryCap:]
+	}
+	raw, err := json.Marshal(keys)
+	if err != nil {
+		return
+	}
+	if err := db.SetCursor(ctx, rc.DB, stateKey, string(raw), rc.now().UTC().Format(time.RFC3339)); err != nil {
+		rc.Log.Warn("proposal memory: persist", "key", stateKey, "err", err)
+	}
+}

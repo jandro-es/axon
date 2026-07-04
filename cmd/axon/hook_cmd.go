@@ -15,7 +15,7 @@ func newHookCmd(gf *globalFlags) *cobra.Command {
 		Use:   "hook <event>",
 		Short: "Handle a Claude Code hook event (internal; invoked from settings.json)",
 		Long: "Thin handler for Claude Code hooks (SessionStart, PreToolUse, PostToolUse,\n" +
-			"Stop). Reads the hook JSON on stdin and emits the decision/context on stdout.\n" +
+			"Stop, SessionEnd). Reads the hook JSON on stdin and emits the decision/context on stdout.\n" +
 			"Hooks tighten behaviour only and never make a model call.",
 		Args:          cobra.ExactArgs(1),
 		SilenceUsage:  true,

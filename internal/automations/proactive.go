@@ -2,7 +2,6 @@ package automations
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -145,7 +144,6 @@ const (
 	resurfaceDormantDays    = 90
 	resurfaceThreshold      = 0.75
 	resurfaceMaxProposals   = 5
-	resurfaceMemoryCap      = 500
 	resurfacerProposedState = "resurfacer:proposed"
 )
 
@@ -201,7 +199,7 @@ func (Resurfacer) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 		return RunResult{}, err
 	}
 
-	proposed := loadResurfacerMemory(ctx, rc)
+	proposed := loadProposalMemory(ctx, rc, resurfacerProposedState)
 	type pair struct {
 		recent, dormant db.NoteStamp
 		sim             float64
@@ -257,7 +255,7 @@ func (Resurfacer) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 		if aerr := rc.Vault.Append(".axon/review-queue.md", header+strings.Join(queue, "\n")+"\n"); aerr != nil {
 			return RunResult{}, aerr
 		}
-		saveResurfacerMemory(ctx, rc, proposed)
+		saveProposalMemory(ctx, rc, resurfacerProposedState, proposed)
 	}
 	return RunResult{Summary: fmt.Sprintf("resurfaced %d pair(s)", len(changes)), Changes: changes}, nil
 }
@@ -270,38 +268,5 @@ func pairKey(a, b string) string {
 	return a + "\x00" + b
 }
 
-// loadResurfacerMemory reads the proposal memory (empty on any problem —
-// worst case a pair is proposed twice).
-func loadResurfacerMemory(ctx context.Context, rc RunCtx) map[string]bool {
-	out := map[string]bool{}
-	raw, err := db.GetCursor(ctx, rc.DB, resurfacerProposedState)
-	if err != nil || raw == "" {
-		return out
-	}
-	var keys []string
-	_ = json.Unmarshal([]byte(raw), &keys)
-	for _, k := range keys {
-		out[k] = true
-	}
-	return out
-}
-
-// saveResurfacerMemory persists the proposal memory beside the engine cursor,
-// capped at the newest entries.
-func saveResurfacerMemory(ctx context.Context, rc RunCtx, proposed map[string]bool) {
-	keys := make([]string, 0, len(proposed))
-	for k := range proposed {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	if len(keys) > resurfaceMemoryCap {
-		keys = keys[len(keys)-resurfaceMemoryCap:]
-	}
-	raw, err := json.Marshal(keys)
-	if err != nil {
-		return
-	}
-	if err := db.SetCursor(ctx, rc.DB, resurfacerProposedState, string(raw), rc.now().UTC().Format(time.RFC3339)); err != nil {
-		rc.Log.Warn("resurfacer: persist proposal memory", "err", err)
-	}
-}
+// Proposal memory load/save lives in helpers.go (shared with the
+// link-suggester, FR-102).

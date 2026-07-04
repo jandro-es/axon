@@ -34,6 +34,7 @@ const (
 	PreToolUse   = "PreToolUse"
 	PostToolUse  = "PostToolUse"
 	Stop         = "Stop"
+	SessionEnd   = "SessionEnd"
 )
 
 // Input is the JSON Claude Code passes on stdin to a hook command. Only the
@@ -86,6 +87,10 @@ func Handle(ctx context.Context, event string, stdinJSON []byte, deps Deps) (Res
 		return Result{ExitCode: 0}, nil // advisory; MCP-tool Claude usage is ledgered by the manager
 	case Stop:
 		return stop(ctx, in, deps), nil
+	case SessionEnd:
+		// Terminal event: record only (sticky ended flag), no advisory output.
+		recordSession(ctx, in, deps, true)
+		return Result{ExitCode: 0}, nil
 	default:
 		return Result{ExitCode: 0}, nil
 	}
@@ -282,7 +287,7 @@ func isProtectedPath(path string) bool {
 // gated by memory.capture_sessions. Every failure is silent: a hook must
 // never break the session.
 func stop(ctx context.Context, in Input, deps Deps) Result {
-	recordSession(ctx, in, deps)
+	recordSession(ctx, in, deps, false)
 	return Result{
 		Stdout:   []byte("Reminder: persist anything durable into the vault (vault_write/vault_patch) and consider /compact if context is large.\n"),
 		ExitCode: 0,
@@ -292,7 +297,7 @@ func stop(ctx context.Context, in Input, deps Deps) Result {
 // sessionPendingCap bounds the recorder's map (newest LastStop wins).
 const sessionPendingCap = 50
 
-func recordSession(ctx context.Context, in Input, deps Deps) {
+func recordSession(ctx context.Context, in Input, deps Deps, ended bool) {
 	if deps.DB == nil || !deps.Memory.SessionCaptureEnabled() ||
 		in.SessionID == "" || in.TranscriptPath == "" {
 		return
@@ -302,7 +307,11 @@ func recordSession(ctx context.Context, in Input, deps Deps) {
 		return
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	pending[in.SessionID] = db.PendingSession{TranscriptPath: in.TranscriptPath, LastStop: now}
+	p := db.PendingSession{TranscriptPath: in.TranscriptPath, LastStop: now, Ended: ended}
+	if prev, ok := pending[in.SessionID]; ok && prev.Ended {
+		p.Ended = true // sticky: a later Stop never clears an end marker
+	}
+	pending[in.SessionID] = p
 	for len(pending) > sessionPendingCap {
 		oldestID, oldest := "", ""
 		for id, p := range pending {

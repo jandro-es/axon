@@ -12,6 +12,17 @@ bypasses the token manager); the vault contract is unchanged.
 
 ### Added
 
+- **ADR follow-up slices (FR-102…FR-104)** — the link-suggester now remembers
+  what it proposed (`link-suggester:proposed`, shared proposal-memory helpers
+  with the resurfacer): a dismissed suggestion stays dismissed and embedding
+  growth stops re-queuing the same pairs. Resolved review-queue lines older
+  than 7 days compact into `.axon/review-queue-archive.md` whenever a
+  resolution rewrites the queue (archive-append before rewrite; emptied
+  section headers dropped; pending lines untouched). And the generated hook
+  settings wire `SessionEnd`: cleanly-ended sessions distill on the next
+  tick via a sticky `ended` flag instead of waiting out the 30-minute idle
+  heuristic, which stays as the crash fallback. Closes the last ADR-noted
+  follow-ups (ADR-018/020/021).
 - **Conditional feed polling (FR-101)** — the subscriptions automation now
   stores each feed's `ETag`/`Last-Modified` and polls with
   `If-None-Match`/`If-Modified-Since`; a `304 Not Modified` is a free skip

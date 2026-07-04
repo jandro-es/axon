@@ -20,7 +20,14 @@ import (
 	"github.com/jandro-es/axon/internal/vault"
 )
 
-const queuePath = ".axon/review-queue.md"
+const (
+	queuePath = ".axon/review-queue.md"
+	// archivePath receives resolved lines older than archiveAfterDays when a
+	// resolution rewrites the queue (FR-103). Append-only, human-prunable,
+	// parsed by nothing.
+	archivePath      = ".axon/review-queue-archive.md"
+	archiveAfterDays = 7
+)
 
 // Item is one review-queue entry.
 type Item struct {
@@ -183,6 +190,9 @@ func appendToLinksBlock(ctx context.Context, v *vault.FS, note, target string) e
 // resolutionRe matches the suffix mark() appends, so IDs survive resolution.
 var resolutionRe = regexp.MustCompile(` — [✓✗] (applied|dismissed) \d{4}-\d{2}-\d{2}$`)
 
+// resolvedDateRe extracts the resolution date mark() appends.
+var resolvedDateRe = regexp.MustCompile(` — [✓✗] (?:applied|dismissed) (\d{4}-\d{2}-\d{2})$`)
+
 // normalizeLine strips the resolution suffix from a line body for hashing.
 func normalizeLine(body string) string {
 	return resolutionRe.ReplaceAllString(body, "")
@@ -220,10 +230,80 @@ func mark(ctx context.Context, v *vault.FS, it Item, suffix string) (Item, error
 	if content == string(data) {
 		return Item{}, fmt.Errorf("item %s: queue line changed underneath — reload", it.ID)
 	}
+	// Compaction (FR-103): resolved lines past the threshold move to the
+	// archive during the rewrite this resolution already performs.
+	// Archive-append precedes the queue rewrite — a crash between the two
+	// duplicates an archive line at worst, never loses one.
+	if kept, archived := compact(content, time.Now().UTC()); archived != "" {
+		stamp := "\n<!-- archived " + time.Now().UTC().Format(time.RFC3339) + " -->\n"
+		if err := v.Append(archivePath, stamp+archived); err != nil {
+			return Item{}, err
+		}
+		content = kept
+	}
 	if err := v.RewriteSystemFile(queuePath, content); err != nil {
 		return Item{}, err
 	}
 	it.Checked = true
 	it.Line = newLine
 	return it, nil
+}
+
+// compact splits queue content into what stays and what archives: resolved
+// lines older than archiveAfterDays move out, grouped under their original
+// section header; section headers left with no items are dropped from the
+// kept content. Pending lines, fresh resolutions, and resolved lines whose
+// date does not parse are kept — never archive on guesswork.
+func compact(content string, now time.Time) (kept, archived string) {
+	cutoff := now.AddDate(0, 0, -archiveAfterDays)
+	type section struct {
+		header  string
+		keep    []string
+		archive []string
+	}
+	cur := &section{} // preamble: lines before the first header
+	sections := []*section{cur}
+	for _, line := range strings.Split(content, "\n") {
+		if sectionRe.MatchString(line) {
+			cur = &section{header: line}
+			sections = append(sections, cur)
+			continue
+		}
+		if m := lineRe.FindStringSubmatch(line); m != nil && m[1] == "x" {
+			if dm := resolvedDateRe.FindStringSubmatch(m[2]); dm != nil {
+				if d, derr := time.Parse("2006-01-02", dm[1]); derr == nil && d.Before(cutoff) {
+					cur.archive = append(cur.archive, line)
+					continue
+				}
+			}
+		}
+		cur.keep = append(cur.keep, line)
+	}
+
+	var keepB, archB strings.Builder
+	for _, s := range sections {
+		if len(s.archive) > 0 {
+			if s.header != "" {
+				archB.WriteString(s.header + "\n")
+			}
+			archB.WriteString(strings.Join(s.archive, "\n") + "\n")
+		}
+		hasItem := false
+		for _, l := range s.keep {
+			if lineRe.MatchString(l) {
+				hasItem = true
+				break
+			}
+		}
+		if s.header != "" && !hasItem {
+			continue // emptied section: drop header and residual blanks
+		}
+		if s.header != "" {
+			keepB.WriteString(s.header + "\n")
+		}
+		if len(s.keep) > 0 {
+			keepB.WriteString(strings.Join(s.keep, "\n") + "\n")
+		}
+	}
+	return keepB.String(), archB.String()
 }
