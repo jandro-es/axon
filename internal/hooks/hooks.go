@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/jandro-es/axon/internal/config"
+	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/identity"
 	"github.com/jandro-es/axon/internal/ingestion"
 	"github.com/jandro-es/axon/internal/tokens"
@@ -38,11 +39,12 @@ const (
 // Input is the JSON Claude Code passes on stdin to a hook command. Only the
 // fields AXON uses are modelled; unknown fields are ignored.
 type Input struct {
-	HookEventName string         `json:"hook_event_name"`
-	SessionID     string         `json:"session_id"`
-	CWD           string         `json:"cwd"`
-	ToolName      string         `json:"tool_name"`
-	ToolInput     map[string]any `json:"tool_input"`
+	HookEventName  string         `json:"hook_event_name"`
+	SessionID      string         `json:"session_id"`
+	CWD            string         `json:"cwd"`
+	ToolName       string         `json:"tool_name"`
+	ToolInput      map[string]any `json:"tool_input"`
+	TranscriptPath string         `json:"transcript_path"`
 }
 
 // Deps are the services hooks read. Manager is used read-only (budget status);
@@ -83,7 +85,7 @@ func Handle(ctx context.Context, event string, stdinJSON []byte, deps Deps) (Res
 	case PostToolUse:
 		return Result{ExitCode: 0}, nil // advisory; MCP-tool Claude usage is ledgered by the manager
 	case Stop:
-		return stop(), nil
+		return stop(ctx, in, deps), nil
 	default:
 		return Result{ExitCode: 0}, nil
 	}
@@ -274,11 +276,43 @@ func isProtectedPath(path string) bool {
 }
 
 // stop surfaces a non-blocking reminder to persist durable knowledge.
-func stop() Result {
+// stop reminds the agent to persist durable work AND records the session for
+// memory distillation (ADR-021, FR-97): a deterministic upsert of
+// {session_id → transcript_path, last_stop} — paths only, never content —
+// gated by memory.capture_sessions. Every failure is silent: a hook must
+// never break the session.
+func stop(ctx context.Context, in Input, deps Deps) Result {
+	recordSession(ctx, in, deps)
 	return Result{
 		Stdout:   []byte("Reminder: persist anything durable into the vault (vault_write/vault_patch) and consider /compact if context is large.\n"),
 		ExitCode: 0,
 	}
+}
+
+// sessionPendingCap bounds the recorder's map (newest LastStop wins).
+const sessionPendingCap = 50
+
+func recordSession(ctx context.Context, in Input, deps Deps) {
+	if deps.DB == nil || !deps.Memory.SessionCaptureEnabled() ||
+		in.SessionID == "" || in.TranscriptPath == "" {
+		return
+	}
+	pending, err := db.LoadPendingSessions(ctx, deps.DB)
+	if err != nil {
+		return
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	pending[in.SessionID] = db.PendingSession{TranscriptPath: in.TranscriptPath, LastStop: now}
+	for len(pending) > sessionPendingCap {
+		oldestID, oldest := "", ""
+		for id, p := range pending {
+			if oldest == "" || p.LastStop < oldest {
+				oldestID, oldest = id, p.LastStop
+			}
+		}
+		delete(pending, oldestID)
+	}
+	_ = db.SavePendingSessions(ctx, deps.DB, pending, now)
 }
 
 func inboxCount(ctx context.Context, v *vault.FS) int {
