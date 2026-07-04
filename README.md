@@ -84,8 +84,15 @@ claude login                                # your Claude subscription / enterpr
 ```
 
 For headless automations, mint a long-lived token once: `claude setup-token`
-(goes into `~/.axon/.env`). Without Ollama everything still works — search is
-lexical-only until vectors back-fill.
+(goes into `~/.axon/.env`).
+
+**Ollama not allowed on your machine?** On Apple silicon, AXON can use
+**Apple's on-device Foundation Models** instead — for embeddings
+(`axon configure embeddings apple`) and the classify tier
+(`axon configure models classify apple`, macOS 26+). No server, no downloads;
+see the [Guide §4 "Providers"](docs/GUIDE.md#4-configuration). And without
+either, everything still works — search is lexical-only until vectors
+back-fill.
 
 ### 2. Install AXON — one line, no toolchain
 

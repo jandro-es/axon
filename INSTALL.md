@@ -63,11 +63,20 @@ attached), also create a long-lived token once and put it in `~/.axon/.env`:
 claude setup-token        # → CLAUDE_CODE_OAUTH_TOKEN=...
 ```
 
+**Can't run Ollama?** (corporate policy, no local servers, no model
+downloads): on Apple silicon Macs, AXON runs **Apple's on-device Foundation
+Models** instead — `axon configure embeddings apple --reindex` for embeddings
+(a tiny Swift helper compiled at `axon init`; no server, nothing listening)
+and `axon configure models classify apple` for the classify tier (macOS 26+
+with Apple Intelligence; `axon doctor` verifies availability). See the
+[Guide §4 "Providers"](docs/GUIDE.md#4-configuration) for the full matrix.
+
 Everything is verifiable before and after: `make doctor` (from source) or
 `axon doctor` (any install) names anything missing **with the exact install
 command for your OS/package manager**, and never changes your system itself.
-AXON degrades gracefully — without Ollama, notes are still written and
-lexically searchable; vectors back-fill via `axon reindex --embeddings` later.
+AXON degrades gracefully — without Ollama (and without the Apple provider),
+notes are still written and lexically searchable; vectors back-fill via
+`axon reindex --embeddings` later.
 
 ## Requirements
 

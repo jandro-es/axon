@@ -54,7 +54,7 @@ dashboard. This guide takes you from a clean machine to a running, useful system
 | **Go 1.26+** | build the binary | only if building from source (a dependency requires it) |
 | **Node 18+ / npm** | build the dashboard SPA | build-time only; the binary embeds the result |
 | **Claude Code CLI** (`claude`) | the "brain" | install from claude.com/code; log in with your plan |
-| **Ollama** | local embeddings for search | install from ollama.com; pull an embedding model |
+| **Ollama** | local embeddings for search | install from ollama.com; pull an embedding model. **Not an option on your machine?** On Apple silicon Macs, AXON can use **Apple's on-device Foundation Models** instead — no server, no downloads (§4, "Providers"). |
 | **Obsidian** (optional) | edit the vault | AXON operates on Markdown directly; Obsidian need not run |
 
 Check what you have:
@@ -260,6 +260,58 @@ elsewhere — the service unit records whatever path was in effect at
 cp .env.example ~/.axon/.env
 # then edit:
 CLAUDE_CODE_OAUTH_TOKEN_PERSONAL=sk-ant-oat01-…   # from `claude setup-token`
+```
+
+### Providers: Ollama, Apple on-device, or Claude-only
+
+Two subsystems can run on local models, and each has an Apple on-device
+alternative for machines where Ollama is unavailable or not allowed
+(corporate policy, no local servers, no model downloads):
+
+| Subsystem | Config key | Ollama | Apple on-device | Neither available |
+|-----------|-----------|--------|-----------------|-------------------|
+| **Embeddings** (semantic search) | `embeddings.provider` | `ollama` + any embedding model | `apple` — macOS on Apple silicon; a tiny Swift helper compiled once at `axon init`; no server, nothing listening | search degrades to lexical-only (FTS5); vectors back-fill later |
+| **Cheap model tiers** (classify / routine) | `models.classify`, `models.routine` | `"ollama:<chat model>"` on either tier | `"apple"` — **classify tier only**; macOS 26+ with Apple Intelligence enabled (`axon doctor` checks availability) | leave the tiers on Claude model strings (the default) |
+
+Rules that hold in every setup: **synthesis is always Claude**, agentic runs
+require Claude (local models cannot drive MCP tools), and every local call
+still passes the token chokepoint — fully ledgered (`cost_usd` null) but
+**budget-exempt**. `models.local_fallback` decides what happens when a local
+call fails: `claude` (default) falls forward through the normal budget-checked
+path; `fail` surfaces the error instead. `models.apple_helper` overrides the
+compiled helper's path if you manage binaries centrally.
+
+**Ready-made setups** (`axon configure` drives all of this interactively):
+
+```yaml
+# 1) Default — Ollama for embeddings, Claude for all model tiers
+embeddings: { provider: ollama, model: nomic-embed-text, dim: 768 }
+models:     { classify: claude-haiku-4-5, routine: claude-sonnet-5, synthesis: claude-opus-4-8 }
+
+# 2) Frugal — Ollama also serves the cheap tiers (free, offline, budget-exempt)
+models:
+  classify: "ollama:qwen3:8b"
+  routine:  "ollama:qwen3:8b"
+  synthesis: claude-opus-4-8
+
+# 3) Apple-only — no Ollama anywhere (Apple silicon; classify needs macOS 26+
+#    with Apple Intelligence). Nothing is downloaded, no server runs.
+embeddings: { provider: apple, model: apple-nlcontextual-v1, dim: 512 }
+models:
+  classify: "apple"
+  routine:  claude-sonnet-5
+  synthesis: claude-opus-4-8
+
+# 4) Restricted box, no local models at all — lexical-only search, Claude tiers.
+#    Simply don't install Ollama; AXON degrades gracefully and doctor says so.
+```
+
+Switching the embeddings provider re-embeds the index — run it as one flow:
+
+```bash
+axon configure embeddings apple --reindex     # switch + compile helper + re-embed
+axon configure models classify apple          # classify tier on-device
+axon doctor                                   # verifies Apple FM availability / Ollama reachability
 ```
 
 ### Resolution & precedence
@@ -546,7 +598,9 @@ only in `api_key` mode.
 
 **Local model routing.** The cheap tiers can route to local models instead of
 Claude — `models.classify: "ollama:qwen3:8b"` (any Ollama chat model) or
-`"apple"` (Apple Foundation Models on-device, macOS, classify tier only).
+`"apple"` (Apple Foundation Models on-device — the choice for machines where
+Ollama is unavailable or restricted; classify tier, macOS 26+). See §4
+"Providers" for the full matrix and ready-made setups.
 Local calls go through the same chokepoint and are fully ledgered (`cost_usd`
 null) but are **budget-exempt**: they never consume the day/week windows and
 never trigger the guard. On a local failure the call falls forward to Claude
