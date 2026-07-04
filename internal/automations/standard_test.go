@@ -2,6 +2,7 @@ package automations
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -376,5 +377,109 @@ func TestInboxTriageEmptyReplyFails(t *testing.T) {
 	fake.Reply = ""
 	if _, err := (InboxTriage{}).Run(context.Background(), rc); err == nil {
 		t.Fatal("empty model reply should fail the triage run")
+	}
+}
+
+// TestHeartbeatSynthesis covers the docs/06 optional one-liner: toggle via
+// automations.heartbeat.model, deterministic noteworthy gate, absolute
+// degradation (defer/error → plain line, run stays ok).
+func TestHeartbeatSynthesis(t *testing.T) {
+	plain := "inbox: 1 · budget day 0% week 0%"
+
+	t.Run("toggle off: zero calls, plain line", func(t *testing.T) {
+		rc, fake := newRC(t, map[string]string{"00-Inbox/x.md": "item\n"})
+		res, err := (Heartbeat{}).Run(context.Background(), rc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fake.CallCount() != 0 {
+			t.Fatalf("toggle off must make no model call, got %d", fake.CallCount())
+		}
+		if !strings.Contains(res.Summary, plain) {
+			t.Fatalf("summary = %q", res.Summary)
+		}
+	})
+
+	t.Run("toggle on, nothing noteworthy: zero calls", func(t *testing.T) {
+		rc, fake := newRC(t, nil) // empty inbox, no queue, no guard
+		rc.Config.Automations = map[string]config.Automation{"heartbeat": {Model: "classify"}}
+		if _, err := (Heartbeat{}).Run(context.Background(), rc); err != nil {
+			t.Fatal(err)
+		}
+		if fake.CallCount() != 0 {
+			t.Fatalf("nothing noteworthy must make no model call, got %d", fake.CallCount())
+		}
+	})
+
+	t.Run("toggle on + noteworthy: synthesized second line", func(t *testing.T) {
+		rc, fake := newRC(t, map[string]string{"00-Inbox/x.md": "item\n"})
+		rc.Config.Automations = map[string]config.Automation{"heartbeat": {Model: "classify"}}
+		fake.Reply = "One inbox item needs triage."
+		res, err := (Heartbeat{}).Run(context.Background(), rc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fake.CallCount() != 1 {
+			t.Fatalf("want exactly one call, got %d", fake.CallCount())
+		}
+		n, _ := rc.Vault.Read(context.Background(), "Daily/"+today(rc)+".md")
+		if !strings.Contains(n.Body, "One inbox item needs triage.") {
+			t.Fatalf("synthesis missing from block:\n%s", n.Body)
+		}
+		if !strings.Contains(res.Summary, "One inbox item needs triage.") {
+			t.Fatalf("summary = %q", res.Summary)
+		}
+	})
+
+	t.Run("budget defer: plain line + skip note, run ok", func(t *testing.T) {
+		rc, fake := newRC(t, map[string]string{"00-Inbox/x.md": "item\n"})
+		rc.Config.Automations = map[string]config.Automation{"heartbeat": {Model: "classify"}}
+		rc.BudgetTokens = 1 // per-call cap forces a defer at the chokepoint
+		res, err := (Heartbeat{}).Run(context.Background(), rc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fake.CallCount() != 0 {
+			t.Fatal("deferred call must not reach the agent")
+		}
+		if !strings.Contains(res.Summary, "synthesis skipped: budget") {
+			t.Fatalf("summary = %q", res.Summary)
+		}
+		n, _ := rc.Vault.Read(context.Background(), "Daily/"+today(rc)+".md")
+		if !strings.Contains(n.Body, plain) || strings.Contains(n.Body, "·  ") {
+			t.Fatalf("block must keep the plain line on defer:\n%s", n.Body)
+		}
+	})
+
+	t.Run("agent error: plain line + failure note, run ok", func(t *testing.T) {
+		rc, fake := newRC(t, map[string]string{"00-Inbox/x.md": "item\n"})
+		rc.Config.Automations = map[string]config.Automation{"heartbeat": {Model: "classify"}}
+		fake.Err = errors.New("boom")
+		res, err := (Heartbeat{}).Run(context.Background(), rc)
+		if err != nil {
+			t.Fatalf("essential heartbeat must not fail on synthesis error: %v", err)
+		}
+		if !strings.Contains(res.Summary, "synthesis failed") {
+			t.Fatalf("summary = %q", res.Summary)
+		}
+	})
+}
+
+func TestValidateHeartbeatLine(t *testing.T) {
+	for _, tt := range []struct {
+		name, in string
+		ok       bool
+	}{
+		{"valid", "3 inbox items look project-related; budget 42% used", true},
+		{"empty", "   ", false},
+		{"multiline", "line one\nline two", false},
+		{"too long", strings.Repeat("x", 300), false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateHeartbeatLine(tt.in)
+			if (err == nil) != tt.ok {
+				t.Fatalf("validateHeartbeatLine(%q) err = %v, want ok=%v", tt.in, err, tt.ok)
+			}
+		})
 	}
 }

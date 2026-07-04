@@ -12,6 +12,12 @@ bypasses the token manager); the vault contract is unchanged.
 
 ### Added
 
+- **Heartbeat synthesis (opt-in)** — setting `automations.heartbeat.model`
+  (e.g. `classify`, local-routable per ADR-015) adds one budget-checked,
+  single-line synthesis to the heartbeat block when something is noteworthy
+  (inbox items, pending review proposals, or an active budget guard);
+  budget defer or model error degrades absolutely to the plain status line.
+  Default remains zero model work.
 - **ADR follow-up slices (FR-102…FR-104)** — the link-suggester now remembers
   what it proposed (`link-suggester:proposed`, shared proposal-memory helpers
   with the resurfacer): a dismissed suggestion stays dismissed and embedding
@@ -188,11 +194,12 @@ contract (`docs/03`) is now implemented.
 
 ### Notes / optional future polish (not contract requirements)
 
-- Heartbeat is intentionally model-free (cheapest automation); an optional
-  one-line model synthesis remains a possible enhancement.
-- The ingest fetcher re-validates egress policy on every redirect and blocks
-  link-local/metadata IPs (NFR-05); pinning the resolved IP across the dial is a
-  further defense-in-depth hardening.
+- ~~Heartbeat one-line model synthesis~~ — built (opt-in via
+  `automations.heartbeat.model`; see Unreleased).
+- ~~Resolved-IP pinning across the dial~~ — closed as covered: the dialer's
+  `Control` hook validates the concrete resolved IP on every connection
+  attempt, so DNS-rebinding to internal ranges is already refused at dial
+  time; pinning adds no security value (evaluated 2026-07-04).
 
 ## [0.9.0] — 2026-06-28
 
