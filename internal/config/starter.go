@@ -83,6 +83,7 @@ profiles:
       briefing:          { enabled: true,  schedule: "0 6 * * *",       model: routine,   budget_tokens: 40_000, catch_up: run-once }
       resurfacer:        { enabled: true,  schedule: "0 7 * * 1",       model: none,      budget_tokens: 0 }
       subscriptions:     { enabled: true,  schedule: "0 * * * *",       model: routine,   budget_tokens: 60_000, catch_up: skip }
+      session-distill:   { enabled: true,  schedule: "15 */2 * * *",    model: classify,  budget_tokens: 30_000, catch_up: skip }
 
     memory:
       inject: true

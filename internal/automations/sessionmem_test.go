@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/identity"
 )
@@ -199,5 +200,17 @@ func TestSessionDistillDryRun(t *testing.T) {
 	pending, _ := db.LoadPendingSessions(context.Background(), rc.DB)
 	if len(pending) != 1 {
 		t.Fatal("dry-run mutated state")
+	}
+}
+
+func TestSessionDistillRegistered(t *testing.T) {
+	p := config.Profile{Automations: map[string]config.Automation{
+		"session-distill": {Enabled: true, Schedule: "15 */2 * * *"},
+	}}
+	if _, err := Get(p, "session-distill"); err != nil {
+		t.Fatalf("not registered: %v", err)
+	}
+	if Purpose("session-distill") == "(no description)" {
+		t.Fatal("no catalog purpose")
 	}
 }

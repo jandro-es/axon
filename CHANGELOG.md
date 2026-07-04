@@ -12,6 +12,15 @@ bypasses the token manager); the vault contract is unchanged.
 
 ### Added
 
+- **Session memory capture (ADR-021, FR-97…FR-99)** — AXON now remembers
+  what your sessions decided. The Stop hook records finished vault sessions
+  (paths only, silently, gated by `memory.capture_sessions` — on by default,
+  off for stricter profiles); the new `session-distill` automation distills
+  each idle session once with a single classify-tier call (local-routable)
+  into decision/lesson/preference entries in MEMORY.md (`source: session`),
+  where the SessionStart injection already surfaces them to every future
+  session and memory-distill's compaction curates them over time. Redaction
+  applies before the model sees any transcript text (NFR-14).
 - **Review-queue actions on the dashboard (ADR-020, FR-94…FR-96)** — a new
   Review tab lists every pending proposal (link suggestions, structured
   inbox-triage moves, resurfaced connections, capture records) with one-click
