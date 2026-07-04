@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="892" height="410" viewBox="0 0 892 410" font-family="ui-sans-serif, -apple-system, Segoe UI, Roboto, sans-serif">
 <rect width="892" height="410" fill="#ffffff"/>
 <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1e1e1e"/></marker></defs>
-<text x="28" y="24" font-size="20" font-weight="700" fill="#1e1e1e">AXON — one MCP server, many Claude clients (Phase 9)</text>
+<text x="28" y="24" font-size="20" font-weight="700" fill="#1e1e1e">AXON — one MCP server, many Claude clients</text>
 <rect x="28" y="64" width="250" height="92" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
 <text x="153" y="88.7" font-size="13" fill="#1e1e1e" text-anchor="middle">Claude Code</text>
 <text x="153" y="105.8" font-size="13" fill="#1e1e1e" text-anchor="middle">tools + hooks + skills +</text>
@@ -17,8 +17,8 @@
 <text x="512" y="146.6" font-size="12" fill="#1e1e1e" text-anchor="middle">vault_search / read / write</text>
 <text x="512" y="162.4" font-size="12" fill="#1e1e1e" text-anchor="middle">vault_patch / move / links</text>
 <text x="512" y="178.2" font-size="12" fill="#1e1e1e" text-anchor="middle">daily_append · knowledge_*</text>
-<text x="512" y="194.1" font-size="12" fill="#1e1e1e" text-anchor="middle">tokens_status · automations_*</text>
-<text x="512" y="209.9" font-size="12" fill="#1e1e1e" text-anchor="middle">memory_remember</text>
+<text x="512" y="194.1" font-size="12" fill="#1e1e1e" text-anchor="middle">tokens_status · metrics_query</text>
+<text x="512" y="209.9" font-size="12" fill="#1e1e1e" text-anchor="middle">automations_* · memory_remember</text>
 <text x="512" y="225.8" font-size="12" fill="#1e1e1e" text-anchor="middle"> </text>
 <text x="512" y="241.6" font-size="12" fill="#1e1e1e" text-anchor="middle">every tool wikilink-safe &amp;</text>
 <text x="512" y="257.4" font-size="12" fill="#1e1e1e" text-anchor="middle">path-sandboxed in the server</text>

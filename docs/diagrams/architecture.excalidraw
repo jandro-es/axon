@@ -376,8 +376,8 @@
       "locked": false,
       "fontSize": 15,
       "fontFamily": 5,
-      "text": "axon daemon\n\n• scheduler + automations\n• ingestion pipeline\n• token manager\n• MCP server\n• dashboard API",
-      "originalText": "axon daemon\n\n• scheduler + automations\n• ingestion pipeline\n• token manager\n• MCP server\n• dashboard API",
+      "text": "axon daemon\n\n• scheduler + automations\n• ingestion pipeline\n• token manager\n• MCP server\n• dashboard + review API",
+      "originalText": "axon daemon\n\n• scheduler + automations\n• ingestion pipeline\n• token manager\n• MCP server\n• dashboard + review API",
       "textAlign": "center",
       "verticalAlign": "middle",
       "containerId": "el000a",
@@ -618,8 +618,8 @@
       "locked": false,
       "fontSize": 16,
       "fontFamily": 5,
-      "text": "Ollama\n(embeddings)",
-      "originalText": "Ollama\n(embeddings)",
+      "text": "Ollama\n(embeddings + local models)",
+      "originalText": "Ollama\n(embeddings + local models)",
       "textAlign": "center",
       "verticalAlign": "middle",
       "containerId": "el000h",
@@ -687,8 +687,8 @@
       "locked": false,
       "fontSize": 16,
       "fontFamily": 5,
-      "text": "Web URLs / PDFs",
-      "originalText": "Web URLs / PDFs",
+      "text": "Web URLs · PDFs · feeds",
+      "originalText": "Web URLs · PDFs · feeds",
       "textAlign": "center",
       "verticalAlign": "middle",
       "containerId": "el000j",
@@ -923,7 +923,7 @@
       "_label": {
         "mx": 385,
         "my": 348,
-        "text": "HTTP / SSE"
+        "text": "HTTP / SSE\n+ review actions"
       }
     },
     {
@@ -931,7 +931,7 @@
       "type": "text",
       "x": 385,
       "y": 348,
-      "width": 80,
+      "width": 216,
       "height": 18,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -954,8 +954,8 @@
       "locked": false,
       "fontSize": 13,
       "fontFamily": 5,
-      "text": "HTTP / SSE",
-      "originalText": "HTTP / SSE",
+      "text": "HTTP / SSE\n+ review actions",
+      "originalText": "HTTP / SSE\n+ review actions",
       "textAlign": "center",
       "verticalAlign": "middle",
       "containerId": "el000p",
@@ -1279,7 +1279,7 @@
       "_label": {
         "mx": 820,
         "my": 276,
-        "text": "embed"
+        "text": "embed · classify\n(via token mgr)"
       }
     },
     {
@@ -1287,7 +1287,7 @@
       "type": "text",
       "x": 820,
       "y": 276,
-      "width": 40,
+      "width": 256,
       "height": 18,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -1310,8 +1310,8 @@
       "locked": false,
       "fontSize": 13,
       "fontFamily": 5,
-      "text": "embed",
-      "originalText": "embed",
+      "text": "embed · classify\n(via token mgr)",
+      "originalText": "embed · classify\n(via token mgr)",
       "textAlign": "center",
       "verticalAlign": "middle",
       "containerId": "el000x",

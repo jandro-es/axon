@@ -26,8 +26,11 @@
 <text x="608" y="551.5" font-size="14" fill="#1e1e1e" text-anchor="middle">defer / deny</text>
 <text x="608" y="570.0" font-size="14" fill="#1e1e1e" text-anchor="middle">(surfaced)</text>
 <rect x="28" y="622" width="380" height="54" rx="10" fill="#ffd8a8" stroke="#1e1e1e" stroke-width="2"/>
-<text x="218" y="643.9" font-size="16" fill="#1e1e1e" text-anchor="middle">Run via claude -p</text>
-<text x="218" y="665.0" font-size="16" fill="#1e1e1e" text-anchor="middle">(the ONLY path to Claude)</text>
+<text x="218" y="643.9" font-size="16" fill="#1e1e1e" text-anchor="middle">Run: claude -p · local model</text>
+<text x="218" y="665.0" font-size="16" fill="#1e1e1e" text-anchor="middle">(ONE path for every generative call)</text>
+<rect x="488" y="622" width="240" height="54" rx="10" fill="#ffd8a8" stroke="#1e1e1e" stroke-width="2"/>
+<text x="608" y="644.5" font-size="14" fill="#1e1e1e" text-anchor="middle">agentic runs: MCP tools +</text>
+<text x="608" y="663.0" font-size="14" fill="#1e1e1e" text-anchor="middle">streaming budget kill-switch</text>
 <rect x="28" y="704" width="380" height="54" rx="10" fill="#d0bfff" stroke="#1e1e1e" stroke-width="2"/>
 <text x="218" y="736.4" font-size="16" fill="#1e1e1e" text-anchor="middle">Record usage → ledger + budget</text>
 <rect x="28" y="786" width="380" height="54" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>

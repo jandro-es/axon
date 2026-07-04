@@ -211,22 +211,22 @@ function architecture() {
 
   // Middle column — the vault (truth), the daemon, the derived DB.
   const vault = box(e, { x: 520, y: 44, w: 220, h: 72, fill: C.yellow, text: 'Vault — Markdown\n(source of truth)', size: 15 })
-  const daemon = box(e, { x: 520, y: 150, w: 220, h: 232, fill: C.blue, text: 'axon daemon\n\n• scheduler + automations\n• ingestion pipeline\n• token manager\n• MCP server\n• dashboard API', size: 15 })
+  const daemon = box(e, { x: 520, y: 150, w: 220, h: 232, fill: C.blue, text: 'axon daemon\n\n• scheduler + automations\n• ingestion pipeline\n• token manager\n• MCP server\n• dashboard + review API', size: 15 })
   const sqlite = box(e, { x: 520, y: 416, w: 220, h: 60, fill: C.purple, text: 'SQLite\n(derived: FTS5 + vectors)' })
 
   // Right column — external services.
   freetext(e, { x: 900, y: 130, text: 'EXTERNAL', size: 13, color: '#868e96' })
   const claude = box(e, { x: 900, y: 156, w: 190, h: 56, fill: C.orange, text: 'Claude\n(claude -p)' })
-  const ollama = box(e, { x: 900, y: 248, w: 190, h: 56, fill: C.orange, text: 'Ollama\n(embeddings)' })
-  const web = box(e, { x: 900, y: 340, w: 190, h: 56, fill: C.red, text: 'Web URLs / PDFs' })
+  const ollama = box(e, { x: 900, y: 248, w: 190, h: 56, fill: C.orange, text: 'Ollama\n(embeddings + local models)' })
+  const web = box(e, { x: 900, y: 340, w: 190, h: 56, fill: C.red, text: 'Web URLs · PDFs · feeds' })
 
   arrow(e, obs.right, vault.left, { label: 'edit' })
   arrow(e, cc.right, [daemon.x, 222], { label: 'MCP tools' })
-  arrow(e, br.right, [daemon.x, 348], { label: 'HTTP / SSE' })
+  arrow(e, br.right, [daemon.x, 348], { label: 'HTTP / SSE\n+ review actions' })
   arrow(e, [daemon.cx, daemon.y], vault.bottom, { label: 'read / wikilink-safe write', both: true })
   arrow(e, daemon.bottom, sqlite.top, { label: 'reindex' })
   arrow(e, [daemon.x + daemon.w, 196], claude.left, { label: 'claude -p\n(via token mgr)' })
-  arrow(e, [daemon.x + daemon.w, 276], ollama.left, { label: 'embed' })
+  arrow(e, [daemon.x + daemon.w, 276], ollama.left, { label: 'embed · classify\n(via token mgr)' })
   arrow(e, [daemon.x + daemon.w, 360], web.left, { label: 'ingest\n(policy)' })
 
   emit('architecture', 'AXON — system architecture', e)
@@ -242,7 +242,7 @@ function ingestion() {
   let y = 60
   const step = (text, fill = C.blue) => { const b = box(e, { x, y, w, h, fill, text }); y += h + gap; return b }
 
-  const input = step('Input:  URL · PDF · local file', C.gray)
+  const input = step('Input:  URL · PDF · file · inbox capture · feeds', C.gray)
   const policy = step('Policy check  (egress + redirects)', C.red)
   const fetch = step('Fetch / read  (size-capped, no JS)')
   const extract = step('Extract & clean → Markdown')
@@ -295,7 +295,9 @@ function chokepoint() {
   const tm = step('Build context + token estimate', C.orange)
   const auth = diamond('Authorize:\nproceed / downgrade /\ndefer / deny', 13)
   const denyBox = side(auth, 'defer / deny\n(surfaced)', C.red)
-  const run = step('Run via claude -p\n(the ONLY path to Claude)', C.orange)
+  const run = step('Run: claude -p · local model\n(ONE path for every generative call)', C.orange)
+  const runNote = side(run, 'agentic runs: MCP tools +\nstreaming budget kill-switch', C.orange)
+  void runNote
   const ledger = step('Record usage → ledger + budget', C.purple)
   const writeV = step('Apply wikilink-safe vault writes', C.blue)
   const ev = step('Emit event → dashboard', C.gray)
@@ -334,7 +336,7 @@ function personalMemory() {
   const session = box(e, { x: 636, y: 200, w: 216, h: 60, fill: C.green, size: 14, text: 'Claude Code session\n“knows you”' })
 
   const remember = box(e, { x: 322, y: 372, w: 130, h: 58, fill: C.blue, size: 13, text: 'memory_remember\nMCP tool' })
-  const distill = box(e, { x: 458, y: 372, w: 130, h: 58, fill: C.blue, size: 13, text: 'memory-distill\n→ token manager' })
+  const distill = box(e, { x: 458, y: 372, w: 130, h: 58, fill: C.blue, size: 12, text: 'memory-distill ·\nsession-distill\n→ token manager' })
 
   box(e, { x: 636, y: 300, w: 216, h: 100, fill: C.red, size: 12, text: 'Privacy (NFR-14)\nnever in logs, events,\nledger or exports;\nredaction before egress.' })
 
@@ -346,7 +348,7 @@ function personalMemory() {
   freetext(e, { x: 392, y: 338, text: 'append (wikilink-safe)', size: 12 })
   void memory
 
-  emit('personal-memory', 'AXON — personal memory & identity (Phase 8)', e)
+  emit('personal-memory', 'AXON — personal memory & identity', e)
 }
 
 // ===========================================================================
@@ -356,7 +358,7 @@ function multiClient() {
   const e = []
   const code = box(e, { x: 24, y: 84, w: 250, h: 92, fill: C.green, size: 13, text: 'Claude Code\ntools + hooks + skills +\nsubagents + headless automations\nfull-featured' })
   const desktop = box(e, { x: 24, y: 244, w: 250, h: 92, fill: C.blue, size: 13, text: 'Claude Desktop\nAXON tools only\nno hooks / skills / injection\ntools-only client' })
-  const server = box(e, { x: 392, y: 120, w: 232, h: 180, fill: C.yellow, size: 12, text: 'axon mcp (stdio)\nvault_search / read / write\nvault_patch / move / links\ndaily_append · knowledge_*\ntokens_status · automations_*\nmemory_remember\n \nevery tool wikilink-safe &\npath-sandboxed in the server' })
+  const server = box(e, { x: 392, y: 120, w: 232, h: 180, fill: C.yellow, size: 12, text: 'axon mcp (stdio)\nvault_search / read / write\nvault_patch / move / links\ndaily_append · knowledge_*\ntokens_status · metrics_query\nautomations_* · memory_remember\n \nevery tool wikilink-safe &\npath-sandboxed in the server' })
   const vault = box(e, { x: 712, y: 160, w: 148, h: 100, fill: C.gray, size: 15, text: 'Vault\n(source of truth)' })
   box(e, { x: 392, y: 328, w: 232, h: 74, fill: C.green, size: 12, text: "Vault safety holds for both:\nenforced in the server,\nnot the client's hooks." })
 
@@ -364,7 +366,7 @@ function multiClient() {
   arrow(e, desktop.right, [392, 258])
   arrow(e, server.right, vault.left, { label: 'safe ops' })
 
-  emit('multi-client', 'AXON — one MCP server, many Claude clients (Phase 9)', e)
+  emit('multi-client', 'AXON — one MCP server, many Claude clients', e)
 }
 
 architecture()
