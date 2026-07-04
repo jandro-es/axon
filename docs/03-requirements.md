@@ -129,6 +129,18 @@ this slice.
 | FR-82 | M | **Capture bookkeeping.** Ticks are change-gated on the inbox listing hash; failed items are remembered in automation state and skipped until they change, surfaced once in `.axon/review-queue.md`, and emitted as events; every capture ingest is observable through the standard run rows and `ingest.*` events. Inbox notes are never modified by capture (cardinal rule 2). |
 | FR-83 | S | **Capture enrichment toggle.** `capture.enrich: heuristic \| claude` (default `heuristic`, zero tokens). `claude` routes enrichment through the token-manager chokepoint on the `routine` tier (ADR-015 local routing and fallback apply) and degrades to heuristic under budget denial. |
 
+### Session memory *(planned — spec approved 2026-07-04, not yet built)*
+
+FR-97…FR-99 trace to ADR-021 and the spec in
+`docs/superpowers/specs/2026-07-04-session-memory-design.md`. Priorities are
+relative to this slice.
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-97 | M | **Session recorder.** The Stop hook, when `memory.capture_sessions` is enabled, records `{session_id → transcript_path, last_stop}` into `automation_state` — deterministic, no model call, paths only (never transcript content), every failure silent so a session is never broken. |
+| FR-98 | M | **Session distiller.** A `session-distill` automation drains sessions idle ≥ 30 minutes: one classify-tier chokepoint call per session (redacted, fenced, tail-capped transcript text) extracting up to 3 decision/lesson/preference items or NONE; entries written via `identity.Remember` with `source: session`; each session tried once ever; budget defer leaves the remainder pending. |
+| FR-99 | M | **Privacy controls.** `memory.capture_sessions` (pointer-default-ON, mirroring `memory.inject`) gates the recorder; redaction rules apply before the model sees transcript text and before entries are written; only vault sessions are captured; NFR-14 applies to the whole path. |
+
 ### Review actions *(built)*
 
 FR-94…FR-96 are **implemented** (ADR-020; spec in
