@@ -365,3 +365,73 @@ func TestSubscribeListEmpty(t *testing.T) {
 		t.Errorf("out = %q", out)
 	}
 }
+
+func TestSubscribeRemoveDropsFeedAndSeenState(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeSubscribeConfig(t, dir, "")
+	stubFetcher(t, nil)
+	for _, u := range []string{"https://feeds.example.com/a.xml", "https://feeds.example.com/b.xml"} {
+		if _, err := run(t, "subscribe", u, "--no-verify", "--config", cfgPath); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seedSeenState(t, cfgPath, `{"https://feeds.example.com/a.xml":["u1"],"https://feeds.example.com/b.xml":["u2"]}`)
+
+	out, err := run(t, "subscribe", "remove", "https://feeds.example.com/a.xml", "--config", cfgPath)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	feeds := loadFeeds(t, cfgPath)
+	if len(feeds) != 1 || feeds[0].URL != "https://feeds.example.com/b.xml" {
+		t.Fatalf("feeds = %+v", feeds)
+	}
+	// Seen entry dropped so a re-subscribe re-baselines (subscribe-from-now).
+	cfg, _ := config.Load(cfgPath)
+	_, p, _ := cfg.ResolveProfile("")
+	seen := loadSeenState(context.Background(), p)
+	if _, ok := seen["https://feeds.example.com/a.xml"]; ok {
+		t.Error("seen entry for removed feed must be dropped")
+	}
+	if _, ok := seen["https://feeds.example.com/b.xml"]; !ok {
+		t.Error("other feeds' seen entries must survive")
+	}
+	raw, _ := os.ReadFile(cfgPath)
+	if !strings.Contains(string(raw), "# keep-me") {
+		t.Error("comment lost")
+	}
+}
+
+func TestSubscribeRemoveUnknownURL(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeSubscribeConfig(t, dir, "")
+	stubFetcher(t, nil)
+	if _, err := run(t, "subscribe", "https://feeds.example.com/a.xml", "--no-verify", "--config", cfgPath); err != nil {
+		t.Fatal(err)
+	}
+	_, err := run(t, "subscribe", "remove", "https://feeds.example.com/nope.xml", "--config", cfgPath)
+	if err == nil {
+		t.Fatal("unknown URL must be an error")
+	}
+	if !strings.Contains(err.Error(), "a.xml") {
+		t.Errorf("error must list current feeds: %v", err)
+	}
+	if feeds := loadFeeds(t, cfgPath); len(feeds) != 1 {
+		t.Fatalf("config mutated: %+v", feeds)
+	}
+}
+
+func TestSubscribeRemoveWithoutDB(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeSubscribeConfig(t, dir, "")
+	stubFetcher(t, nil)
+	if _, err := run(t, "subscribe", "https://feeds.example.com/a.xml", "--no-verify", "--config", cfgPath); err != nil {
+		t.Fatal(err)
+	}
+	// No data dir/DB: the config edit must still proceed.
+	if out, err := run(t, "subscribe", "remove", "https://feeds.example.com/a.xml", "--config", cfgPath); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if feeds := loadFeeds(t, cfgPath); len(feeds) != 0 {
+		t.Fatalf("feeds = %+v", feeds)
+	}
+}

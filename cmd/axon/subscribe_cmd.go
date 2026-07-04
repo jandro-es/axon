@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/parser"
@@ -42,8 +44,87 @@ func newSubscribeCmd(gf *globalFlags) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&noVerify, "no-verify", false, "skip fetching the URL to verify it parses as a feed")
 	cmd.Flags().BoolVar(&allow, "allow", false, "add the feed's host to policy.ingest_domains_allow if the policy refuses it")
-	cmd.AddCommand(newSubscribeListCmd(gf))
+	cmd.AddCommand(newSubscribeListCmd(gf), newSubscribeRemoveCmd(gf))
 	return cmd
+}
+
+func newSubscribeRemoveCmd(gf *globalFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:   "remove <feed-url>",
+		Short: "Unsubscribe a feed (drops its seen-state so re-subscribing re-baselines)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
+			feedURL := args[0]
+			cfg, err := config.Load(gf.configPath)
+			if err != nil {
+				return err
+			}
+			_, profile, err := cfg.ResolveProfile(gf.profile)
+			if err != nil {
+				return err
+			}
+			found := false
+			var current []string
+			for _, f := range profile.Subscriptions.Feeds {
+				current = append(current, "  "+f.URL)
+				if f.URL == feedURL {
+					found = true
+				}
+			}
+			if !found {
+				return fmt.Errorf("not subscribed: %s\ncurrent feeds (exact URL match):\n%s",
+					feedURL, strings.Join(current, "\n"))
+			}
+			if err := updateSubscriptionsBlock(gf, func(s *config.SubscriptionsConfig) error {
+				kept := s.Feeds[:0]
+				for _, f := range s.Feeds {
+					if f.URL != feedURL {
+						kept = append(kept, f)
+					}
+				}
+				s.Feeds = kept
+				return nil
+			}); err != nil {
+				return err
+			}
+			dropSeenEntry(cmd.Context(), profile, feedURL)
+			fmt.Fprintf(out, "✓ unsubscribed: %s\n", feedURL)
+			return nil
+		},
+	}
+}
+
+// dropSeenEntry removes the feed's seen-state so a later re-subscribe gets
+// subscribe-from-now semantics again. Best-effort: a missing/unreadable DB
+// never blocks the config edit (stale entries are harmless and capped).
+func dropSeenEntry(ctx context.Context, profile config.Profile, feedURL string) {
+	dbPath := profile.Paths().DBPath
+	if _, err := os.Stat(dbPath); err != nil {
+		return
+	}
+	sqlDB, err := db.Open(dbPath)
+	if err != nil {
+		return
+	}
+	defer sqlDB.Close()
+	raw, err := db.GetCursor(ctx, sqlDB, "subscriptions:seen")
+	if err != nil || raw == "" {
+		return
+	}
+	var seen map[string][]string
+	if json.Unmarshal([]byte(raw), &seen) != nil {
+		return
+	}
+	if _, ok := seen[feedURL]; !ok {
+		return
+	}
+	delete(seen, feedURL)
+	b, err := json.Marshal(seen)
+	if err != nil {
+		return
+	}
+	_ = db.SetCursor(ctx, sqlDB, "subscriptions:seen", string(b), time.Now().UTC().Format(time.RFC3339))
 }
 
 func newSubscribeListCmd(gf *globalFlags) *cobra.Command {
