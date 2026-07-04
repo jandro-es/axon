@@ -58,6 +58,9 @@ func (c *Config) Validate() error {
 		if err := validateCapture(p.Capture); err != nil {
 			return fmt.Errorf("config validation failed: profile %q: %w", name, err)
 		}
+		if err := validateSubscriptions(p.Subscriptions); err != nil {
+			return fmt.Errorf("config validation failed: profile %q: %w", name, err)
+		}
 	}
 	return nil
 }
