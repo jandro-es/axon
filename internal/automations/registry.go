@@ -24,6 +24,7 @@ func Registry(profile config.Profile) map[string]Automation {
 		Capture{}.Name():          Capture{},
 		Briefing{}.Name():         Briefing{},
 		Resurfacer{}.Name():       Resurfacer{},
+		Subscriptions{}.Name():    Subscriptions{},
 	}
 	return reg
 }

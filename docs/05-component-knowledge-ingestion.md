@@ -74,6 +74,18 @@ and surfaced once in `.axon/review-queue.md`. Enrichment follows
 `capture.enrich` (`heuristic` default; `claude` via the chokepoint on the
 routine tier). Spec: `docs/superpowers/specs/2026-07-03-universal-capture-design.md`.
 
+## 5c. Subscriptions (ADR-019)
+
+The `subscriptions` automation polls `subscriptions.feeds` hourly through the
+same egress-policied fetcher as every ingest and feeds new items into this
+pipeline. Volume is structural: **subscribe-from-now** (a feed's first tick
+marks current entries seen, ingests nothing), a per-feed `max_per_tick` cap
+(default 5), a capped seen-state in `automation_state`, and one attempt per
+item (failures surfaced, explicit `axon ingest` as the retry). Enrichment
+follows `subscriptions.enrich` (`heuristic` default; `claude` via the
+chokepoint on the routine tier). Feed parsing is gofeed (the ADR-019
+dependency). Spec: `docs/superpowers/specs/2026-07-04-subscriptions-design.md`.
+
 ## 6. Failure & edge handling
 
 - Unreachable/denied URL, empty extraction, scanned PDF → recorded `failed/redacted` with reason; never a half-written note.

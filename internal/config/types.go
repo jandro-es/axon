@@ -7,6 +7,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -49,6 +50,58 @@ type Profile struct {
 	// Capture tunes the capture automation (ADR-016). Optional: an absent block
 	// resolves to heuristic enrichment and the default archive folder.
 	Capture CaptureConfig `yaml:"capture"`
+	// Subscriptions declares the RSS/Atom feeds AXON polls (ADR-019).
+	// Optional: an absent block means no feeds and the automation skips.
+	Subscriptions SubscriptionsConfig `yaml:"subscriptions"`
+}
+
+// SubscriptionsConfig declares the RSS/Atom feeds AXON polls (ADR-019).
+type SubscriptionsConfig struct {
+	// Enrich selects metadata enrichment for ingested items: "heuristic"
+	// (default, zero tokens) or "claude" (chokepoint, routine tier).
+	Enrich string `yaml:"enrich,omitempty"`
+	// MaxPerTick caps new items ingested per feed per tick (default 5).
+	MaxPerTick int `yaml:"max_per_tick,omitempty"`
+	// Feeds are the subscribed feed URLs.
+	Feeds []Feed `yaml:"feeds,omitempty"`
+}
+
+// Feed is one subscribed feed.
+type Feed struct {
+	URL string `yaml:"url"`
+}
+
+// EnrichMode returns the enrichment mode, defaulting to "heuristic".
+func (c SubscriptionsConfig) EnrichMode() string {
+	if c.Enrich == "" {
+		return "heuristic"
+	}
+	return c.Enrich
+}
+
+// PerTick returns the per-feed per-tick ingestion cap, defaulting to 5.
+func (c SubscriptionsConfig) PerTick() int {
+	if c.MaxPerTick <= 0 {
+		return 5
+	}
+	return c.MaxPerTick
+}
+
+// validateSubscriptions applies the subscriptions rules (ADR-019).
+func validateSubscriptions(c SubscriptionsConfig) error {
+	if c.Enrich != "" && c.Enrich != "heuristic" && c.Enrich != "claude" {
+		return fmt.Errorf("subscriptions.enrich must be heuristic or claude (got %q)", c.Enrich)
+	}
+	if c.MaxPerTick < 0 {
+		return fmt.Errorf("subscriptions.max_per_tick must be >= 0 (got %d)", c.MaxPerTick)
+	}
+	for _, f := range c.Feeds {
+		u, err := url.Parse(f.URL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return fmt.Errorf("subscriptions feed %q must be an http(s) URL", f.URL)
+		}
+	}
+	return nil
 }
 
 // CaptureConfig tunes the capture automation (ADR-016): the FR-26 funnel that

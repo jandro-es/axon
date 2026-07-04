@@ -111,7 +111,7 @@ func (Capture) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 		return RunResult{}, err
 	}
 	failures := loadCaptureFailures(ctx, rc)
-	pl := capturePipeline(rc)
+	pl := enrichedPipeline(rc, rc.Config.Capture.EnrichMode())
 
 	var (
 		changes                   []string
@@ -209,13 +209,13 @@ func (Capture) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 	}, nil
 }
 
-// capturePipeline returns the pipeline to ingest with: a shallow copy of the
-// shared one (never mutated), with the enricher per capture.enrich. "claude"
-// goes through the token-manager chokepoint on the routine tier (cardinal
-// rule 1); the default stays the pipeline's zero-token heuristic.
-func capturePipeline(rc RunCtx) *ingestion.Pipeline {
+// enrichedPipeline returns a shallow copy of the shared pipeline with the
+// enricher selected by mode ("claude" → chokepoint on the routine tier;
+// anything else keeps the zero-token heuristic). Used by capture (ADR-016)
+// and subscriptions (ADR-019); the shared instance is never mutated.
+func enrichedPipeline(rc RunCtx, mode string) *ingestion.Pipeline {
 	pl := *rc.Pipeline
-	if rc.Config.Capture.EnrichMode() == "claude" {
+	if mode == "claude" {
 		pl.Enricher = ingestion.ClaudeEnricher{Manager: rc.Manager, ModelKey: "routine"}
 	}
 	return &pl

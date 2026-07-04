@@ -90,6 +90,12 @@ profiles:
       enrich: heuristic                       # heuristic (default, zero tokens) | claude (chokepoint, routine tier)
       archive_dir: "04-Archive/Capture"       # where ingested inbox originals are moved (never deleted)
 
+    # subscriptions:                          # RSS/Atom feeds polled hourly (ADR-019)
+    #   enrich: heuristic                     # heuristic (default, zero tokens) | claude (chokepoint, routine tier)
+    #   max_per_tick: 5                       # new items ingested per feed per tick
+    #   feeds:                                # subscribe-from-now: existing entries are never backfilled
+    #     - url: "https://example.com/feed.xml"
+
     limits:                                   # token awareness on subscription = rate-limit / Agent-SDK-credit
       daily_tokens:  1_500_000                # ESTIMATED input+output; guards burn, not dollars
       weekly_tokens: 8_000_000
@@ -134,6 +140,7 @@ profiles:
       capture:           { enabled: true,  schedule: "*/5 * * * *",     model: none,      budget_tokens: 0, catch_up: run-once }
       briefing:          { enabled: true,  schedule: "0 6 * * *",       model: routine,   budget_tokens: 40_000, catch_up: run-once }
       resurfacer:        { enabled: true,  schedule: "0 7 * * 1",       model: none,      budget_tokens: 0 }
+      subscriptions:     { enabled: true,  schedule: "0 * * * *",       model: routine,   budget_tokens: 60_000, catch_up: skip }
 
     # Personal identity & memory layer (Component 12). Injected at SessionStart so
     # the assistant knows you. Optional block — these are the defaults.

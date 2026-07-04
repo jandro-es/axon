@@ -10,7 +10,7 @@ func TestRegistryHasAllStandardAutomations(t *testing.T) {
 	want := []string{
 		"budget-guard", "heartbeat", "knowledge-reindex", "context-export",
 		"link-suggester", "daily-log", "inbox-triage", "compaction", "knowledge-digest",
-		"memory-distill", "capture", "briefing", "resurfacer",
+		"memory-distill", "capture", "briefing", "resurfacer", "subscriptions",
 	}
 	reg := Registry(config.Profile{})
 	if len(reg) != len(want) {
