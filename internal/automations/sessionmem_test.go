@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -212,5 +213,43 @@ func TestSessionDistillRegistered(t *testing.T) {
 	}
 	if Purpose("session-distill") == "(no description)" {
 		t.Fatal("no catalog purpose")
+	}
+}
+
+// TestReadySessionsEndedImmediately: an ended session is ready with no idle
+// wait; a fresh non-ended one still waits out the threshold; legacy state
+// rows without the ended field keep working (FR-104).
+func TestReadySessionsEndedImmediately(t *testing.T) {
+	rc, _ := newRC(t, nil)
+	ctx := context.Background()
+	now := rc.now().UTC()
+	pending := map[string]db.PendingSession{
+		"ended-fresh": {TranscriptPath: "/tmp/a.jsonl", LastStop: now.Format(time.RFC3339), Ended: true},
+		"idle-fresh":  {TranscriptPath: "/tmp/b.jsonl", LastStop: now.Format(time.RFC3339)},
+		"idle-old":    {TranscriptPath: "/tmp/c.jsonl", LastStop: now.Add(-40 * time.Minute).Format(time.RFC3339)},
+	}
+	if err := db.SavePendingSessions(ctx, rc.DB, pending, now.Format(time.RFC3339)); err != nil {
+		t.Fatal(err)
+	}
+	ready, _, err := SessionDistill{}.readySessions(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"ended-fresh", "idle-old"}; !slices.Equal(ready, want) {
+		t.Fatalf("ready = %v, want %v", ready, want)
+	}
+
+	// Legacy row (no ended field in the JSON) unmarshals as not-ended.
+	legacy := `{"legacy-old":{"transcript_path":"/tmp/l.jsonl","last_stop":"` +
+		now.Add(-40*time.Minute).Format(time.RFC3339) + `"}}`
+	if err := db.SetCursor(ctx, rc.DB, db.SessionPendingKey, legacy, now.Format(time.RFC3339)); err != nil {
+		t.Fatal(err)
+	}
+	ready, _, err = SessionDistill{}.readySessions(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"legacy-old"}; !slices.Equal(ready, want) {
+		t.Fatalf("legacy ready = %v, want %v", ready, want)
 	}
 }

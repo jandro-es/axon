@@ -14,6 +14,9 @@ const SessionPendingKey = "session-distill:pending"
 type PendingSession struct {
 	TranscriptPath string `json:"transcript_path"`
 	LastStop       string `json:"last_stop"` // RFC3339
+	// Ended marks a SessionEnd-recorded session (FR-104): immediately ready
+	// to distill, no idle wait. Sticky; absent in legacy rows (= false).
+	Ended bool `json:"ended,omitempty"`
 }
 
 // LoadPendingSessions reads the pending-session map (empty on any problem —
