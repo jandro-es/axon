@@ -48,7 +48,7 @@ profiles:
 
     models:
       classify:  claude-haiku-4-5
-      routine:   claude-sonnet-4-6
+      routine:   claude-sonnet-5
       synthesis: claude-opus-4-8
 
     limits:

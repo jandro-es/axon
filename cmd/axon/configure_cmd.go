@@ -190,7 +190,7 @@ func askModelForClass(out io.Writer, in io.Reader, p config.Profile, class strin
 		}
 		return "ollama:" + model, nil
 	default:
-		return tui.Input(out, in, "Model string for "+class, "claude-sonnet-4-6", currentModel(p, class))
+		return tui.Input(out, in, "Model string for "+class, "claude-sonnet-5", currentModel(p, class))
 	}
 }
 

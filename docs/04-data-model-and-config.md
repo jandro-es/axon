@@ -207,7 +207,7 @@ profiles:
     # meaning Claude quota. Optional keys: ollama_host (default
     # http://localhost:11434, independent of embeddings.host), local_fallback
     # (claude|fail, default claude — FR-79), apple_helper (helper path override).
-    models:   { classify: claude-haiku-4-5, routine: claude-sonnet-4-6, synthesis: claude-opus-4-8 }
+    models:   { classify: claude-haiku-4-5, routine: claude-sonnet-5, synthesis: claude-opus-4-8 }
     # capture: the FR-26 capture funnel (ADR-016). Optional; defaults shown.
     # The capture automation itself is scheduled via automations.capture.
     # enrich: heuristic (default, zero tokens) | claude (chokepoint, routine
@@ -248,7 +248,7 @@ profiles:
       oauth_token: env:CLAUDE_CODE_OAUTH_TOKEN_WORK   # only if the org permits `claude setup-token`; else unset
     dashboard: { host: "127.0.0.1", port: 7777 }      # same port ok — never co-runs with personal
     embeddings: { provider: ollama, model: bge-m3, dim: 1024, batch_size: 16 }
-    models:   { classify: claude-haiku-4-5, routine: claude-sonnet-4-6, synthesis: claude-sonnet-4-6 }
+    models:   { classify: claude-haiku-4-5, routine: claude-sonnet-5, synthesis: claude-sonnet-5 }
     limits:   { daily_tokens: 600_000, weekly_tokens: 3_000_000, guard_pause_at_pct: 70 }
     retrieval: { top_k: 6, max_context_tokens: 8_000 }
     policy:

@@ -77,7 +77,7 @@ profiles:
 
     models:                                   # preferred model per operation class (ADR-015).
       classify:  claude-haiku-4-5             # Claude string → `claude -p --model` (plan tier governs
-      routine:   claude-sonnet-4-6            # availability; VERIFY current model strings). Local options:
+      routine:   claude-sonnet-5              # availability; VERIFY current model strings). Local options:
       synthesis: claude-opus-4-8              # synthesis is ALWAYS Claude (validated).
       # classify: "ollama:qwen3:8b"           # local Ollama /api/chat — free, offline, ledgered, budget-exempt
       # classify: "apple"                     # Apple Foundation Models on-device (macOS 26+, classify only)
