@@ -11,6 +11,7 @@ import (
 
 	"github.com/mmcdole/gofeed"
 
+	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/ingestion"
 )
@@ -21,6 +22,9 @@ const (
 	subscriptionsSeenState = "subscriptions:seen"
 	// subsSeenCapPerFeed bounds each feed's seen list (keep the newest).
 	subsSeenCapPerFeed = 500
+	// subscriptionsHTTPState stores per-feed HTTP cache validators for
+	// conditional polling (FR-101): map[feedURL]ingestion.Validators.
+	subscriptionsHTTPState = "subscriptions:http"
 )
 
 // Subscriptions polls the config-declared RSS/Atom feeds and ingests new
@@ -48,13 +52,30 @@ func (Subscriptions) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 	pl := enrichedPipeline(rc, cfg.EnrichMode())
 	parser := gofeed.NewParser()
 
+	cond, _ := rc.Pipeline.Fetcher.(ingestion.ConditionalFetcher)
+	validators := loadSubsHTTP(ctx, rc)
+
 	var (
-		changes                                []string
-		ingested, failed, subscribed, feedErrs int
+		changes                                           []string
+		ingested, failed, subscribed, feedErrs, unchanged int
 	)
 
 	for _, feed := range cfg.Feeds {
-		doc, err := rc.Pipeline.Fetcher.Fetch(ctx, feed.URL)
+		var doc *ingestion.Document
+		var err error
+		if cond != nil {
+			var notModified bool
+			doc, notModified, err = cond.FetchConditional(ctx, feed.URL, validators[feed.URL])
+			if err == nil && notModified {
+				// The server asserts nothing changed (304): free skip —
+				// no body, no parse, seen-state untouched (FR-101).
+				unchanged++
+				changes = append(changes, "feed unchanged (304): "+feed.URL)
+				continue
+			}
+		} else {
+			doc, err = rc.Pipeline.Fetcher.Fetch(ctx, feed.URL)
+		}
 		if err != nil {
 			feedErrs++
 			changes = append(changes, fmt.Sprintf("feed FAILED: %s — %v", feed.URL, err))
@@ -67,6 +88,12 @@ func (Subscriptions) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 			continue
 		}
 		links := itemLinks(parsed)
+
+		if v := (ingestion.Validators{ETag: doc.ETag, LastModified: doc.LastModified}); v != (ingestion.Validators{}) {
+			validators[feed.URL] = v
+		} else {
+			delete(validators, feed.URL) // feed stopped sending validators
+		}
 
 		seenList, known := seen[feed.URL]
 		if !known {
@@ -122,6 +149,7 @@ func (Subscriptions) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 
 	if !rc.DryRun {
 		saveSubsSeen(ctx, rc, seen)
+		saveSubsHTTP(ctx, rc, validators, cfg.Feeds)
 	}
 
 	summary := fmt.Sprintf("ingested %d item(s) from %d feed(s), %d failed", ingested, len(cfg.Feeds), failed)
@@ -130,6 +158,9 @@ func (Subscriptions) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 	}
 	if feedErrs > 0 {
 		summary += fmt.Sprintf("; %d feed(s) unreachable", feedErrs)
+	}
+	if unchanged > 0 {
+		summary += fmt.Sprintf("; %d unchanged (304)", unchanged)
 	}
 	if rc.DryRun {
 		summary = "dry-run: " + summary + " (would subscribe/ingest as listed)"
@@ -186,6 +217,36 @@ func loadSubsSeen(ctx context.Context, rc RunCtx) map[string][]string {
 	}
 	_ = json.Unmarshal([]byte(raw), &out)
 	return out
+}
+
+// loadSubsHTTP reads the per-feed HTTP validators (empty on any problem —
+// worst case one unconditional GET per feed).
+func loadSubsHTTP(ctx context.Context, rc RunCtx) map[string]ingestion.Validators {
+	out := map[string]ingestion.Validators{}
+	raw, err := db.GetCursor(ctx, rc.DB, subscriptionsHTTPState)
+	if err != nil || raw == "" {
+		return out
+	}
+	_ = json.Unmarshal([]byte(raw), &out)
+	return out
+}
+
+// saveSubsHTTP persists the validators, pruned to currently-configured
+// feeds so removed subscriptions self-clean.
+func saveSubsHTTP(ctx context.Context, rc RunCtx, m map[string]ingestion.Validators, feeds []config.Feed) {
+	keep := map[string]ingestion.Validators{}
+	for _, f := range feeds {
+		if v, ok := m[f.URL]; ok {
+			keep[f.URL] = v
+		}
+	}
+	raw, err := json.Marshal(keep)
+	if err != nil {
+		return
+	}
+	if err := db.SetCursor(ctx, rc.DB, subscriptionsHTTPState, string(raw), rc.now().UTC().Format(time.RFC3339)); err != nil {
+		rc.Log.Warn("subscriptions: persist http validators", "err", err)
+	}
 }
 
 // saveSubsSeen persists the seen memory beside the engine cursors.

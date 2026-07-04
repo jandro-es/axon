@@ -2,24 +2,45 @@ package automations
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/jandro-es/axon/internal/config"
+	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/ingestion"
 )
 
-// urlFetcher serves canned documents by exact URL and counts fetches.
+// urlFetcher serves canned documents by exact URL and counts fetches. It
+// implements ingestion.ConditionalFetcher: a stored etag matching the
+// request's validator yields a 304 (hits304, no full-fetch count).
 type urlFetcher struct {
 	docs    map[string]*ingestion.Document
 	calls   map[string]int
+	etags   map[string]string
+	hits304 int
 	failAll bool
 }
 
 func newURLFetcher() *urlFetcher {
-	return &urlFetcher{docs: map[string]*ingestion.Document{}, calls: map[string]int{}}
+	return &urlFetcher{docs: map[string]*ingestion.Document{}, calls: map[string]int{}, etags: map[string]string{}}
+}
+
+func (u *urlFetcher) FetchConditional(ctx context.Context, url string, v ingestion.Validators) (*ingestion.Document, bool, error) {
+	if v.ETag != "" && v.ETag == u.etags[url] {
+		u.hits304++
+		return nil, true, nil
+	}
+	d, err := u.Fetch(ctx, url)
+	if err != nil {
+		return nil, false, err
+	}
+	if et := u.etags[url]; et != "" {
+		d.ETag = et
+	}
+	return d, false, nil
 }
 
 func (u *urlFetcher) Fetch(ctx context.Context, url string) (*ingestion.Document, error) {
@@ -238,5 +259,97 @@ func TestSubscriptionsRegistered(t *testing.T) {
 	}
 	if s := Schedulables(p); len(s) != 1 || s[0].Automation.Name() != "subscriptions" {
 		t.Fatalf("schedulables = %+v", s)
+	}
+}
+
+func TestSubscriptionsConditional304(t *testing.T) {
+	f := newURLFetcher()
+	f.docs[testFeedURL] = &ingestion.Document{URL: testFeedURL, ContentType: "application/rss+xml",
+		Body: []byte(rssXML("https://feeds.example.com/p1"))}
+	f.etags[testFeedURL] = `W/"v1"`
+	f.addHTML("https://feeds.example.com/p1", "Post One")
+	rc := subsRC(t, f, testFeedURL)
+	ctx := context.Background()
+
+	// Tick 1: subscribe-from-now; validators stored.
+	if _, err := (Subscriptions{}).Run(ctx, rc); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := db.GetCursor(ctx, rc.DB, "subscriptions:http")
+	var vals map[string]ingestion.Validators
+	if err := json.Unmarshal([]byte(raw), &vals); err != nil || vals[testFeedURL].ETag != `W/"v1"` {
+		t.Fatalf("validators not stored: %q (%v)", raw, err)
+	}
+
+	// Tick 2: same etag → 304; nothing fetched in full, nothing ingested,
+	// seen-state untouched, summary reports it.
+	res, err := (Subscriptions{}).Run(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.hits304 != 1 || f.calls[testFeedURL] != 1 {
+		t.Errorf("hits304=%d fullFetches=%d, want 1/1", f.hits304, f.calls[testFeedURL])
+	}
+	if !strings.Contains(res.Summary, "1 unchanged (304)") {
+		t.Errorf("summary = %q", res.Summary)
+	}
+	seen := loadSubsSeen(ctx, rc)
+	if len(seen[testFeedURL]) != 1 {
+		t.Errorf("seen-state disturbed: %v", seen)
+	}
+}
+
+func TestSubscriptionsValidatorsUpdateAndPrune(t *testing.T) {
+	feedB := "https://feeds.example.com/b.xml"
+	f := newURLFetcher()
+	f.docs[testFeedURL] = &ingestion.Document{URL: testFeedURL, ContentType: "application/rss+xml",
+		Body: []byte(rssXML("https://feeds.example.com/p1"))}
+	f.docs[feedB] = &ingestion.Document{URL: feedB, ContentType: "application/rss+xml",
+		Body: []byte(rssXML("https://feeds.example.com/p2"))}
+	f.etags[testFeedURL] = `"v1"`
+	f.etags[feedB] = `"v1"`
+	rc := subsRC(t, f, testFeedURL, feedB)
+	ctx := context.Background()
+
+	if _, err := (Subscriptions{}).Run(ctx, rc); err != nil { // both subscribed, validators v1
+		t.Fatal(err)
+	}
+	// Server updated feed A: new etag → full fetch, validator replaced.
+	f.etags[testFeedURL] = `"v2"`
+	if _, err := (Subscriptions{}).Run(ctx, rc); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := db.GetCursor(ctx, rc.DB, "subscriptions:http")
+	var vals map[string]ingestion.Validators
+	_ = json.Unmarshal([]byte(raw), &vals)
+	if vals[testFeedURL].ETag != `"v2"` || vals[feedB].ETag != `"v1"` {
+		t.Fatalf("validators = %+v", vals)
+	}
+
+	// Feed B removed from config: its validator prunes on the next run.
+	rc.Config.Subscriptions.Feeds = []config.Feed{{URL: testFeedURL}}
+	if _, err := (Subscriptions{}).Run(ctx, rc); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ = db.GetCursor(ctx, rc.DB, "subscriptions:http")
+	vals = nil
+	_ = json.Unmarshal([]byte(raw), &vals)
+	if _, ok := vals[feedB]; ok {
+		t.Errorf("removed feed's validators must prune: %+v", vals)
+	}
+}
+
+func TestSubscriptionsDryRunStoresNoValidators(t *testing.T) {
+	f := newURLFetcher()
+	f.docs[testFeedURL] = &ingestion.Document{URL: testFeedURL, ContentType: "application/rss+xml",
+		Body: []byte(rssXML("https://feeds.example.com/p1"))}
+	f.etags[testFeedURL] = `"v1"`
+	rc := subsRC(t, f, testFeedURL)
+	rc.DryRun = true
+	if _, err := (Subscriptions{}).Run(context.Background(), rc); err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := db.GetCursor(context.Background(), rc.DB, "subscriptions:http"); raw != "" {
+		t.Errorf("dry-run stored validators: %q", raw)
 	}
 }
