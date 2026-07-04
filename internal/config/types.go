@@ -199,11 +199,20 @@ type MemoryConfig struct {
 	SessionTokens int `yaml:"session_tokens"`
 	// RecentEntries is how many newest MEMORY.md entries to inject (default 10).
 	RecentEntries int `yaml:"recent_entries"`
+	// CaptureSessions gates the Stop-hook session recorder (ADR-021,
+	// NFR-14). Pointer so absence means ON; a stricter profile sets false.
+	CaptureSessions *bool `yaml:"capture_sessions"`
 }
 
 // InjectEnabled reports whether SessionStart identity injection is on (default
 // true when the key is absent).
 func (m MemoryConfig) InjectEnabled() bool { return m.Inject == nil || *m.Inject }
+
+// SessionCaptureEnabled reports whether finished sessions are recorded for
+// memory distillation (default true; capture_sessions: false disables).
+func (m MemoryConfig) SessionCaptureEnabled() bool {
+	return m.CaptureSessions == nil || *m.CaptureSessions
+}
 
 // SessionTokenBudget returns the injection token ceiling, defaulting to 1500.
 func (m MemoryConfig) SessionTokenBudget() int {
