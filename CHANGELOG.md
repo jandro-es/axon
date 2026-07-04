@@ -2,13 +2,16 @@
 
 All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
-[Semantic Versioning](https://semver.org/) (pre-1.0: minor versions may break).
+[Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Developer-experience, observability, and installation improvements. Cardinal
-rule 1 is generalized by ADR-015 (no generative call — Claude or local —
-bypasses the token manager); the vault contract is unchanged.
+## [1.0.0] — 2026-07-04
+
+The v1 contract is complete: every requirement in FR-01…FR-107 / NFR-01…NFR-14
+is implemented, audited (see `docs/PRODUCTION-READINESS.md`), and documented.
+Cardinal rule 1 is generalized by ADR-015 (no generative call — Claude or
+local — bypasses the token manager); the vault contract is unchanged.
 
 ### Added
 
