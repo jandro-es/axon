@@ -190,6 +190,7 @@ memory injection entirely. `axon profiles` shows the isolation surface.
 | [Dashboard & observability](docs/09-component-dashboard-observability.md) | Live charts, the Review tab, the knowledge graph. |
 | [Personal memory & onboarding](docs/12-component-personal-memory-and-onboarding.md) | The identity layer, session memory, `axon onboard`. |
 | [Multi-client (Claude Desktop)](docs/13-component-multi-client-claude-desktop.md) | One MCP server, many Claude clients. |
+| [1.1 roadmap](docs/14-roadmap-1.1.md) | What's next: ask-your-vault, retrieval scale, entity intelligence, capture reach. |
 
 Deeper design notes (vision, research, installer internals) live in
 [docs/](docs/); build conventions are in [`CLAUDE.md`](CLAUDE.md).
