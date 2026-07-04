@@ -41,7 +41,8 @@ internal/      # all application packages (private to the module)
   automations/ # the automation engine + the standard automation set
   events/      # in-process event bus (SSE + persistence subscribers)
   mcp/         # AXON MCP server (stdio): vault + knowledge + token tools
-  dashboard/   # dashboard HTTP + SSE handlers (Go) serving the SPA and streaming events
+  dashboard/   # dashboard HTTP + SSE handlers (Go): SPA, event stream, review-queue resolutions (ADR-020)
+  review/      # review-queue parsing + wikilink-safe accept/dismiss (ADR-020)
   hooks/       # Claude Code hook logic (SessionStart/PreToolUse/...), called via `axon hook`
   identity/    # personal memory layer: USER/SOUL/MEMORY notes, onboarding (Component 12)
   clients/     # multi-client wiring (Claude Desktop config merge, Component 13)
