@@ -203,3 +203,86 @@ func TestReplaceProfileBlockRefusesInvalidWrite(t *testing.T) {
 		t.Fatalf("invalid write landed: %+v", feeds)
 	}
 }
+
+// writeStrictConfig tightens the wildcard allowlist to one named host, so
+// any other host is refused by CheckIngestPolicy.
+func writeStrictConfig(t *testing.T, dir string) string {
+	t.Helper()
+	path := writeSubscribeConfig(t, dir, "")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	strict := strings.Replace(string(raw),
+		`ingest_domains_allow: ["*"]`,
+		`ingest_domains_allow: ["allowed.example.com"]`, 1)
+	if strict == string(raw) {
+		t.Fatal("policy line not found to tighten")
+	}
+	if err := os.WriteFile(path, []byte(strict), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestSubscribePolicyRefusalAndAllow(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeStrictConfig(t, dir)
+	stubFetcher(t, map[string]string{"https://feeds.example.com/a.xml": atomFixture})
+
+	// Refused without --allow: non-zero, names the host, hints --allow,
+	// config untouched.
+	out, err := run(t, "subscribe", "https://feeds.example.com/a.xml", "--config", cfgPath)
+	if err == nil {
+		t.Fatalf("policy refusal must be an error:\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "feeds.example.com") || !strings.Contains(err.Error(), "--allow") {
+		t.Errorf("refusal must name host + hint --allow: %v", err)
+	}
+	if feeds := loadFeeds(t, cfgPath); len(feeds) != 0 {
+		t.Fatalf("refused add wrote config: %+v", feeds)
+	}
+
+	// --allow: domain appended to the policy, feed subscribed.
+	out, err = run(t, "subscribe", "https://feeds.example.com/a.xml", "--allow", "--config", cfgPath)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	cfg, _ := config.Load(cfgPath)
+	_, p, _ := cfg.ResolveProfile("")
+	if !slicesContains(p.Policy.IngestDomainsAllow, "feeds.example.com") {
+		t.Errorf("domain not appended: %v", p.Policy.IngestDomainsAllow)
+	}
+	if feeds := loadFeeds(t, cfgPath); len(feeds) != 1 {
+		t.Fatalf("feeds = %+v", feeds)
+	}
+	raw, _ := os.ReadFile(cfgPath)
+	if !strings.Contains(string(raw), "# keep-me") {
+		t.Error("comment lost by policy rewrite")
+	}
+}
+
+func TestSubscribeAllowedHostMakesNoPolicyEdit(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeSubscribeConfig(t, dir, "") // wildcard policy: check passes
+	stubFetcher(t, map[string]string{"https://feeds.example.com/a.xml": atomFixture})
+
+	if out, err := run(t, "subscribe", "https://feeds.example.com/a.xml", "--allow", "--config", cfgPath); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	cfg, _ := config.Load(cfgPath)
+	_, p, _ := cfg.ResolveProfile("")
+	// The flag only acts on refusal: wildcard list untouched.
+	if len(p.Policy.IngestDomainsAllow) != 1 || p.Policy.IngestDomainsAllow[0] != "*" {
+		t.Errorf("policy edited without need: %v", p.Policy.IngestDomainsAllow)
+	}
+}
+
+func slicesContains(list []string, want string) bool {
+	for _, s := range list {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}

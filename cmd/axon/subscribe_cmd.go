@@ -68,7 +68,30 @@ func subscribeAdd(cmd *cobra.Command, gf *globalFlags, feedURL string, noVerify,
 		}
 	}
 
-	// 3. Verification (default on): fetch through the egress-policied
+	// 3. Ingest policy: refusal is explicit; --allow opts the domain in
+	// (never silent — policy changes are user consent).
+	host := u.Hostname()
+	if perr := ingestion.CheckIngestPolicy(profile.Policy, host); perr != nil {
+		if !allow {
+			return fmt.Errorf("host %q is refused by the ingest policy (%v)\n"+
+				"  add %q to policy.ingest_domains_allow in %s, or re-run with --allow",
+				host, perr, host, gf.configPath)
+		}
+		if err := appendAllowDomain(gf, host); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "✓ added %q to policy.ingest_domains_allow\n", host)
+		// Re-load so the verification fetch runs under the updated policy.
+		cfg, err = config.Load(gf.configPath)
+		if err != nil {
+			return err
+		}
+		if _, profile, err = cfg.ResolveProfile(gf.profile); err != nil {
+			return err
+		}
+	}
+
+	// 4. Verification (default on): fetch through the egress-policied
 	// fetcher, parse as a feed, report the title. NFR-04: same policy
 	// enforcement as every ingest.
 	if noVerify {
@@ -85,7 +108,7 @@ func subscribeAdd(cmd *cobra.Command, gf *globalFlags, feedURL string, noVerify,
 		fmt.Fprintf(out, "✓ verified: %q (%d entries)\n", parsed.Title, len(parsed.Items))
 	}
 
-	// 4. Append through the comment-preserving editor.
+	// 5. Append through the comment-preserving editor.
 	if err := updateSubscriptionsBlock(gf, func(s *config.SubscriptionsConfig) error {
 		s.Feeds = append(s.Feeds, config.Feed{URL: feedURL})
 		return nil
@@ -96,6 +119,74 @@ func subscribeAdd(cmd *cobra.Command, gf *globalFlags, feedURL string, noVerify,
 	fmt.Fprintln(out, "  Polled hourly by the subscriptions automation; the first poll marks existing entries seen (FR-92).")
 	fmt.Fprintln(out, "  A running daemon applies this on restart — or run `axon run subscriptions` now.")
 	return nil
+}
+
+// appendAllowDomain appends host to the profile's ingest_domains_allow.
+// The edit is surgical — only the allowlist value node is rewritten, in
+// flow style (`[...]`), which is valid whether the surrounding policy map
+// is flow- or block-styled. (Replacing a whole non-empty flow mapping with
+// a block mapping panics inside goccy's renderer, so the whole-block
+// rebuild used for subscriptions is not safe here.)
+func appendAllowDomain(gf *globalFlags, host string) error {
+	raw, err := os.ReadFile(gf.configPath)
+	if err != nil {
+		return err
+	}
+	cfg, err := config.Parse(raw)
+	if err != nil {
+		return err
+	}
+	name := cfg.ResolveProfileName(gf.profile)
+	list := append(cfg.Profiles[name].Policy.IngestDomainsAllow, host)
+
+	file, err := parser.ParseBytes(raw, parser.ParseComments)
+	if err != nil {
+		return fmt.Errorf("parse config: %w", err)
+	}
+	rendered, err := yaml.MarshalWithOptions(list, yaml.Flow(true))
+	if err != nil {
+		return err
+	}
+	keyPath, err := yaml.PathString(jsonPathFor(name, "policy.ingest_domains_allow"))
+	if err != nil {
+		return err
+	}
+	if _, rerr := keyPath.ReadNode(bytes.NewReader(raw)); rerr == nil {
+		// Common case: the key exists (starter/example configs write it).
+		if err := keyPath.ReplaceWithReader(file, bytes.NewReader(rendered)); err != nil {
+			return fmt.Errorf("set ingest_domains_allow: %w", err)
+		}
+	} else if polPath, perr := yaml.PathString(jsonPathFor(name, "policy")); perr != nil {
+		return perr
+	} else if _, rerr := polPath.ReadNode(bytes.NewReader(raw)); rerr == nil {
+		// Policy exists without the key: merge a flow-styled entry into it.
+		entry, merr := yaml.MarshalWithOptions(map[string]any{"ingest_domains_allow": list}, yaml.Flow(true))
+		if merr != nil {
+			return merr
+		}
+		if err := polPath.MergeFromReader(file, bytes.NewReader(entry)); err != nil {
+			return fmt.Errorf("add ingest_domains_allow: %w", err)
+		}
+	} else {
+		// No policy block at all: merge one into the profile.
+		block, merr := yaml.Marshal(map[string]any{"policy": map[string]any{"ingest_domains_allow": list}})
+		if merr != nil {
+			return merr
+		}
+		parent, perr2 := yaml.PathString("$.profiles." + name)
+		if perr2 != nil {
+			return perr2
+		}
+		if err := parent.MergeFromReader(file, bytes.NewReader(block)); err != nil {
+			return fmt.Errorf("add policy: %w", err)
+		}
+	}
+
+	updated := []byte(file.String())
+	if _, err := config.Parse(updated); err != nil {
+		return fmt.Errorf("refusing to write: the change makes the config invalid: %w", err)
+	}
+	return writeFileAtomic(gf.configPath, updated)
 }
 
 // updateSubscriptionsBlock applies mutate to the active profile's
