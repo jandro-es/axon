@@ -107,6 +107,8 @@ profiles:
     retrieval:
       top_k: 8                                # chunks fetched per query (hybrid lexical + semantic)
       max_context_tokens: 12_000              # hard ceiling on retrieved context assembled per call
+      rerank: off                             # off | ollama:<model> — optional local reranker (overfetch top_k×3, pointwise rescoring; best-effort, budget-exempt)
+      # rerank_overfetch: 3                    # candidate multiple fetched before reranking
 
     ingestion:
       ocr: off                                # off | apple (macOS on-device Vision) | tesseract (needs pdftoppm+tesseract) — OCR fallback for scanned PDFs

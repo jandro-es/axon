@@ -59,6 +59,7 @@ profiles:
     retrieval:
       top_k: 8
       max_context_tokens: 12_000
+      rerank: off                             # off | ollama:<model> — optional local reranker (best-effort, budget-exempt)
 
     ingestion:
       ocr: off                                # off | apple (macOS on-device Vision) | tesseract (pdftoppm+tesseract) — OCR fallback for scanned PDFs

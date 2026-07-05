@@ -39,6 +39,7 @@ flowchart LR
 ## 3. Retrieval (used here and by Components 06/07/08)
 
 - **Hybrid search** = FTS5/BM25 (lexical) ∪ sqlite-vec cosine (semantic), fused by reciprocal-rank (configurable weights), filtered by metadata (folder/tag/type) when requested.
+- **Optional reranking** (ADR-027, FR-126/127): when `retrieval.rerank: ollama:<model>` is set, hybrid search overfetches `top_k × rerank_overfetch` candidates and a local Ollama model re-scores them pointwise (0–10) to reorder the top-k. It is a retrieval primitive outside the chokepoint (like embeddings), budget-exempt, off by default, and best-effort — any failure falls back to the fused order.
 - Returns: note path, chunk snippet(s), source ref, lexical score, vector score, fused score.
 - A `retrieve(query, {top_k, max_context_tokens, filters})` helper assembles a **token-bounded** context block (Component 07) for any model call — the standard way to avoid dumping the vault.
 

@@ -230,6 +230,33 @@ The two installations are **separate** (different machines, accounts, restrictio
 **Why:** FR-26's own wording is poll-based ("queued for ingestion on the next ingestion tick"), and the automation framework already supplies scheduling, enabled/schedule/catch-up/dry-run config, panic-safety, run accounting, the change-gate convention, and event plumbing — a watcher would re-invent all of it around a new dependency. Rejected: **fsnotify** (new dependency; debounce and partial-sync-write races with vault sync tools; still needs a scan-on-start for files that arrived while the daemon was down — at which point the poll *is* the design) and **a `POST /capture` route on the dashboard server** (that server's invariant is read-only: never writes the vault, never calls Claude). A separate localhost capture listener (bookmarklet/Shortcut target) is a possible future extension behind its own ADR.
 **Trade-offs:** minutes-level latency instead of seconds — acceptable for a sync-fed funnel and tunable via cron. Processed URLs are tracked in SQLite (derived), so a full reindex may re-fetch a URL once before the content-hash dedupe skips it. Failed items stay visible in the inbox rather than moving to a quarantine folder. (Spec: `docs/superpowers/specs/2026-07-03-universal-capture-design.md`; FR-26, FR-81…FR-83.)
 
+### ADR-027 — Local reranking as a retrieval primitive (outside the chokepoint) *(accepted — built)*
+
+**Status:** Accepted (2026-07-05, roadmap 1.1 B2).
+
+**Context:** Hybrid search's fused order is coarse. A reranker re-scores a wider
+candidate pool to lift the genuinely relevant passages into the top-k. Ollama
+has no rerank endpoint, so a local reranker is an LLM-as-scorer call — raising
+the question of whether it must route through the token-manager chokepoint.
+
+**Decision:** Reranking is a **retrieval primitive**, like embeddings: a local,
+non-Claude scoring op over already-retrieved candidates that produces an
+*ordering*, never vault- or Claude-bound content. It therefore lives in a leaf
+package (`internal/rerank`) called by `search`, calls Ollama directly, sits
+**outside** the token manager, and is budget-exempt by construction. This is a
+narrow amendment to cardinal-rule-1/ADR-015: "no *generative content* call
+bypasses the chokepoint" — a scoring call that only reorders retrieval results
+is not such a call, exactly as embeddings are not. Selected by
+`retrieval.rerank: off | ollama:<model>` (default off); pointwise 0–10 scoring
+with bounded concurrency; **best-effort** — any failure falls back to the fused
+order, so reranking never breaks search.
+
+**Consequences:** Better top-k on opt-in, with no Claude spend and no new Go
+dependency. `search` stays a leaf (no `search → tokens` coupling); ~top-k×3 local
+calls per query are not ledgered (they are retrieval, not model traffic). A
+future reranker provider (e.g. a compiled cross-encoder helper) can join behind
+the same `Reranker` interface. (Spec: `docs/superpowers/specs/2026-07-05-local-reranker-design.md`; FR-126/127.)
+
 ### ADR-026 — Local OCR provider seam for scanned PDFs *(accepted — built)*
 
 **Status:** Accepted (2026-07-05, roadmap 1.1 D2).
