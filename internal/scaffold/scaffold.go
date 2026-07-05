@@ -58,6 +58,7 @@ var files = []fileSpec{
 	{"Templates/Project.md", "assets/templates/project.md"},
 	{"Templates/Knowledge Source.md", "assets/templates/knowledge-source.md"},
 	{"Templates/MOC.md", "assets/templates/moc.md"},
+	{"03-Resources/Research Questions.md", "assets/notes/research-questions.md"},
 }
 
 // Result reports what the scaffold did, for the init summary and idempotency

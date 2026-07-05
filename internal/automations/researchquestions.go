@@ -38,7 +38,16 @@ func parseQuestions(body string) []string {
 		human = body[:i]
 	}
 	var out []string
+	inFence := false
 	for _, line := range strings.Split(human, "\n") {
+		// Fenced code blocks hold examples/illustrations, never live questions.
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			continue
+		}
 		m := rqItemRe.FindStringSubmatch(line)
 		if m == nil {
 			continue

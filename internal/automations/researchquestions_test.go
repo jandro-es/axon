@@ -68,6 +68,15 @@ func TestParseQuestionsEmpty(t *testing.T) {
 	}
 }
 
+// The scaffolded template's example questions are fenced and must NOT parse as
+// live questions — otherwise the inert template would spend tokens once enabled.
+func TestParseQuestionsIgnoresFenced(t *testing.T) {
+	body := "# Research Questions\n\nExamples:\n\n```\n- What did I conclude about spaced repetition?\n- How do notes connect?\n```\n\n<!-- axon:answers:start -->\n<!-- axon:answers:end -->\n"
+	if q := parseQuestions(body); len(q) != 0 {
+		t.Fatalf("fenced examples parsed as live questions: %v", q)
+	}
+}
+
 func TestRenderAnswers(t *testing.T) {
 	results := []rqResult{
 		{Question: "What is X?", Answer: ask.Answer{Text: "X is a thing.", Citations: []string{"a/b", "c/d"}}},
