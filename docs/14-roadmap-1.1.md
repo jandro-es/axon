@@ -47,7 +47,7 @@ run with sources; removing the note disables the feature cleanly.
 
 ## Phase B — Retrieval scale & quality
 
-### B1 — ANN index behind the ADR-010 seam (M) · provisional FR-114, ADR-024
+### B1 — ANN index behind the ADR-010 seam (M) · FR-113–115, ADR-025 *(built)*
 **Build:** a pluggable vector index (`retrieval.index: brute | ann`) behind the
 existing repository seam. Identical-results contract at small N (tested);
 `doctor` suggests switching past a vault-size threshold. The single-file

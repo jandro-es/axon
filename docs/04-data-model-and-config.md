@@ -124,6 +124,17 @@ CREATE VIRTUAL TABLE vec_chunks USING vec0(
 );
 CREATE VIRTUAL TABLE fts_chunks USING fts5(text, content='chunks', content_rowid='id');
 
+-- Optional IVF-flat ANN index (ADR-025, retrieval.index: ann). Both are DERIVED
+-- from vec_chunks.embedding and rebuilt by `axon reindex`; `brute` mode leaves
+-- them empty/NULL.
+CREATE TABLE vec_centroids (           -- k≈√N spherical-k-means centroids
+  id     INTEGER PRIMARY KEY,
+  dim    INTEGER NOT NULL,
+  model  TEXT    NOT NULL,
+  vector BLOB    NOT NULL              -- little-endian float32, same codec as vec_chunks
+);
+-- vec_chunks gains: centroid INTEGER (nullable; NULL = unassigned overflow, always scanned)
+
 -- Token ledger (every Claude call)
 CREATE TABLE token_ledger (
   id              INTEGER PRIMARY KEY,
@@ -215,7 +226,11 @@ profiles:
     # originals (moved wikilink-safely, never deleted).
     capture:  { enrich: heuristic, archive_dir: 04-Archive/Capture }
     limits:   { daily_tokens: 1_500_000, weekly_tokens: 8_000_000, guard_pause_at_pct: 80 }           # estimated tokens; no dollar cap here
-    retrieval: { top_k: 8, max_context_tokens: 12_000 }
+    # index: brute (default, exact full scan) | ann (IVF-flat, ADR-025). In ann
+    # mode the index auto-falls back to exact brute below ann.threshold vectors;
+    # ann.nprobe clusters are probed per query (higher = more recall). Enable ann
+    # then run `axon reindex` to build vec_centroids; `axon doctor` advises when.
+    retrieval: { top_k: 8, max_context_tokens: 12_000, index: brute, ann: { threshold: 10_000, nprobe: 8 } }
     policy:
       data_residency: local-only
       egress_allowlist: ["localhost", "*"]

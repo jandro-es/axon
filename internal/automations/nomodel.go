@@ -80,6 +80,8 @@ func (KnowledgeReindex) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 			changes = append(changes, fmt.Sprintf("re-embedded %d pending chunks", re.Embedded))
 		}
 	}
+	// Best-effort ANN index maintenance (ADR-025): never fail the reindex over it.
+	_ = core.RefreshVectorIndex(ctx, rc.DB, rc.Config.Retrieval)
 	return RunResult{Summary: fmt.Sprintf("indexed %d notes, %d links", res.Notes, res.Links), Changes: changes}, nil
 }
 

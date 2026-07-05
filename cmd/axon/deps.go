@@ -155,7 +155,7 @@ type services struct {
 // adapter), search, a deterministic-enricher pipeline and the automation engine.
 // Requires the database to be open.
 func (d *profileDeps) buildServices(bus *events.Bus) services {
-	searcher := search.New(d.db, d.embedder)
+	searcher := search.New(d.db, d.embedder).Configure(d.profile.Retrieval)
 	mgr := tokens.NewWithRouter(d.db, d.agentRouter(), searcher, bus, managerConfig(d.name, d.profile, d.cfg))
 	pipeline := &ingestion.Pipeline{
 		Vault: d.vault, DB: d.db, Embedder: d.embedder,

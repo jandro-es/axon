@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"strings"
 
+	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/embeddings"
 )
@@ -18,6 +19,28 @@ import (
 type Searcher struct {
 	DB       *sql.DB
 	Embedder embeddings.Provider
+
+	// Vector backend selection (ADR-025). Zero value ⇒ exact brute-force.
+	IndexMode string
+	Threshold int
+	NProbe    int
+}
+
+// Configure sets the vector backend from retrieval config and returns the
+// receiver for chaining. Call sites that don't call it stay on brute-force.
+func (s *Searcher) Configure(cfg config.RetrievalConfig) *Searcher {
+	s.IndexMode = cfg.IndexMode()
+	s.Threshold = cfg.ANN.ThresholdOr()
+	s.NProbe = cfg.ANN.NProbeOr()
+	return s
+}
+
+// vindex builds the db.VectorIndex for this searcher's configuration.
+func (s *Searcher) vindex() db.VectorIndex {
+	if s.IndexMode == "ann" {
+		return db.IVFIndex{Threshold: s.Threshold, NProbe: s.NProbe}
+	}
+	return db.BruteIndex{}
 }
 
 // New constructs a Searcher.
@@ -33,7 +56,7 @@ func (s *Searcher) Search(ctx context.Context, query string, topK int) ([]db.Chu
 			qv = vecs[0]
 		}
 	}
-	return db.HybridSearch(ctx, s.DB, db.SearchOpts{Query: query, QueryVector: qv, TopK: topK})
+	return db.HybridSearch(ctx, s.DB, db.SearchOpts{Query: query, QueryVector: qv, TopK: topK, Index: s.vindex()})
 }
 
 // Retrieved is a token-bounded context block assembled from search hits, the

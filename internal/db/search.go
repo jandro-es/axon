@@ -20,6 +20,8 @@ type SearchOpts struct {
 	Query       string
 	QueryVector []float32
 	TopK        int
+	// Index selects the vector backend (ADR-025); nil means exact BruteIndex.
+	Index VectorIndex
 }
 
 // ChunkHit is one fused search result.
@@ -47,7 +49,11 @@ func HybridSearch(ctx context.Context, q DBTX, opts SearchOpts) ([]ChunkHit, err
 	if err != nil {
 		return nil, err
 	}
-	vec, vecScore, err := vectorCandidates(ctx, q, opts.QueryVector, pool)
+	idx := opts.Index
+	if idx == nil {
+		idx = BruteIndex{}
+	}
+	vec, vecScore, err := idx.Candidates(ctx, q, opts.QueryVector, pool)
 	if err != nil {
 		return nil, err
 	}
