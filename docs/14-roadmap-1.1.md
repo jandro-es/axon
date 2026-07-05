@@ -56,7 +56,7 @@ server-based vector DB" guardrail stands.
 **Gate:** results parity on a small corpus; measurable latency win on a
 synthetic 20k-note corpus; `axon reindex` fully rebuilds the index.
 
-### B2 — Optional local reranker (S) · provisional FR-115
+### B2 — Optional local reranker (S) · FR-126/127, ADR-027 *(built)*
 **Build:** `retrieval.rerank: off | "ollama:<model>"` — rerank top-k×3 → top-k
 through an Ollama model, budget-exempt and ledgered per ADR-015.
 **Gate:** rerank on/off changes ordering, never candidate safety; zero Claude

@@ -324,6 +324,29 @@ type RetrievalConfig struct {
 	// scan, the default) or "ann" (IVF-flat approximate, opt-in).
 	Index string    `yaml:"index,omitempty" validate:"omitempty,oneof=brute ann"`
 	ANN   ANNConfig `yaml:"ann,omitempty"`
+	// Rerank selects an optional local reranker applied to a wider candidate
+	// pool: "" or "off" (default), or "ollama:<model>" (ADR-027). Best-effort —
+	// any failure falls back to the fused order.
+	Rerank string `yaml:"rerank,omitempty"`
+	// RerankOverfetch is the candidate multiple fetched before reranking
+	// (default 3; ignored when rerank is off).
+	RerankOverfetch int `yaml:"rerank_overfetch,omitempty"`
+}
+
+// RerankMode returns the configured reranker, defaulting to "off" when unset.
+func (r RetrievalConfig) RerankMode() string {
+	if r.Rerank == "" {
+		return "off"
+	}
+	return r.Rerank
+}
+
+// RerankOverfetchOr returns the candidate multiple for reranking, default 3.
+func (r RetrievalConfig) RerankOverfetchOr() int {
+	if r.RerankOverfetch <= 0 {
+		return 3
+	}
+	return r.RerankOverfetch
 }
 
 // ANNConfig tunes the IVF-flat index (ADR-025). Zero values take documented

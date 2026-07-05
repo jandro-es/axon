@@ -14,6 +14,7 @@ import (
 	"github.com/jandro-es/axon/internal/events"
 	"github.com/jandro-es/axon/internal/ingestion"
 	"github.com/jandro-es/axon/internal/mcp"
+	"github.com/jandro-es/axon/internal/rerank"
 	"github.com/jandro-es/axon/internal/search"
 	"github.com/jandro-es/axon/internal/tokens"
 	"github.com/jandro-es/axon/internal/vault"
@@ -155,8 +156,20 @@ type services struct {
 // buildServices assembles the token-manager chokepoint (with the real claude -p
 // adapter), search, a deterministic-enricher pipeline and the automation engine.
 // Requires the database to be open.
+// buildSearcher constructs the hybrid Searcher with the configured vector
+// backend and optional local reranker (ADR-025/ADR-027). Shared by the service
+// wiring and the `axon search` CLI so both honour retrieval.rerank.
+func (d *profileDeps) buildSearcher() *search.Searcher {
+	host := d.profile.Embeddings.Host
+	if host == "" {
+		host = embeddings.DefaultOllamaHost
+	}
+	reranker, _ := rerank.RerankerFor(d.profile.Retrieval.Rerank, host) // off/misconfig → nil; doctor surfaces it
+	return search.New(d.db, d.embedder).Configure(d.profile.Retrieval).WithReranker(reranker, d.profile.Retrieval.RerankOverfetchOr())
+}
+
 func (d *profileDeps) buildServices(bus *events.Bus) services {
-	searcher := search.New(d.db, d.embedder).Configure(d.profile.Retrieval)
+	searcher := d.buildSearcher()
 	mgr := tokens.NewWithRouter(d.db, d.agentRouter(), searcher, bus, managerConfig(d.name, d.profile, d.cfg))
 	ocr, _ := ingestion.OCRFor(d.profile.Ingestion, runtime.GOOS) // off/misconfig → nil; doctor surfaces it
 	pipeline := &ingestion.Pipeline{

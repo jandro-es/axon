@@ -7,7 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jandro-es/axon/internal/search"
 	"github.com/jandro-es/axon/internal/tui"
 	"github.com/jandro-es/axon/internal/ui"
 )
@@ -27,7 +26,7 @@ func newSearchCmd(gf *globalFlags) *cobra.Command {
 			defer deps.close()
 
 			query := strings.Join(args, " ")
-			s := search.New(deps.db, deps.embedder).Configure(deps.profile.Retrieval)
+			s := deps.buildSearcher()
 			hits, err := s.Search(cmd.Context(), query, topK)
 			if err != nil {
 				return err
