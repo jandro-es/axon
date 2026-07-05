@@ -27,7 +27,7 @@ func newSearchCmd(gf *globalFlags) *cobra.Command {
 			defer deps.close()
 
 			query := strings.Join(args, " ")
-			s := search.New(deps.db, deps.embedder)
+			s := search.New(deps.db, deps.embedder).Configure(deps.profile.Retrieval)
 			hits, err := s.Search(cmd.Context(), query, topK)
 			if err != nil {
 				return err
