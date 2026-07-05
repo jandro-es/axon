@@ -209,6 +209,11 @@ func CountVectors(ctx context.Context, q Queryer) (int, error) {
 	return scanCount(q.QueryRowContext(ctx, "SELECT COUNT(*) FROM vec_chunks;"))
 }
 
+// CountCentroids reports how many IVF centroids are stored (0 = index not built).
+func CountCentroids(ctx context.Context, q Queryer) (int, error) {
+	return scanCount(q.QueryRowContext(ctx, "SELECT COUNT(*) FROM vec_centroids;"))
+}
+
 // DBTX is the read+write surface shared by *sql.DB and *sql.Tx, used by repo
 // functions that both query and mutate within a caller-chosen scope.
 type DBTX interface {
