@@ -56,8 +56,9 @@ above this line; answers appear in the managed block below.
 ```
 
 **Parsing (human region only, deterministic):** a *question* is a top-level list
-item (`- `, `* `, or `- [ ] ` / `- [x] `) whose text contains a `?`, read from
-the body **above** the `<!-- axon:answers:start -->` marker. Everything at/after
+item (`- `, `* `, or `- [ ] ` / `- [x] `) whose trimmed text (after stripping a
+leading checkbox) **ends with `?`**, read from the body **above** the
+`<!-- axon:answers:start -->` marker. Everything at/after
 the marker is ignored on read (AXON's own output is never re-parsed). Non-list
 prose is ignored, so the user may write context freely. The checkbox state is
 never modified.
@@ -120,13 +121,15 @@ the automation is idempotent with no partial-state bookkeeping.
 Add to `axon.config.example.yaml` (personal profile) and the starter template:
 
 ```yaml
-research-questions: { enabled: true, schedule: "30 8 * * 1", model: synthesis, budget_tokens: 150_000 }
+research-questions: { enabled: false, schedule: "30 8 * * 1", model: synthesis, budget_tokens: 150_000 }
 ```
 
-Monday 08:30 — just after `knowledge-digest` (08:00). Default-enabled is safe for
-S8: with no note (or no questions) it is a no-op, so a fresh clone does nothing
-until the user opts in by writing a question. In the locked-down `work` profile
-it is disabled by default, like `knowledge-digest` (`research-questions: { enabled: false }`).
+**Disabled by default** in both profiles. Monday 08:30 (just after
+`knowledge-digest` at 08:00) is the cadence when the user opts in. This is
+doubly safe for S8: a fresh clone does nothing both because the automation is
+off and because — even if enabled — it no-ops until the note exists with a real
+question. The user turns it on by setting `enabled: true` (and writing a
+question).
 
 ## Scaffolding
 
