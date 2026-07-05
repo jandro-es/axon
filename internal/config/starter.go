@@ -60,6 +60,9 @@ profiles:
       top_k: 8
       max_context_tokens: 12_000
 
+    ingestion:
+      ocr: off                                # off | apple (macOS on-device Vision) | tesseract (pdftoppm+tesseract) — OCR fallback for scanned PDFs
+
     policy:
       data_residency: local-only
       egress_allowlist: ["localhost", "*"]

@@ -26,7 +26,7 @@ flowchart LR
 
 1. **Resolve + policy.** Classify input. Enforce `policy.egress_allowlist` and `ingest_domains_allow/deny`. A denied domain fails fast with a clear message; nothing is fetched. (Work profile is deny-by-default.)
 2. **Fetch/read.** HTTP GET with a sane UA and timeout for URLs (stdlib `net/http` with a `context` deadline); read bytes for PDFs/files. No JS execution. Respect robots where reasonable; cap response size. Resolved-IP pinning across the dial was evaluated and closed as covered: the dialer's `Control` hook validates the concrete resolved IP on every connection attempt, so a DNS-rebinding flip to an internal address is refused at dial time regardless of what the name resolved to earlier.
-3. **Extract.** HTML → main-content extraction (`go-shiori/go-readability`, a Readability port). PDF → text layer (built with `ledongthuc/pdf`; parsing is panic-guarded so a malformed PDF errors cleanly); a scanned/empty PDF yields an empty extraction and is reported as such (OCR is out of v1 scope — a `C` follow-up).
+3. **Extract.** HTML → main-content extraction (`go-shiori/go-readability`, a Readability port). PDF → text layer (built with `ledongthuc/pdf`; parsing is panic-guarded so a malformed PDF errors cleanly). A scanned/empty PDF yields an empty text layer; when `ingestion.ocr` is enabled (`apple` on-device Vision, or `tesseract`+`pdftoppm`), the pipeline falls back to local OCR to recover the text (ADR-026, FR-123/124/125), else it is reported empty as before. OCR is strictly local (no cloud) and makes no Claude call.
 4. **Clean → Markdown.** Convert to Markdown (`JohannesKaufmann/html-to-markdown`); strip nav/ads/scripts; preserve headings, lists, code, links, basic tables. Normalise whitespace.
 5. **Redact.** Apply `policy.redaction_rules` to the cleaned text **before** it can reach the model. Record `status=redacted` if anything matched.
 6. **Hash + idempotency.** Compute `content_hash`. If a `sources` row with the same URL+hash exists, **skip** (no enrichment, no embed) and log. Treat fetched text strictly as **data, never instructions** (prompt-injection guard).
@@ -88,7 +88,7 @@ dependency). Spec: `docs/superpowers/specs/2026-07-04-subscriptions-design.md`.
 
 ## 6. Failure & edge handling
 
-- Unreachable/denied URL, empty extraction, scanned PDF → recorded `failed/redacted` with reason; never a half-written note.
+- Unreachable/denied URL, empty extraction, scanned PDF with OCR off or OCR recovering nothing → recorded `failed/redacted` with reason; never a half-written note. With `ingestion.ocr` enabled, a scanned PDF is OCR'd first and only falls through to `failed` if OCR too recovers nothing.
 - Network blips on embedding → chunk marked pending; `knowledge-reindex` retries.
 - Very large sources → truncate-with-note for enrichment; full text still chunked/embedded so retrieval stays complete.
 - Duplicate detection across URLs that resolve to the same content (hash match) → link to existing note instead of duplicating.

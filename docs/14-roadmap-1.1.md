@@ -108,7 +108,7 @@ minimal new machinery. Docs ship a bookmarklet and a macOS Shortcuts recipe.
 **Gate:** a bookmarklet click lands a URL in the inbox and it is ingested on
 the next capture tick; the endpoint is loopback-only and refuses cross-origin.
 
-### D2 — OCR for scanned PDFs (M) · provisional FR-123, ADR-026
+### D2 — OCR for scanned PDFs (M) · FR-123/124/125, ADR-026 *(built)*
 **Build:** closes docs/05's explicitly deferred v1 item. A local-only OCR
 provider seam — Apple Vision on-device via the ADR-013 compiled-helper
 pattern, or tesseract when present (`ingestion.ocr: off | apple | tesseract`).
