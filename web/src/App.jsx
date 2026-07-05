@@ -607,6 +607,63 @@ function ActivityCard({ live, initial, span }) {
 }
 
 
+/* ── ask tab (ADR-023) ───────────────────────────────────────────────────── */
+function postAsk(question) {
+  return fetch('/api/ask', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Axon-Ask': '1' },
+    body: JSON.stringify({ question }),
+  }).then(async (r) => {
+    if (!r.ok) throw new Error(await r.text())
+    return r.json()
+  })
+}
+
+function AskTab({ span }) {
+  const [q, setQ] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [ans, setAns] = useState(null)
+  const [err, setErr] = useState(null)
+
+  const submit = (e) => {
+    e.preventDefault()
+    if (!q.trim() || busy) return
+    setBusy(true); setErr(null); setAns(null)
+    postAsk(q.trim())
+      .then(setAns)
+      .catch((e2) => setErr(String(e2.message || e2)))
+      .finally(() => setBusy(false))
+  }
+
+  return (
+    <Card title="Ask your vault" meta="grounded — cites sources or refuses" span={span}>
+      <form className="ask-form" onSubmit={submit}>
+        <input className="ask-input" placeholder="Ask a question answered only from your notes…"
+               value={q} onChange={(e) => setQ(e.target.value)} />
+        <button type="submit" disabled={busy || !q.trim()}>{busy ? 'Asking…' : 'Ask'}</button>
+      </form>
+      {err && <Empty>{err}</Empty>}
+      {ans && ans.refused && (
+        <div className="ask-answer refused">
+          <p><b>No answer:</b> {ans.reason}</p>
+          {ans.sources?.length > 0 && (
+            <><p className="ask-src-label">Retrieved (uncited):</p>
+              <ul>{ans.sources.map((s) => <li key={s}>{s}</li>)}</ul></>
+          )}
+        </div>
+      )}
+      {ans && !ans.refused && (
+        <div className="ask-answer">
+          <p className="ask-text">{ans.answer}</p>
+          <p className="ask-src-label">Sources:</p>
+          <ul>{(ans.citations || []).map((c) => <li key={c}>{c}</li>)}</ul>
+          <p className="ask-meta">~{ans.tokens} tokens</p>
+        </div>
+      )}
+    </Card>
+  )
+}
+
 /* ── review tab (ADR-020) ────────────────────────────────────────────────── */
 function postReviewAction(id, action) {
   return fetch('/api/review/action', {
@@ -687,7 +744,7 @@ function ReviewTab({ span }) {
 /* ── app shell ───────────────────────────────────────────────────────────── */
 const TABS = [
   ['overview', 'Overview'], ['tokens', 'Tokens'], ['automations', 'Automations'], ['review', 'Review'],
-  ['knowledge', 'Knowledge'], ['graph', 'Graph'], ['activity', 'Activity'],
+  ['ask', 'Ask'], ['knowledge', 'Knowledge'], ['graph', 'Graph'], ['activity', 'Activity'],
 ]
 
 export default function App() {
@@ -728,7 +785,7 @@ export default function App() {
       </header>
 
       <nav className="nav">
-        {TABS.map(([id, label]) => (
+        {TABS.filter(([id]) => id !== 'ask' || health?.ask_enabled !== false).map(([id, label]) => (
           <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>{label}{id === 'review' && reviewMeta?.pending ? ` · ${reviewMeta.pending}` : ''}</button>
         ))}
       </nav>
@@ -777,6 +834,7 @@ export default function App() {
           </>}
 
           {tab === 'review' && <ReviewTab span="span-12" />}
+          {tab === 'ask' && <AskTab span="span-12" />}
 
           {tab === 'graph' && <GraphCard graph={graph} simEdges={simEdges} onToggleSim={setSimEdges} span="span-12" />}
 
