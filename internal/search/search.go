@@ -12,6 +12,7 @@ import (
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/embeddings"
+	"github.com/jandro-es/axon/internal/rerank"
 )
 
 // Searcher runs hybrid searches. Embedder may be nil or unreachable, in which
@@ -24,6 +25,19 @@ type Searcher struct {
 	IndexMode string
 	Threshold int
 	NProbe    int
+
+	// Reranker, when non-nil, reorders a wider candidate pool (retrieval
+	// primitive, ADR-027). Overfetch is the candidate multiple (≤0 ⇒ 3).
+	Reranker  rerank.Reranker
+	Overfetch int
+}
+
+// WithReranker attaches an optional local reranker and returns the receiver.
+// overfetch is the candidate multiple fetched before reranking (≤0 ⇒ 3).
+func (s *Searcher) WithReranker(r rerank.Reranker, overfetch int) *Searcher {
+	s.Reranker = r
+	s.Overfetch = overfetch
+	return s
 }
 
 // Configure sets the vector backend from retrieval config and returns the
@@ -48,7 +62,10 @@ func New(database *sql.DB, embedder embeddings.Provider) *Searcher {
 	return &Searcher{DB: database, Embedder: embedder}
 }
 
-// Search returns the top-k hybrid results for a free-text query.
+// Search returns the top-k hybrid results for a free-text query. When a
+// reranker is configured it overfetches top-k×overfetch candidates, reorders
+// them locally, and returns the top-k; any reranker failure falls back to the
+// fused order (best-effort, never breaks search).
 func (s *Searcher) Search(ctx context.Context, query string, topK int) ([]db.ChunkHit, error) {
 	var qv []float32
 	if s.Embedder != nil && strings.TrimSpace(query) != "" {
@@ -56,7 +73,58 @@ func (s *Searcher) Search(ctx context.Context, query string, topK int) ([]db.Chu
 			qv = vecs[0]
 		}
 	}
-	return db.HybridSearch(ctx, s.DB, db.SearchOpts{Query: query, QueryVector: qv, TopK: topK, Index: s.vindex()})
+	fetch := topK
+	if s.Reranker != nil {
+		of := s.Overfetch
+		if of <= 0 {
+			of = 3
+		}
+		fetch = topK * of
+	}
+	hits, err := db.HybridSearch(ctx, s.DB, db.SearchOpts{Query: query, QueryVector: qv, TopK: fetch, Index: s.vindex()})
+	if err != nil {
+		return nil, err
+	}
+	if s.Reranker == nil || len(hits) <= 1 {
+		return clampHits(hits, topK), nil
+	}
+	cands := make([]rerank.Candidate, len(hits))
+	for i, h := range hits {
+		cands[i] = rerank.Candidate{Text: h.Snippet, Score: h.Score}
+	}
+	order, rerr := s.Reranker.Rerank(ctx, query, cands)
+	if rerr != nil {
+		return clampHits(hits, topK), nil // best-effort fallback to fused order
+	}
+	return clampHits(reorder(hits, order), topK), nil
+}
+
+// reorder applies an index permutation defensively: valid unseen indices first,
+// then any leftover hits in original order (robust to partial/garbage input).
+func reorder(hits []db.ChunkHit, order []int) []db.ChunkHit {
+	out := make([]db.ChunkHit, 0, len(hits))
+	seen := make([]bool, len(hits))
+	for _, idx := range order {
+		if idx < 0 || idx >= len(hits) || seen[idx] {
+			continue
+		}
+		seen[idx] = true
+		out = append(out, hits[idx])
+	}
+	for i, h := range hits {
+		if !seen[i] {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
+// clampHits caps the slice to topK (topK ≤ 0 ⇒ unchanged).
+func clampHits(hits []db.ChunkHit, topK int) []db.ChunkHit {
+	if topK > 0 && len(hits) > topK {
+		return hits[:topK]
+	}
+	return hits
 }
 
 // Retrieved is a token-bounded context block assembled from search hits, the
