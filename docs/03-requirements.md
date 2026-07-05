@@ -139,11 +139,12 @@ this slice.
 | FR-129 | S | **Mention threshold.** An entity's page is materialised only once it appears in ≥ `mentionThreshold` distinct notes (default 2); pending mentions are held in `automation_state` and backfilled when the page is created. Reprocessing a note never double-counts (dedup within pending and against the block). |
 | FR-130 | S | **Entity pages & `axon:mentions` block.** Entity pages live under `Entities/People/` and `Entities/Projects/` (lazily created); each maintains an `axon:mentions` managed block of `- [[note]] (date)` lines appended wikilink-safely (`vault.Create`/`vault.Patch`, deduped). Human prose outside the block is never touched and there is no delete (cardinal rule 2). |
 
-### Ask your vault *(in build — roadmap 1.1 slice A1)*
+### 1.1 — Ask, connect, anticipate *(built 2026-07-05/06)*
 
-FR-108…FR-110 trace to `docs/14-roadmap-1.1.md` (Phase A) and the spec in
-`docs/superpowers/specs/2026-07-05-ask-design.md`. Priorities are relative to
-this slice.
+FR-108…FR-120 and FR-131…FR-133 are the **1.1** contract (Phases A–D of
+`docs/14-roadmap-1.1.md`), shipped alongside FR-121…FR-130 in the table above.
+Each traces to its slice spec under `docs/superpowers/specs/`. Priorities are
+relative to their slice.
 
 | ID | Pri | Requirement |
 |----|-----|-------------|
@@ -160,6 +161,9 @@ this slice.
 | FR-118 | S | **Memory contradiction detection (roadmap 1.1 C1).** The `memory-distill` automation detects, within its existing single synthesis call, when a newly-distilled durable fact contradicts an existing `axon:memory` entry. The current entries are supplied to the model numbered; a contradiction is returned as `CONFLICT <n>: <new statement>` and resolved back to the exact stored entry by number. No additional model call is made (cardinal rule 1). Spec in `docs/superpowers/specs/2026-07-05-memory-consolidation-design.md`. |
 | FR-119 | S | **Reconciliation proposal & supersede-on-accept.** A detected contradiction is written to the review queue as a `reconcile` item carrying the new statement and the entry it supersedes; the new fact is **not** added to memory until accepted (no silent coexistence). Accepting supersedes the old entry with the new one; dismissing keeps the old and drops the new — every write wikilink-safe into the `axon:memory` managed block (cardinal rule 2, no delete). |
 | FR-120 | S | **Tombstone audit trail & no re-nag.** Supersession tombstones the old entry (struck and dated `~~…~~ (superseded YYYY-MM-DD)`, never deleted) so memory history stays auditable. The same contradiction is proposed at most once (proposal memory, FR-102 helpers); if the old entry is gone at accept time the new fact is still added and the resolution reports it was not struck. |
+| FR-131 | S | **Project pulse (roadmap 1.1 C3).** A weekly `project-pulse` automation reads the notes under `01-Projects/` and the stated `- goals:` from `02-Areas/Profile/USER.md`, and writes deterministic per-project facts — last-touched, active/`⚠ stale` (≥3 weeks untouched), and any linked goal — into an `axon:pulse` managed block in `01-Projects/Project Pulse.md` (created with a human preamble it never touches; cardinal rule 2). Change-gated on the ISO-week ∨ the project set / update-stamps / goals; disabled by default. Spec in `docs/superpowers/specs/2026-07-05-project-pulse-design.md`. |
+| FR-132 | S | **Budget-degrading pulse narrative.** One routine-tier chokepoint call (local-routable, ADR-015) turns the facts plus bounded per-project excerpts (retrieve-don't-dump) into a 3–6 sentence pulse of progress / stalls / next actions, grounded strictly in the supplied text as data (NFR-05). Under budget denial the narrative degrades to a facts-only block (`_(pulse narrative skipped: budget)_`) — the pulse never fails on budget pressure. |
+| FR-133 | S | **Stale-project nudges.** Each project untouched for ≥3 weeks appends one `- [ ]` line to `.axon/review-queue.md` (`pulse: [[project]] untouched N weeks — review or archive?`), at most once ever (proposal memory keyed by path — never re-nags weekly). `--dry-run` reports both the pulse and the nudges without writing. |
 
 ### Session memory *(built 2026-07-04)*
 

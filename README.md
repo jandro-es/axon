@@ -29,10 +29,11 @@ vault stays plain Markdown; everything else is derived and disposable.
 - **Ask your vault**: `axon ask` answers questions from your notes only —
   grounded or silent, with `[[wikilink]]` citations enforced in code.
 
-**The vault maintains itself.** Fifteen scheduled automations — inbox triage,
+**The vault maintains itself.** Eighteen scheduled automations — inbox triage,
 daily log, note compaction, link suggestions, a morning **briefing**, a weekly
 **resurfacer** that reconnects dormant notes to what you're working on now, a
-weekly knowledge digest, memory distillation, and more. They run on *new
+weekly knowledge digest, memory distillation, **entity pages**, a weekly
+**project pulse**, standing **research questions**, and more. They run on *new
 material* (content-hash gated), never on a clock for its own sake, and
 everything they propose lands in a review queue you resolve with one click on
 the dashboard's **Review** tab. Turn any of them off; a system with all
@@ -186,13 +187,13 @@ memory injection entirely. `axon profiles` shows the isolation surface.
 | [Requirements](docs/03-requirements.md) | The numbered contract: FR-01…107, NFR-01…14. |
 | [Data model & config](docs/04-data-model-and-config.md) | Vault layout, DB schema, frontmatter, full config reference. |
 | [Knowledge ingestion](docs/05-component-knowledge-ingestion.md) | URL/PDF/capture/feeds → Markdown → chunk → embed → index. |
-| [Automation engine](docs/06-component-automation-engine.md) | Scheduler, the fifteen standard automations, agentic runs. |
+| [Automation engine](docs/06-component-automation-engine.md) | Scheduler, the eighteen standard automations, agentic runs. |
 | [Context & token manager](docs/07-component-context-token-manager.md) | Counting, budgets, local routing, compaction, frugality. |
 | [Agent bridge & MCP](docs/08-component-agent-bridge-mcp.md) | MCP tools, hooks, agentic allowlists, wikilink safety. |
 | [Dashboard & observability](docs/09-component-dashboard-observability.md) | Live charts, the Review tab, the knowledge graph. |
 | [Personal memory & onboarding](docs/12-component-personal-memory-and-onboarding.md) | The identity layer, session memory, `axon onboard`. |
 | [Multi-client (Claude Desktop)](docs/13-component-multi-client-claude-desktop.md) | One MCP server, many Claude clients. |
-| [1.1 roadmap](docs/14-roadmap-1.1.md) | What's next: ask-your-vault, retrieval scale, entity intelligence, capture reach. |
+| [1.1 roadmap](docs/14-roadmap-1.1.md) | Shipped in 1.1: ask-your-vault, ANN + reranker retrieval, memory/entity/pulse intelligence, capture + OCR reach (B3 merge proposals rolls to 1.2). |
 
 Deeper design notes (vision, research, installer internals) live in
 [docs/](docs/); build conventions are in [`CLAUDE.md`](CLAUDE.md).

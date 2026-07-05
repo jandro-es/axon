@@ -90,6 +90,7 @@ profiles:
       subscriptions:     { enabled: true,  schedule: "0 * * * *",       model: routine,   budget_tokens: 60_000, catch_up: skip }
       session-distill:   { enabled: true,  schedule: "15 */2 * * *",    model: classify,  budget_tokens: 30_000, catch_up: skip }
       entity-pages:      { enabled: false, schedule: "0 9 * * 1",       model: classify,  budget_tokens: 60_000 }
+      project-pulse:     { enabled: false, schedule: "0 10 * * 1",      model: routine,   budget_tokens: 40_000 }
 
     memory:
       inject: true

@@ -49,6 +49,7 @@ flowchart TB
     MCP --> Vault
     MCP --> OLLAMA
     TOKENS --> CLAUDE
+    TOKENS -->|local tiers, ADR-015| OLLAMA
     TOKENS --> DB
     AUTO --> TOKENS
     MCP --> TOKENS

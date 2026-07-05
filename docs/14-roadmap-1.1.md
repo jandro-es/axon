@@ -1,4 +1,4 @@
-# 14 — Roadmap 1.1 *(planning only — nothing here is built)*
+# 14 — Roadmap 1.1 *(shipped 2026-07-05/06 — B3 rolls to 1.2)*
 
 1.0 built the self-maintaining vault: capture, ingestion, search, fifteen
 automations, memory, budgets, observability — the complete v1 contract
@@ -91,12 +91,15 @@ blocks — the vault grows an index of *who* and *what*, not just notes.
 **Gate:** mentions accrue wikilink-safely; human prose on entity pages is
 never touched; extraction runs on new material only (content-hash gated).
 
-### C3 — Project pulse (S) · provisional FR-120
-**Build:** a weekly automation reading `01-Projects` + USER goals; writes a
-pulse block (progress, stalls, next actions) and nudges stale projects via
-the review queue.
-**Gate:** a project untouched for N weeks produces one nudge (with proposal
-memory); pulse degrades to facts-only under budget pressure.
+### C3 — Project pulse (S) · FR-131/132/133 (no ADR) *(built)*
+**Build:** a weekly `project-pulse` automation reading `01-Projects` + USER
+goals; writes a pulse block (progress, stalls, next actions) into
+`01-Projects/Project Pulse.md` and nudges stale projects via the review queue.
+Pure composition of the Briefing (facts + degrading narrative) and Resurfacer
+(weekly cursor, review-queue nudges, proposal memory) patterns. Spec in
+`docs/superpowers/specs/2026-07-05-project-pulse-design.md`.
+**Gate:** a project untouched for ≥3 weeks produces one nudge (with proposal
+memory); pulse degrades to facts-only under budget pressure. Disabled by default.
 
 ## Phase D — Capture & ingestion reach
 
@@ -132,7 +135,11 @@ preserves today's clean "empty extraction, reported" behaviour.
 | 11 | B3 merge proposals | M | Needs its own destructive-op design pass; last. |
 
 **Release criterion:** 1.1.0 ships when **Phase A is complete plus at least two
-other phases**; remaining slices roll to 1.2 without renumbering.
+other phases**; remaining slices roll to 1.2 without renumbering. **Met and
+exceeded:** Phases A (A1–A3), B (B1–B2), C (C1–C3) and D (D1–D2) all shipped by
+2026-07-06 (FR-108…133, ADR-023…027). Only **B3** (near-duplicate merge
+proposals — needs its own destructive-op design pass) rolls to 1.2. **1.1.0 is
+cut.**
 
 ## Cross-cutting rules
 
