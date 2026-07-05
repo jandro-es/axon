@@ -100,18 +100,18 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 			var dash *dashboard.Server
 			if !noDashboard {
 				dash = dashboard.New(dashboard.Config{
-					Profile:    deps.name,
-					Host:       deps.profile.Dashboard.Host,
-					Port:       deps.profile.Dashboard.Port,
-					DB:         deps.db,
-					Manager:    svc.manager,
-					Bus:        bus,
-					Static:     web.Assets(),
-					Vault:      deps.vault,
-					Searcher:   svc.searcher,
-					Retrieval:  deps.profile.Retrieval,
+					Profile:        deps.name,
+					Host:           deps.profile.Dashboard.Host,
+					Port:           deps.profile.Dashboard.Port,
+					DB:             deps.db,
+					Manager:        svc.manager,
+					Bus:            bus,
+					Static:         web.Assets(),
+					Vault:          deps.vault,
+					Searcher:       svc.searcher,
+					Retrieval:      deps.profile.Retrieval,
 					AskEnabled:     deps.profile.Dashboard.AskAllowed(),
-				CaptureEnabled: deps.profile.Dashboard.CaptureAllowed(),
+					CaptureEnabled: deps.profile.Dashboard.CaptureAllowed(),
 					Health: func(context.Context) map[string]any {
 						h := map[string]any{
 							"embeddings_provider": deps.profile.Embeddings.Provider,
