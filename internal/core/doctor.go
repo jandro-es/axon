@@ -17,8 +17,8 @@ import (
 
 	"github.com/jandro-es/axon/internal/clients"
 	"github.com/jandro-es/axon/internal/config"
-	"github.com/jandro-es/axon/internal/embeddings"
 	"github.com/jandro-es/axon/internal/db"
+	"github.com/jandro-es/axon/internal/embeddings"
 )
 
 // CheckStatus is the outcome of a single doctor check.
