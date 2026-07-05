@@ -152,6 +152,20 @@ type IngestionConfig struct {
 	// targets. This is how pages behind SSO (Confluence, internal wikis) become
 	// ingestable: a PAT/API token in a header, not a browser session.
 	Auth []IngestAuth `yaml:"auth" validate:"dive"`
+	// OCR selects the scanned-PDF OCR provider used as a fallback when a PDF's
+	// text layer is empty: "" or "off" (default), "apple" (on-device Vision via
+	// a compiled Swift helper, macOS only), or "tesseract" (pdftoppm+tesseract).
+	OCR string `yaml:"ocr" validate:"omitempty,oneof=off apple tesseract"`
+	// OCRHelper overrides the compiled Apple OCR helper path (apple provider).
+	OCRHelper string `yaml:"ocr_helper"`
+}
+
+// OCRMode returns the configured OCR provider, defaulting to "off" when unset.
+func (c IngestionConfig) OCRMode() string {
+	if c.OCR == "" {
+		return "off"
+	}
+	return c.OCR
 }
 
 // IngestAuth is one per-domain credential for ingestion fetches. Value may be

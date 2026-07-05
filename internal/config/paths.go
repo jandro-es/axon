@@ -68,6 +68,12 @@ func DefaultAppleHelperPath() string {
 	return filepath.Join(AxonHome(), "bin", "axon-apple-embed")
 }
 
+// DefaultOCRHelperPath is where `axon init` compiles the Apple OCR helper:
+// a machine-level tool (like the embeddings helper), not per-profile.
+func DefaultOCRHelperPath() string {
+	return filepath.Join(AxonHome(), "bin", "axon-apple-ocr")
+}
+
 // AppleFoundationModel identifies the on-device Foundation Models system
 // model in ledger rows and ModelRefs (ADR-015). Versioned like the
 // embeddings identifier so a future model change is visible in the ledger.
