@@ -98,5 +98,32 @@ func TestCaptureTextOnly(t *testing.T) {
 	}
 }
 
-// io is used by the served-page tests added in Task 3.
-var _ = io.Discard
+func TestCapturePageServed(t *testing.T) {
+	srv, _, _ := captureTestServer(t, true)
+	res, err := http.Get(srv.URL + "/capture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != 200 {
+		t.Fatalf("status = %d, want 200", res.StatusCode)
+	}
+	if ct := res.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Fatalf("content-type = %q, want text/html", ct)
+	}
+	body, _ := io.ReadAll(res.Body)
+	if !strings.Contains(string(body), "/api/capture") ||
+		!strings.Contains(string(body), "X-Axon-Capture") {
+		t.Fatalf("page does not reference the guarded POST:\n%s", body)
+	}
+}
+
+func TestCapturePageDisabled404(t *testing.T) {
+	off, _, _ := captureTestServer(t, false)
+	res, err := http.Get(off.URL + "/capture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("disabled page status = %d, want 404", res.StatusCode)
+	}
+}

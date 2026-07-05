@@ -115,3 +115,52 @@ func captureLabel(url, title string) string {
 	}
 	return "note"
 }
+
+// handleCapturePage serves the same-origin capture page (ADR-024). A
+// cross-origin bookmarklet opens this URL with the payload in location.hash;
+// the page's JS reads the hash and does the guarded same-origin POST to
+// /api/capture. Because the page is same-origin with the dashboard, the guarded
+// POST succeeds; a cross-origin opener can only navigate here, not read the
+// response or forge the same-origin request.
+func (s *Server) handleCapturePage(w http.ResponseWriter, _ *http.Request) {
+	if !s.cfg.CaptureEnabled || s.cfg.Vault == nil {
+		http.Error(w, "capture is disabled for this profile", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write([]byte(capturePageHTML))
+}
+
+// capturePageHTML is a self-contained page: no external assets, no inline
+// interpolation of request data (the payload comes from location.hash at
+// runtime and is treated as data, never executed — NFR-05).
+const capturePageHTML = `<!doctype html><meta charset="utf-8">
+<title>AXON capture</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font:15px system-ui;margin:3rem auto;max-width:32rem;color:#222;background:#fafafa;text-align:center}
+.ok{color:#137333}.err{color:#c5221f;white-space:pre-wrap;text-align:left}</style>
+<h1>AXON capture</h1>
+<p id="status">Capturing…</p>
+<script>
+(function () {
+  var status = document.getElementById('status');
+  var h = new URLSearchParams((location.hash || '').replace(/^#/, ''));
+  var payload = { url: h.get('u') || '', title: h.get('t') || '', text: h.get('s') || '' };
+  if (!payload.url && !payload.title && !payload.text) {
+    status.className = 'err'; status.textContent = 'Nothing to capture.'; return;
+  }
+  fetch('/api/capture', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Axon-Capture': '1' },
+    body: JSON.stringify(payload)
+  }).then(function (r) {
+    if (r.ok) return r.json();
+    return r.text().then(function (t) { throw new Error(t || ('HTTP ' + r.status)); });
+  }).then(function (j) {
+    status.className = 'ok'; status.textContent = 'Captured ✓ ' + (j.path || '');
+    setTimeout(function () { window.close(); }, 800);
+  }).catch(function (e) {
+    status.className = 'err'; status.textContent = 'Capture failed: ' + e.message;
+  });
+})();
+</script>`
