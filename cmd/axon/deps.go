@@ -14,6 +14,7 @@ import (
 	"github.com/jandro-es/axon/internal/events"
 	"github.com/jandro-es/axon/internal/ingestion"
 	"github.com/jandro-es/axon/internal/mcp"
+	"github.com/jandro-es/axon/internal/rerank"
 	"github.com/jandro-es/axon/internal/search"
 	"github.com/jandro-es/axon/internal/tokens"
 	"github.com/jandro-es/axon/internal/vault"
@@ -156,7 +157,12 @@ type services struct {
 // adapter), search, a deterministic-enricher pipeline and the automation engine.
 // Requires the database to be open.
 func (d *profileDeps) buildServices(bus *events.Bus) services {
-	searcher := search.New(d.db, d.embedder).Configure(d.profile.Retrieval)
+	rerankHost := d.profile.Embeddings.Host
+	if rerankHost == "" {
+		rerankHost = embeddings.DefaultOllamaHost
+	}
+	reranker, _ := rerank.RerankerFor(d.profile.Retrieval.Rerank, rerankHost) // off/misconfig → nil; doctor surfaces it
+	searcher := search.New(d.db, d.embedder).Configure(d.profile.Retrieval).WithReranker(reranker, d.profile.Retrieval.RerankOverfetchOr())
 	mgr := tokens.NewWithRouter(d.db, d.agentRouter(), searcher, bus, managerConfig(d.name, d.profile, d.cfg))
 	ocr, _ := ingestion.OCRFor(d.profile.Ingestion, runtime.GOOS) // off/misconfig → nil; doctor surfaces it
 	pipeline := &ingestion.Pipeline{

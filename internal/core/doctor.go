@@ -13,9 +13,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/jandro-es/axon/internal/clients"
 	"github.com/jandro-es/axon/internal/config"
+	"github.com/jandro-es/axon/internal/embeddings"
 	"github.com/jandro-es/axon/internal/db"
 )
 
@@ -100,6 +102,10 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 			if p.Ingestion.OCRMode() != "off" {
 				checks = append(checks, ocrCheck(p))
 			}
+			// 4d. Local reranker prerequisite, only when retrieval.rerank is set.
+			if p.Retrieval.RerankMode() != "off" {
+				checks = append(checks, rerankCheck(p))
+			}
 			embChecked = true
 		}
 	}
@@ -178,6 +184,32 @@ func ocrCheck(p config.Profile) Check {
 	default:
 		return Check{name, StatusOK, "OCR off"}
 	}
+}
+
+// rerankCheck verifies the configured local reranker's prerequisite: a
+// reachable Ollama server with the model pulled. Read-only and tolerant — a
+// missing prerequisite or malformed value warns (rerank silently falls back to
+// the fused order), never fails doctor.
+func rerankCheck(p config.Profile) Check {
+	const name = "rerank"
+	mode := p.Retrieval.RerankMode()
+	if !strings.HasPrefix(mode, "ollama:") {
+		return Check{name, StatusWarn, fmt.Sprintf("retrieval.rerank %q not recognised — use off or ollama:<model>", mode)}
+	}
+	model := strings.TrimPrefix(mode, "ollama:")
+	host := p.Embeddings.Host
+	if host == "" {
+		host = embeddings.DefaultOllamaHost
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if !ollamaReachable(ctx, host) {
+		return Check{name, StatusWarn, fmt.Sprintf("reranker Ollama not reachable at %s — start `ollama serve` (rerank falls back to fused order)", host)}
+	}
+	if !ollamaModelPresent(ctx, host, model) {
+		return Check{name, StatusWarn, fmt.Sprintf("reranker model %q not pulled — run `ollama pull %s`", model, model)}
+	}
+	return Check{name, StatusOK, "reranker ready: " + mode}
 }
 
 // localModelsCheck reports the state of any locally-routed model tier
