@@ -44,7 +44,7 @@ func (t *TesseractOCR) Recognize(ctx context.Context, pdf []byte) (string, error
 	if err != nil {
 		return "", err
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	pdfPath := filepath.Join(dir, "in.pdf")
 	if err := os.WriteFile(pdfPath, pdf, 0o600); err != nil {
 		return "", err

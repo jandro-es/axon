@@ -39,7 +39,7 @@ func (a *AppleOCR) Recognize(ctx context.Context, pdf []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(f.Name())
+	defer func() { _ = os.Remove(f.Name()) }()
 	if _, err := f.Write(pdf); err != nil {
 		f.Close()
 		return "", err
