@@ -32,8 +32,12 @@ tokens on a question its retrieval cannot support.
   fused `ChunkHit.Score` (`internal/db/search.go:26`).
 - The chokepoint call shape is `tokens.AgentCall{Operation, ModelKey, System,
   Messages, ValidateOutput}` via `Manager.Run` (cardinal rule 1); redaction
-  applies inside the manager; a validation error triggers one retry at the
-  chokepoint before failing.
+  applies inside the manager; a validation failure on the Claude path fails
+  the call immediately (one failed, ledgered run — only the local-model path
+  retries once, ADR-015). Over-window calls follow the FR-43 downgrade
+  ladder: a starved budget downgrades the tier and still answers; true
+  defer/deny (per-call caps, exhausted cheapest tier) maps to the budget
+  refusal.
 - `ingestion.NeutralizeDelimiters` is the standing data-fencing helper;
   fetched/file content is data, not instructions (NFR-05).
 - Dependency rule: `ask` may import `search`, `tokens`, `config`,
@@ -88,7 +92,7 @@ Flow:
    - Valid answer → `Answer{Text, Citations (resolved, deduped), Sources}`.
    - `NOT_FOUND` → `Refused: true, Reason: "the retrieved notes don't answer
      this"`, Sources listed (success, tokens ledgered).
-   - Validation still failing after the chokepoint retry → `Refused: true,
+   - Validation failure → `Refused: true,
      Reason: "no grounded answer (model output failed citation validation)"`,
      Sources listed. Not a Go error: the caller renders it; the failed run is
      ledgered by the chokepoint as usual.

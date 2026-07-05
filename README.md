@@ -26,6 +26,8 @@ vault stays plain Markdown; everything else is derived and disposable.
   through the same pipeline, capped and deduplicated.
 - **Hybrid search** (FTS5 lexical + vector semantic) over all of it, from the
   CLI or any Claude client.
+- **Ask your vault**: `axon ask` answers questions from your notes only —
+  grounded or silent, with `[[wikilink]]` citations enforced in code.
 
 **The vault maintains itself.** Fifteen scheduled automations — inbox triage,
 daily log, note compaction, link suggestions, a morning **briefing**, a weekly
@@ -125,7 +127,7 @@ axon uninstall   # remove daemon + binary; --purge also removes ~/.axon. Vault u
 Full details — flags, Windows, moving your vault, troubleshooting — in
 [INSTALL.md](INSTALL.md) and the [Guide](docs/GUIDE.md). Daily commands live
 in the Guide's [command reference](docs/GUIDE.md#15-command-reference); the
-short list is `ingest`, `search`, `subscribe`, `run`, `status`, `configure`.
+short list is `ask`, `ingest`, `search`, `subscribe`, `run`, `status`, `configure`.
 
 ## Architecture
 

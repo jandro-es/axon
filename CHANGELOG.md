@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **`axon ask` (FR-108…FR-110, roadmap 1.1 A1)** — grounded-or-silent answers
+  from the vault: hybrid retrieval builds a bounded context, a deterministic
+  gate refuses unanswerable questions for free, one synthesis-tier call
+  answers with `[[wikilink]]` citations, and a code-enforced contract
+  guarantees every citation resolves to a retrieved note — hallucinated or
+  missing citations surface as refusals listing the sources.
+
 ## [1.0.0] — 2026-07-04
 
 The v1 contract is complete: every requirement in FR-01…FR-107 / NFR-01…NFR-14

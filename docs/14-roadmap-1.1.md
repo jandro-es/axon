@@ -16,7 +16,7 @@ acceptance gate passes.
 
 ## Phase A — Ask your vault *(the headline; build first)*
 
-### A1 — `axon ask` (M) · provisional FR-108…110
+### A1 — `axon ask` (M) · FR-108…110 *(built)*
 **Build:** retrieval-augmented answers with `[[wikilink]]` citations. Retrieve
 via the existing hybrid `search` facade; build a bounded context from
 `retrieval.top_k` / `max_context_tokens`; one synthesis-tier chokepoint call;
