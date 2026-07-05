@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/jandro-es/axon/internal/agent"
 )
 
 func TestNormalizeEntity(t *testing.T) {
@@ -124,5 +126,77 @@ func TestPendingEntitiesRoundtrip(t *testing.T) {
 	out := loadPendingEntities(ctx, rc)
 	if len(out) != 1 || out["person|jane doe"].Name != "Jane Doe" || len(out["person|jane doe"].Sources) != 2 {
 		t.Fatalf("roundtrip = %+v", out)
+	}
+}
+
+func TestEntityPagesMaterializesAtThreshold(t *testing.T) {
+	ctx := context.Background()
+	rc, fake := newRC(t, map[string]string{
+		"Daily/2026-06-28.md":    "---\ntype: daily\nupdated: 2026-06-28\n---\nMet Jane Doe about the roadmap.\n",
+		"03-Resources/mtg.md":    "---\ntype: note\nupdated: 2026-06-28\n---\nJane Doe reviewed the plan.\n",
+		"Entities/People/old.md": "---\ntype: entity\nupdated: 2026-06-28\n---\nshould NOT be scanned\n",
+	})
+	mustReindex(t, rc)
+	fake.RespondFn = func(r agent.Request) (*agent.Response, error) {
+		return &agent.Response{Text: `{"people":["Jane Doe"],"projects":[]}`, Model: r.Model, Usage: agent.Usage{InputTokens: 40, OutputTokens: 8}}, nil
+	}
+
+	res, err := EntityPages{}.Run(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res.Summary, "1 created") {
+		t.Errorf("summary = %q", res.Summary)
+	}
+	page := "Entities/People/Jane Doe.md"
+	if !rc.Vault.Exists(page) {
+		t.Fatal("entity page not created at threshold")
+	}
+	n, _ := rc.Vault.Read(ctx, page)
+	if !strings.Contains(n.Body, "[[Daily/2026-06-28]]") || !strings.Contains(n.Body, "[[03-Resources/mtg]]") {
+		t.Fatalf("both mentions not present:\n%s", n.Body)
+	}
+	if strings.Contains(n.Body, "[[Entities/People/old]]") {
+		t.Fatal("Entities/ page was scanned (self-loop)")
+	}
+}
+
+func TestEntityPagesBelowThresholdNoPage(t *testing.T) {
+	ctx := context.Background()
+	rc, fake := newRC(t, map[string]string{
+		"Daily/2026-06-28.md": "---\ntype: daily\nupdated: 2026-06-28\n---\nQuick call with Jane Doe.\n",
+	})
+	mustReindex(t, rc)
+	fake.RespondFn = func(r agent.Request) (*agent.Response, error) {
+		return &agent.Response{Text: `{"people":["Jane Doe"],"projects":[]}`, Model: r.Model, Usage: agent.Usage{InputTokens: 30, OutputTokens: 6}}, nil
+	}
+	if _, err := (EntityPages{}).Run(ctx, rc); err != nil {
+		t.Fatal(err)
+	}
+	if rc.Vault.Exists("Entities/People/Jane Doe.md") {
+		t.Fatal("one mention should stay pending, no page")
+	}
+}
+
+func TestEntityPagesDryRunWritesNothing(t *testing.T) {
+	ctx := context.Background()
+	rc, fake := newRC(t, map[string]string{
+		"Daily/2026-06-28.md": "---\ntype: daily\nupdated: 2026-06-28\n---\nJane Doe and Phoenix.\n",
+		"03-Resources/b.md":   "---\ntype: note\nupdated: 2026-06-28\n---\nJane Doe again.\n",
+	})
+	mustReindex(t, rc)
+	rc.DryRun = true
+	fake.RespondFn = func(r agent.Request) (*agent.Response, error) {
+		return &agent.Response{Text: `{"people":["Jane Doe"],"projects":[]}`, Model: r.Model, Usage: agent.Usage{InputTokens: 20, OutputTokens: 4}}, nil
+	}
+	res, err := EntityPages{}.Run(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(res.Summary, "would") {
+		t.Errorf("dry-run summary = %q", res.Summary)
+	}
+	if rc.Vault.Exists("Entities/People/Jane Doe.md") {
+		t.Fatal("dry-run must not create pages")
 	}
 }
