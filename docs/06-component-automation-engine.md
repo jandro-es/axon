@@ -75,6 +75,17 @@ Writes the morning `axon:briefing` block into `Daily/<date>.md`, at most once pe
 ### resurfacer (weekly, no model — ADR-018)
 Proposes review-queue connections between recently-touched notes (≤7 days) and dormant ones (≥90 days) by mean-chunk-vector cosine (≥0.75; primitives shared with the dashboard graph). Persistent proposal memory in `automation_state` means a pair is never re-proposed. The spaced-serendipity half of the proactive layer.
 
+### research-questions (weekly, 1.1 A3 — off by default)
+Answers user-authored standing questions from `03-Resources/Research Questions.md` (top-level `?` items in the human region) — one grounded `ask` per question through the chokepoint — into an `axon:answers` block with `[[wikilink]]` citations and a confidence marker. Change-gated on the question hash ∨ new sources this week; unanswered questions persist.
+
+### entity-pages (weekly, classify-tier, 1.1 C2 — off by default)
+Extracts named people/projects from notes updated in the lookback window (one structured classify call each, local-routable) and maintains `Entities/People|Projects/` index pages, appending `- [[note]] (date)` lines to an `axon:mentions` block once an entity clears the ≥2-note threshold. Pending mentions live in `automation_state`; human prose is never touched.
+
+### project-pulse (weekly, 1.1 C3 — off by default)
+Reads `01-Projects/` + the USER goals and writes an `axon:pulse` block in `01-Projects/Project Pulse.md`: deterministic per-project facts (last-touched, active/stale, linked goal) plus one budget-degrading routine-tier narrative (progress/stalls/next). Nudges projects untouched ≥3 weeks to the review queue once (proposal memory). Composes the briefing + resurfacer patterns.
+
+> This is an illustrative tour, not the full catalog — the authoritative, always-current list (including `capture`, `subscriptions`, `session-distill`, `memory-distill`) is the `purposes` map surfaced by `axon automations`.
+
 ## 4. Agent adapter — Claude Code (`claude -p`) is the default path
 
 Automations reach Claude by shelling out to Claude Code, authenticated by the profile's subscription/enterprise login:
