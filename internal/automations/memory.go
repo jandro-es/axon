@@ -3,6 +3,8 @@ package automations
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -159,6 +161,78 @@ func ensureCompactTag(line, date string) string {
 	line = strings.TrimSpace(line)
 	line = strings.TrimPrefix(line, "- ")
 	return fmt.Sprintf("- %s — %s (source: compaction)", date, line)
+}
+
+// conflict pairs a newly-distilled statement with the exact existing memory
+// entry text it contradicts.
+type conflict struct{ New, Old string }
+
+// conflictLineRe matches a "CONFLICT <n>: <new statement>" line the distil
+// model emits when a new fact contradicts existing memory entry number n.
+var conflictLineRe = regexp.MustCompile(`^CONFLICT\s+(\d+)\s*:\s*(.+)$`)
+
+// parseDistillOutput splits a distil reply into plain new facts and
+// contradiction pairs. existing is the current memory entry texts (bare facts,
+// newest first) used to resolve "CONFLICT <n>" to the exact old text. A new
+// fact whose text also appears as a conflict's New is dropped from newFacts (it
+// is handled as a reconciliation, not a silent add). Out-of-range or
+// unparseable CONFLICT lines are ignored.
+func parseDistillOutput(text string, existing []string) (newFacts []string, conflicts []conflict) {
+	isConflict := map[string]bool{}
+	for line := range strings.SplitSeq(text, "\n") {
+		l := strings.TrimSpace(line)
+		m := conflictLineRe.FindStringSubmatch(l)
+		if m == nil {
+			continue
+		}
+		n, err := strconv.Atoi(m[1])
+		if err != nil || n < 1 || n > len(existing) {
+			continue
+		}
+		stmt := strings.TrimSpace(m[2])
+		if stmt == "" {
+			continue
+		}
+		conflicts = append(conflicts, conflict{New: stmt, Old: existing[n-1]})
+		isConflict[stmt] = true
+	}
+	for line := range strings.SplitSeq(text, "\n") {
+		l := strings.TrimSpace(line)
+		if l == "" || strings.EqualFold(l, "NONE") || conflictLineRe.MatchString(l) {
+			continue
+		}
+		if !strings.HasPrefix(l, "- ") && !strings.HasPrefix(l, "* ") {
+			continue
+		}
+		fact := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(l, "- "), "* "))
+		if fact == "" || isConflict[fact] {
+			continue
+		}
+		newFacts = append(newFacts, fact)
+	}
+	return newFacts, conflicts
+}
+
+// memoryEntryText extracts the bare fact from a formatted memory entry line
+// ("- DATE — text [kind] (source: …)"), dropping the date prefix and trailing
+// metadata so a distilled statement can be matched against it. It is the
+// inverse view of identity.FormatEntry.
+func memoryEntryText(line string) string {
+	s := strings.TrimSpace(line)
+	s = strings.TrimPrefix(s, "- ")
+	if i := strings.Index(s, " — "); i >= 0 {
+		s = s[i+len(" — "):]
+	}
+	if i := strings.LastIndex(s, " (source:"); i >= 0 {
+		s = s[:i]
+	}
+	s = strings.TrimSpace(s)
+	if strings.HasSuffix(s, "]") {
+		if i := strings.LastIndex(s, " ["); i >= 0 {
+			s = s[:i]
+		}
+	}
+	return strings.TrimSpace(s)
 }
 
 // parseMemoryProposals turns a model reply into clean memory entry texts (the
