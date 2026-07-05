@@ -306,6 +306,41 @@ type LimitsConfig struct {
 type RetrievalConfig struct {
 	TopK             int     `yaml:"top_k" validate:"required,min=1"`
 	MaxContextTokens FlexInt `yaml:"max_context_tokens" validate:"required"`
+	// Index selects the vector-search backend (ADR-025): "brute" (exact full
+	// scan, the default) or "ann" (IVF-flat approximate, opt-in).
+	Index string    `yaml:"index,omitempty" validate:"omitempty,oneof=brute ann"`
+	ANN   ANNConfig `yaml:"ann,omitempty"`
+}
+
+// ANNConfig tunes the IVF-flat index (ADR-025). Zero values take documented
+// defaults via the accessors below.
+type ANNConfig struct {
+	Threshold int `yaml:"threshold,omitempty"` // min vectors before ann engages
+	NProbe    int `yaml:"nprobe,omitempty"`    // clusters probed per query
+}
+
+// IndexMode returns the configured vector backend, defaulting to "brute".
+func (r RetrievalConfig) IndexMode() string {
+	if r.Index == "" {
+		return "brute"
+	}
+	return r.Index
+}
+
+// ThresholdOr returns the ann engage-threshold, defaulting to 10000 vectors.
+func (a ANNConfig) ThresholdOr() int {
+	if a.Threshold <= 0 {
+		return 10000
+	}
+	return a.Threshold
+}
+
+// NProbeOr returns clusters probed per query, defaulting to 8.
+func (a ANNConfig) NProbeOr() int {
+	if a.NProbe <= 0 {
+		return 8
+	}
+	return a.NProbe
 }
 
 // PolicyConfig is the per-profile safety envelope, enforced in code (not by
