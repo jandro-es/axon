@@ -127,3 +127,18 @@ func TestCapturePageDisabled404(t *testing.T) {
 		t.Fatalf("disabled page status = %d, want 404", res.StatusCode)
 	}
 }
+
+func TestHealthReportsCaptureEnabled(t *testing.T) {
+	srv, _, _ := captureTestServer(t, true)
+	res, err := http.Get(srv.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var h map[string]any
+	if err := json.NewDecoder(res.Body).Decode(&h); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := h["capture_enabled"].(bool); !ok || !v {
+		t.Fatalf("health capture_enabled = %v (ok=%v), want true", h["capture_enabled"], ok)
+	}
+}

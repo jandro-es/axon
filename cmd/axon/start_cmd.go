@@ -110,7 +110,8 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 					Vault:      deps.vault,
 					Searcher:   svc.searcher,
 					Retrieval:  deps.profile.Retrieval,
-					AskEnabled: deps.profile.Dashboard.AskAllowed(),
+					AskEnabled:     deps.profile.Dashboard.AskAllowed(),
+				CaptureEnabled: deps.profile.Dashboard.CaptureAllowed(),
 					Health: func(context.Context) map[string]any {
 						h := map[string]any{
 							"embeddings_provider": deps.profile.Embeddings.Provider,
