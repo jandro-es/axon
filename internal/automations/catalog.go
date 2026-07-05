@@ -26,6 +26,7 @@ var purposes = map[string]string{
 	"subscriptions":      "Polls configured RSS/Atom feeds hourly and ingests new items through the pipeline (subscribe-from-now, per-tick caps). Enrichment optional via subscriptions.enrich.",
 	"session-distill":    "Distills finished vault sessions into durable MEMORY entries (decisions, lessons, preferences) — one classify-tier call per session, once ever. Gated by memory.capture_sessions.",
 	"research-questions": "Weekly: answers standing questions in 03-Resources/Research Questions.md from the vault, grounded, into an axon:answers block. Disabled by default.",
+	"entity-pages":       "Extracts named people and projects from new notes into auto-maintained Entities/ index pages with wikilink-safe mention lists. Disabled by default.",
 }
 
 // Purpose returns the human description for an automation, or a generic fallback.

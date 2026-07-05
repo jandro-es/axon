@@ -84,7 +84,7 @@ single synthesis call (no extra spend). Spec in
 **Gate:** a seeded contradiction produces one proposal; accepting rewrites the
 managed block only (tombstone + new entry); dismissing keeps the old entry.
 
-### C2 — Entity pages (M) · provisional FR-118…119, ADR-025
+### C2 — Entity pages (M) · FR-128/129/130 (no ADR) *(built)*
 **Build:** classify-tier (local-routable) extraction of people/projects from
 new notes into auto-maintained entity notes with `axon:mentions` managed
 blocks — the vault grows an index of *who* and *what*, not just notes.
