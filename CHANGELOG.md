@@ -8,6 +8,14 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **Pluggable ANN vector index (FR-113…FR-115, ADR-025)** — a `db.VectorIndex`
+  seam with an in-house IVF-flat approximate index behind `retrieval.index: ann`
+  (default `brute`, unchanged). Deterministic spherical k-means clusters vectors
+  into an in-file `vec_centroids` table + `vec_chunks.centroid` column; queries
+  probe the `nprobe` nearest lists plus a NULL overflow. Auto-falls back to exact
+  brute below `retrieval.ann.threshold` (default 10 000) and is bit-identical to
+  brute at `nprobe ≥ k`. Rebuilt by `axon reindex`; `axon doctor` advises when to
+  enable it. Single-file SQLite promise intact — no server, no new dependency.
 - **Browser capture endpoint (FR-121…FR-122, ADR-024)** — `POST /api/capture`
   and a served same-origin `/capture` page drop a URL/selection into
   `00-Inbox/` for the `capture` automation to ingest — guarded like review/ask
