@@ -60,6 +60,7 @@ profiles:
       host: "127.0.0.1"                       # localhost only — never bind to 0.0.0.0
       port: 7777
       # ask_enabled: true                     # dashboard Ask panel / POST /api/ask (ADR-023); set false to forbid browser-triggered token spend
+      # capture_enabled: true                 # browser capture: POST /api/capture + served /capture page (ADR-024); set false to forbid browser vault writes
 
     embeddings:
       provider: ollama                        # ollama | apple

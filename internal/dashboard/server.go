@@ -46,6 +46,9 @@ type Config struct {
 	Searcher   *search.Searcher
 	Retrieval  config.RetrievalConfig
 	AskEnabled bool
+	// CaptureEnabled + Vault power POST /api/capture and GET /capture (ADR-024).
+	// A nil Vault or CaptureEnabled=false disables both (404).
+	CaptureEnabled bool
 }
 
 // Server is the dashboard HTTP server.
@@ -83,6 +86,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/review", s.jsonHandler(s.dataReview))
 	mux.HandleFunc("POST /api/review/action", s.handleReviewAction)
 	mux.HandleFunc("POST /api/ask", s.handleAsk)
+	mux.HandleFunc("POST /api/capture", s.handleCapture)
+	mux.HandleFunc("GET /capture", s.handleCapturePage)
 	mux.HandleFunc("GET /api/export", s.handleExport)
 	mux.Handle("/", s.staticHandler())
 	return s.guardHost(mux)

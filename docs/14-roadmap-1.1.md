@@ -97,7 +97,7 @@ memory); pulse degrades to facts-only under budget pressure.
 
 ## Phase D — Capture & ingestion reach
 
-### D1 — Localhost capture endpoint + bookmarklet/Shortcuts (S) · provisional FR-121…122
+### D1 — Localhost capture endpoint + bookmarklet/Shortcuts (S) · FR-121…122, ADR-024 *(built)*
 **Build:** `POST /api/capture` on the dashboard (same guard pattern as review
 actions; covered by the ADR-023 surface extension from A2), dropping items
 into `00-Inbox/` where the **existing capture automation** takes over —

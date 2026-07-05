@@ -8,6 +8,13 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **Browser capture endpoint (FR-121…FR-122, ADR-024)** — `POST /api/capture`
+  and a served same-origin `/capture` page drop a URL/selection into
+  `00-Inbox/` for the `capture` automation to ingest — guarded like review/ask
+  actions (loopback + Host guard + JSON content type + `X-Axon-Capture`
+  preflight header), gated by a new `dashboard.capture_enabled` kill-switch
+  (default on), and making no model call. Ships a bookmarklet + macOS Shortcuts
+  recipe (see GUIDE §6).
 - **`vault_ask` + dashboard Ask panel (FR-111…FR-112, ADR-023)** — the
   grounded `ask` engine on two more surfaces: a `vault_ask` MCP tool (Claude
   Code + Desktop) and a dashboard **Ask** panel backed by `POST /api/ask`.

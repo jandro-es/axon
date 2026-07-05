@@ -398,6 +398,43 @@ A typical loop:
    the weekly `resurfacer` proposes connections between what you're working on
    now and dormant notes that relate to it.
 
+### Capture from anywhere (browser + Shortcuts)
+
+With the dashboard running (`dashboard.capture_enabled` is on by default), you
+can drop a page or selection straight into your inbox. AXON writes it to
+`00-Inbox/` and the `capture` automation ingests it on its next tick — no model
+call happens at capture time.
+
+**Bookmarklet.** Create a new bookmark with this as the URL (adjust the port if
+you changed `dashboard.port`). Clicking it on any page opens a small AXON tab
+that captures the URL, title, and any selected text, then closes itself:
+
+```
+javascript:(function(){var p=7777;window.open('http://127.0.0.1:'+p+'/capture#u='+encodeURIComponent(location.href)+'&t='+encodeURIComponent(document.title)+'&s='+encodeURIComponent((''+getSelection()).slice(0,2000)));})()
+```
+
+The bookmarklet opens AXON's own `/capture` page, which performs the actual
+guarded request same-origin — an arbitrary web page cannot POST to the endpoint
+itself (the guard requires a same-origin request carrying a custom header).
+
+**macOS Shortcuts / curl.** For a share-sheet Shortcut, add a *Get Contents of
+URL* action:
+
+- URL: `http://127.0.0.1:7777/api/capture`
+- Method: `POST`
+- Headers: `Content-Type: application/json`, `X-Axon-Capture: 1`
+- Request Body (JSON): `{ "url": <Shortcut Input> }`
+
+The same request from a terminal:
+
+```bash
+curl -sS http://127.0.0.1:7777/api/capture \
+  -H 'Content-Type: application/json' -H 'X-Axon-Capture: 1' \
+  -d '{"url":"https://example.com/article","title":"Something to read"}'
+```
+
+Set `dashboard.capture_enabled: false` to turn the endpoint off entirely.
+
 ---
 
 ## 7. Knowledge ingestion & search

@@ -248,10 +248,16 @@ type DashboardConfig struct {
 	// AskEnabled gates the browser-triggered ask endpoint (ADR-023). Pointer
 	// default-ON: unset = enabled; set false to forbid dashboard token spend.
 	AskEnabled *bool `yaml:"ask_enabled,omitempty"`
+	// CaptureEnabled gates the browser capture endpoint (ADR-024). Pointer
+	// default-ON: unset = enabled; set false to forbid browser vault writes.
+	CaptureEnabled *bool `yaml:"capture_enabled,omitempty"`
 }
 
 // AskAllowed reports whether the dashboard Ask endpoint is enabled (default true).
 func (d DashboardConfig) AskAllowed() bool { return d.AskEnabled == nil || *d.AskEnabled }
+
+// CaptureAllowed reports whether the browser capture endpoint is enabled (default true).
+func (d DashboardConfig) CaptureAllowed() bool { return d.CaptureEnabled == nil || *d.CaptureEnabled }
 
 // EmbeddingsConfig configures the local embedding provider. dim MUST match the
 // model's output dimension; changing the model or provider forces a full
