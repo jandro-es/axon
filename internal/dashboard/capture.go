@@ -102,7 +102,7 @@ func captureBody(url, title, text string, now time.Time) string {
 		b.WriteString(text)
 		b.WriteString("\n")
 	}
-	b.WriteString(fmt.Sprintf("\n<!-- captured %s via /api/capture -->\n", now.Format(time.RFC3339)))
+	fmt.Fprintf(&b, "\n<!-- captured %s via /api/capture -->\n", now.Format(time.RFC3339))
 	return b.String()
 }
 
