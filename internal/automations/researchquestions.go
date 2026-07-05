@@ -1,11 +1,16 @@
 package automations
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/jandro-es/axon/internal/ask"
+	"github.com/jandro-es/axon/internal/db"
 )
 
 const (
@@ -79,4 +84,84 @@ func renderAnswers(results []rqResult, weekLabel string) string {
 	}
 	fmt.Fprintf(&b, "_Updated %s · %d answered · %d open_", weekLabel, answered, len(results)-answered)
 	return b.String()
+}
+
+// ResearchQuestions answers user-authored standing questions from the whole
+// vault (A3, FR-116/117): grounded ask per question, rendered into the
+// axon:answers managed block. Feature is off until the note exists with a
+// question; the human region is never edited (cardinal rule 2).
+type ResearchQuestions struct{}
+
+func (ResearchQuestions) Name() string    { return "research-questions" }
+func (ResearchQuestions) Essential() bool { return false }
+
+func (ResearchQuestions) questions(ctx context.Context, rc RunCtx) ([]string, error) {
+	if !rc.Vault.Exists(rqNotePath) {
+		return nil, nil
+	}
+	n, err := rc.Vault.Read(ctx, rqNotePath)
+	if err != nil {
+		return nil, err
+	}
+	return parseQuestions(n.Body), nil
+}
+
+func (r ResearchQuestions) DetectChange(ctx context.Context, rc RunCtx) (Change, error) {
+	qs, err := r.questions(ctx, rc)
+	if err != nil {
+		return Change{}, err
+	}
+	if len(qs) == 0 {
+		return Change{Changed: false, Reason: "no research questions"}, nil
+	}
+	since := weekStart(rc).Format(time.RFC3339)
+	n, err := db.CountSourcesSince(ctx, rc.DB, since)
+	if err != nil {
+		return Change{}, err
+	}
+	sum := sha256.Sum256([]byte(strings.Join(qs, "\n")))
+	cursor := fmt.Sprintf("%s:%s:%d", hex.EncodeToString(sum[:8]), weekStart(rc).Format("2006-01-02"), n)
+	if cursor == rc.LastCursor {
+		return Change{Changed: false, Reason: "questions + sources unchanged"}, nil
+	}
+	return Change{Changed: true, Reason: fmt.Sprintf("%d question(s), %d source(s) this week", len(qs), n), Cursor: cursor}, nil
+}
+
+func (r ResearchQuestions) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
+	qs, err := r.questions(ctx, rc)
+	if err != nil {
+		return RunResult{}, err
+	}
+	if len(qs) == 0 {
+		return RunResult{Summary: "no research questions (feature inactive)"}, nil
+	}
+	if rc.DryRun {
+		return RunResult{Summary: fmt.Sprintf("would answer %d research question(s)", len(qs)), Changes: []string{rqNotePath}}, nil
+	}
+
+	deps := ask.Deps{Searcher: rc.Searcher, Manager: rc.Manager, Config: rc.Config}
+	results := make([]rqResult, 0, len(qs))
+	answered, est := 0, 0
+	for _, q := range qs {
+		a, aerr := ask.Ask(ctx, deps, q, 0)
+		if aerr != nil {
+			// Unexpected transport error: treat as open, keep going.
+			a = ask.Answer{Refused: true, Reason: aerr.Error()}
+		}
+		est += a.Tokens
+		if !a.Refused && a.Text != "" {
+			answered++
+		}
+		results = append(results, rqResult{Question: q, Answer: a})
+	}
+
+	block := renderAnswers(results, weekStart(rc).Format("2006-01-02"))
+	if err := rc.Vault.Patch(ctx, rqNotePath, rqAnswersBlock, block); err != nil {
+		return RunResult{}, err
+	}
+	return RunResult{
+		Summary:         fmt.Sprintf("answered %d/%d research question(s)", answered, len(qs)),
+		Changes:         []string{rqNotePath},
+		EstimatedTokens: est,
+	}, nil
 }
