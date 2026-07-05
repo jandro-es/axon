@@ -74,12 +74,15 @@ zero broken links and both originals recoverable from the archive.
 
 ## Phase C — Memory & entity intelligence
 
-### C1 — Memory consolidation with contradiction handling (S) · provisional FR-117
+### C1 — Memory consolidation with contradiction handling (S) · FR-118/119/120 (no ADR) *(built)*
 **Build:** memory-distill upgrade — a new entry that contradicts an existing
-MEMORY entry becomes a review-queue reconciliation proposal instead of silent
-coexistence.
+MEMORY entry becomes a review-queue `reconcile` proposal instead of silent
+coexistence; accept supersedes (tombstones the old entry, prepends the new),
+dismiss keeps the old and drops the new. Detection folds into the existing
+single synthesis call (no extra spend). Spec in
+`docs/superpowers/specs/2026-07-05-memory-consolidation-design.md`.
 **Gate:** a seeded contradiction produces one proposal; accepting rewrites the
-managed block only; dismissing keeps both entries.
+managed block only (tombstone + new entry); dismissing keeps the old entry.
 
 ### C2 — Entity pages (M) · provisional FR-118…119, ADR-025
 **Build:** classify-tier (local-routable) extraction of people/projects from

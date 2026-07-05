@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jandro-es/axon/internal/identity"
 	"github.com/jandro-es/axon/internal/vault"
 )
 
@@ -50,6 +51,7 @@ var (
 	pairRe       = regexp.MustCompile(`^\[\[([^\]]+)\]\] ↔ \[\[([^\]]+)\]\]`)
 	triageRe     = regexp.MustCompile(`^triage \[\[([^\]]+)\]\] → (\S+) \(tags: ([^)]*)\)`)
 	resurfaceRe  = regexp.MustCompile(`^resurface \[\[([^\]]+)\]\] — related to recent \[\[([^\]]+)\]\]`)
+	reconcileRe  = regexp.MustCompile(`^reconcile: "(.+)" supersedes "(.+)"$`)
 )
 
 // Load parses the queue file. A missing file is an empty queue.
@@ -107,6 +109,9 @@ func Load(ctx context.Context, v *vault.FS) ([]Item, error) {
 		case resurfaceRe.MatchString(body):
 			rm := resurfaceRe.FindStringSubmatch(body)
 			it.Kind, it.Target, it.Note = "resurface", rm[1], rm[2]
+		case reconcileRe.MatchString(body):
+			rm := reconcileRe.FindStringSubmatch(body)
+			it.Kind, it.Note, it.Target = "reconcile", rm[1], rm[2]
 		}
 		// The ID hashes the normalized body (checkbox + resolution suffix
 		// stripped) so an item keeps its identity across resolution — a
@@ -125,6 +130,7 @@ func Accept(ctx context.Context, v *vault.FS, id string) (Item, error) {
 	if err != nil {
 		return Item{}, err
 	}
+	suffix := "✓ applied"
 	switch it.Kind {
 	case "link", "pair", "resurface":
 		if err := appendToLinksBlock(ctx, v, it.Note, it.Target); err != nil {
@@ -135,10 +141,15 @@ func Accept(ctx context.Context, v *vault.FS, id string) (Item, error) {
 		if err := v.Move(ctx, it.Note+".md", dest); err != nil {
 			return Item{}, err
 		}
+	case "reconcile":
+		if _, err := identity.Reconcile(ctx, v, it.Target, it.Note, time.Now().UTC().Format("2006-01-02")); err != nil {
+			return Item{}, err
+		}
+		suffix = "✓ reconciled"
 	default:
 		return Item{}, fmt.Errorf("item %s (%s) is not actionable — dismiss it instead", id, it.Kind)
 	}
-	return mark(ctx, v, it, "✓ applied")
+	return mark(ctx, v, it, suffix)
 }
 
 // Dismiss resolves a pending item without applying it.

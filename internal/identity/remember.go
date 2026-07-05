@@ -48,6 +48,53 @@ func Remember(ctx context.Context, v *vault.FS, e Entry) (string, error) {
 	return line, nil
 }
 
+// Reconcile supersedes an existing memory entry with a new one inside the
+// axon:memory managed block (cardinal rule 2). It tombstones the first
+// non-struck line whose text contains oldText — striking it and appending
+// " (superseded DATE)" — and prepends a fresh entry for newText
+// (source: reconcile), then re-writes only the block via vault.Patch. If no
+// line matches oldText (e.g. it was compacted since the proposal), the new
+// entry is still prepended and matched is false so the caller can report it.
+// Makes no model call. Params are oldText/newText to avoid shadowing `new`.
+func Reconcile(ctx context.Context, v *vault.FS, oldText, newText, date string) (bool, error) {
+	if strings.TrimSpace(newText) == "" {
+		return false, fmt.Errorf("reconcile: new entry text is empty")
+	}
+	if date == "" {
+		date = time.Now().UTC().Format("2006-01-02")
+	}
+	if !Present(v) {
+		if _, err := Generate(v, Values{Date: date}); err != nil {
+			return false, err
+		}
+	}
+	body, err := readBody(ctx, v, MemoryPath)
+	if err != nil {
+		return false, err
+	}
+	entries := parseEntries(extractBlock(body, MemoryBlock))
+	matched := false
+	for i, line := range entries {
+		if !matched && strings.Contains(line, oldText) && !strings.Contains(line, "~~") {
+			entries[i] = tombstone(line, date)
+			matched = true
+		}
+	}
+	newEntry := FormatEntry(Entry{Text: newText, Source: "reconcile", Date: date})
+	all := append([]string{newEntry}, entries...) // newest first
+	if err := v.Patch(ctx, MemoryPath, MemoryBlock, strings.Join(all, "\n")); err != nil {
+		return false, err
+	}
+	return matched, nil
+}
+
+// tombstone strikes a memory entry line and tags it superseded, preserving the
+// dated fact for audit while marking it inactive.
+func tombstone(line, date string) string {
+	inner := strings.TrimPrefix(strings.TrimSpace(line), "- ")
+	return fmt.Sprintf("- ~~%s~~ (superseded %s)", inner, date)
+}
+
 // FormatEntry renders a single MEMORY bullet: "- DATE — text [kind] (source: …)".
 func FormatEntry(e Entry) string {
 	// Collapse internal newlines so one entry stays one line (the block is parsed
