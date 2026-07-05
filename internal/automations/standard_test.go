@@ -554,3 +554,11 @@ func TestCompactionAgenticDryRunNoMutation(t *testing.T) {
 		t.Fatalf("dry-run mutated the note:\n%s", after.Body)
 	}
 }
+
+// TestVaultAskNeverAgentic pins ADR-023: vault_ask must never be callable
+// from an agentic automation (it would be a nested model call).
+func TestVaultAskNeverAgentic(t *testing.T) {
+	if agenticReadTools["vault_ask"] || agenticWriteTools["vault_ask"] {
+		t.Fatal("vault_ask must never be in an agentic automation allowlist (ADR-023)")
+	}
+}

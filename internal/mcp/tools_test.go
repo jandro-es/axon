@@ -269,3 +269,41 @@ func snapshot(t *testing.T, root string) map[string]string {
 	})
 	return out
 }
+
+func TestVaultAskTool(t *testing.T) {
+	ctx := context.Background()
+	tools, v, fake := newTestTools(t, map[string]string{
+		"Notes/vectors.md": "# Vector Databases\n\nVector databases index embeddings for similarity search.\n",
+		"Notes/f1.md":      "# Gardening\n\nTomatoes need full sun.\n",
+		"Notes/f2.md":      "# Cooking\n\nBraising renders collagen to gelatin.\n",
+		"Notes/f3.md":      "# Travel\n\nShoulder season is cheaper.\n",
+	})
+	if _, err := core.Reindex(ctx, v, tools.deps.DB); err != nil {
+		t.Fatal(err)
+	}
+	fake.Reply = "Vector databases index embeddings for similarity search [[Notes/vectors]]."
+
+	out, err := tools.Ask(ctx, AskIn{Question: "what are vector databases for similarity search"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Refused {
+		t.Fatalf("expected a grounded answer, got refusal: %+v", out)
+	}
+	if len(out.Citations) != 1 || out.Citations[0] != "Notes/vectors.md" {
+		t.Fatalf("citations = %v", out.Citations)
+	}
+}
+
+func TestVaultAskRegistered(t *testing.T) {
+	names := registeredToolNames(nil)
+	found := false
+	for _, n := range names {
+		if n == "vault_ask" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("vault_ask not in the default tool set: %v", names)
+	}
+}

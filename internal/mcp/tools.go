@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jandro-es/axon/internal/ask"
 	"github.com/jandro-es/axon/internal/automations"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
@@ -482,4 +483,20 @@ func (t *Tools) RunAutomation(ctx context.Context, in RunIn) (automations.Outcom
 		return automations.Outcome{}, err
 	}
 	return t.deps.Engine.Run(ctx, a, in.DryRun)
+}
+
+// --- ask (grounded RAG, FR-111 / ADR-023) -----------------------------------
+
+type AskIn struct {
+	Question string `json:"question" jsonschema:"the question to answer from the vault"`
+	TopK     int    `json:"top_k,omitempty" jsonschema:"retrieval depth (default: retrieval.top_k)"`
+}
+
+// Ask answers a question grounded only in retrieved vault notes (internal/ask):
+// grounded-or-silent, with [[wikilink]] citations, spending synthesis-tier
+// tokens through the chokepoint. Read-only toward the vault.
+func (t *Tools) Ask(ctx context.Context, in AskIn) (ask.Answer, error) {
+	return ask.Ask(ctx, ask.Deps{
+		Searcher: t.deps.Searcher, Manager: t.deps.Manager, Config: t.deps.Config,
+	}, in.Question, in.TopK)
 }

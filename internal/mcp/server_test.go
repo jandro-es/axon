@@ -41,7 +41,7 @@ func TestServerProtocolListsAndCallsTools(t *testing.T) {
 	want := []string{
 		"automations_list", "automations_run", "daily_append", "knowledge_ingest",
 		"knowledge_search", "memory_remember", "metrics_query", "tokens_status",
-		"vault_links", "vault_move", "vault_patch", "vault_read", "vault_search", "vault_write",
+		"vault_ask", "vault_links", "vault_move", "vault_patch", "vault_read", "vault_search", "vault_write",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("tools/list returned %d tools (%v), want %d", len(got), got, len(want))

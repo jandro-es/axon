@@ -6,6 +6,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jandro-es/axon/internal/ask"
 	"github.com/jandro-es/axon/internal/automations"
 )
 
@@ -123,6 +124,13 @@ func toolRegistry() []toolReg {
 			mcp.AddTool(s, &mcp.Tool{Name: "automations_run", Description: "Run an automation through the same engine path as the scheduler."},
 				func(ctx context.Context, _ *mcp.CallToolRequest, in RunIn) (*mcp.CallToolResult, automations.Outcome, error) {
 					out, err := t.RunAutomation(ctx, in)
+					return nil, out, err
+				})
+		}},
+		{"vault_ask", func(s *mcp.Server, t *Tools) {
+			mcp.AddTool(s, &mcp.Tool{Name: "vault_ask", Description: "Answer a question grounded ONLY in retrieved vault + knowledge notes, with [[wikilink]] citations. Refuses when nothing relevant is found rather than answering from general knowledge. Spends synthesis-tier tokens through the token manager."},
+				func(ctx context.Context, _ *mcp.CallToolRequest, in AskIn) (*mcp.CallToolResult, ask.Answer, error) {
+					out, err := t.Ask(ctx, in)
 					return nil, out, err
 				})
 		}},
