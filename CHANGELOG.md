@@ -8,6 +8,14 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **Standing research questions (FR-116…FR-117)** — a weekly
+  `research-questions` automation answers questions you keep in
+  `03-Resources/Research Questions.md` from your vault (grounded `ask` per
+  question) into an `axon:answers` block, with `[[wikilink]]` citations and a
+  confidence marker (`✅ Answered` / `📝 Tentative` / `🔍 Open`). Unanswered
+  questions persist and are re-attempted weekly. Never edits your prose
+  (cardinal rule 2); disabled by default and inert until the note has a real
+  question; `axon init` scaffolds a template with fenced examples.
 - **Pluggable ANN vector index (FR-113…FR-115, ADR-025)** — a `db.VectorIndex`
   seam with an in-house IVF-flat approximate index behind `retrieval.index: ann`
   (default `brute`, unchanged). Deterministic spherical k-means clusters vectors

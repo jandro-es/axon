@@ -37,7 +37,7 @@ CORS-preflight guard as review actions.
 spend appears in the ledger and the Tokens chart within 5s; the endpoint is
 unreachable cross-origin.
 
-### A3 — Standing research questions (S) · provisional FR-113
+### A3 — Standing research questions (S) · FR-116/117 (no ADR) *(built)*
 **Build:** a managed vault note (`03-Resources/Research Questions.md`,
 `axon:questions` block). The weekly knowledge-digest attempts answers from
 that week's new material — citations and a confidence marker per answer;

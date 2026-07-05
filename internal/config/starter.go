@@ -76,6 +76,7 @@ profiles:
       context-export:    { enabled: true,  schedule: "0 4 * * 0",       model: none,      budget_tokens: 0 }
       knowledge-reindex: { enabled: true,  schedule: "0 2 * * *",       model: none,      budget_tokens: 0 }
       knowledge-digest:  { enabled: true,  schedule: "0 8 * * 1",       model: synthesis, budget_tokens: 200_000 }
+      research-questions: { enabled: false, schedule: "30 8 * * 1",      model: synthesis, budget_tokens: 150_000 }
       link-suggester:    { enabled: true,  schedule: "0 1 * * *",       model: classify,  budget_tokens: 60_000 }
       memory-distill:    { enabled: true,  schedule: "0 5 * * *",       model: synthesis, budget_tokens: 120_000 }
       budget-guard:      { enabled: true,  schedule: "*/15 * * * *",    model: none,      budget_tokens: 0 }

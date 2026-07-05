@@ -10,21 +10,22 @@ import (
 // what it does and when. Kept beside the registry so the copy lives in one place
 // and `axon automations` can explain the system without the user reading code.
 var purposes = map[string]string{
-	"budget-guard":      "Watches token-budget pressure and pauses non-essential automations when usage crosses the guard threshold.",
-	"heartbeat":         "Periodic situational awareness: inbox backlog, budget headroom and guard state. No model call.",
-	"knowledge-reindex": "Rebuilds the derived DB (notes mirror, link graph, embeddings) from the vault when it changes. No model call.",
-	"context-export":    "Writes a portable snapshot bundle (manifest + core context) under .axon/exports/. No model call.",
-	"link-suggester":    "Proposes Zettelkasten links from vector similarity and queues them for review. No model call.",
-	"daily-log":         "Synthesises the day's activity into today's daily-note summary block.",
-	"inbox-triage":      "Classifies new Inbox items and proposes a triage into the review queue.",
-	"compaction":        "Distills oversized notes into summary blocks, preserving the original prose.",
-	"knowledge-digest":  "Weekly synthesis of newly ingested sources: surfaces connections and proposes MOC additions.",
-	"memory-distill":    "Maintains the durable personal-memory note: distils new entries and compacts old ones.",
-	"capture":           "Ingests own-line URLs from Inbox notes and files dropped into 00-Inbox, archiving originals. The FR-26 capture funnel; no model call (enrichment optional via capture.enrich).",
-	"briefing":          "Writes the morning axon:briefing block into the daily note: what changed, review queue, budget — plus a short routine-tier narrative. Facts are free; the narrative degrades on budget pressure.",
-	"resurfacer":        "Weekly vector resurfacing: proposes review-queue connections between recently-touched notes and dormant ones (90+ days). No model call.",
-	"subscriptions":     "Polls configured RSS/Atom feeds hourly and ingests new items through the pipeline (subscribe-from-now, per-tick caps). Enrichment optional via subscriptions.enrich.",
-	"session-distill":   "Distills finished vault sessions into durable MEMORY entries (decisions, lessons, preferences) — one classify-tier call per session, once ever. Gated by memory.capture_sessions.",
+	"budget-guard":       "Watches token-budget pressure and pauses non-essential automations when usage crosses the guard threshold.",
+	"heartbeat":          "Periodic situational awareness: inbox backlog, budget headroom and guard state. No model call.",
+	"knowledge-reindex":  "Rebuilds the derived DB (notes mirror, link graph, embeddings) from the vault when it changes. No model call.",
+	"context-export":     "Writes a portable snapshot bundle (manifest + core context) under .axon/exports/. No model call.",
+	"link-suggester":     "Proposes Zettelkasten links from vector similarity and queues them for review. No model call.",
+	"daily-log":          "Synthesises the day's activity into today's daily-note summary block.",
+	"inbox-triage":       "Classifies new Inbox items and proposes a triage into the review queue.",
+	"compaction":         "Distills oversized notes into summary blocks, preserving the original prose.",
+	"knowledge-digest":   "Weekly synthesis of newly ingested sources: surfaces connections and proposes MOC additions.",
+	"memory-distill":     "Maintains the durable personal-memory note: distils new entries and compacts old ones.",
+	"capture":            "Ingests own-line URLs from Inbox notes and files dropped into 00-Inbox, archiving originals. The FR-26 capture funnel; no model call (enrichment optional via capture.enrich).",
+	"briefing":           "Writes the morning axon:briefing block into the daily note: what changed, review queue, budget — plus a short routine-tier narrative. Facts are free; the narrative degrades on budget pressure.",
+	"resurfacer":         "Weekly vector resurfacing: proposes review-queue connections between recently-touched notes and dormant ones (90+ days). No model call.",
+	"subscriptions":      "Polls configured RSS/Atom feeds hourly and ingests new items through the pipeline (subscribe-from-now, per-tick caps). Enrichment optional via subscriptions.enrich.",
+	"session-distill":    "Distills finished vault sessions into durable MEMORY entries (decisions, lessons, preferences) — one classify-tier call per session, once ever. Gated by memory.capture_sessions.",
+	"research-questions": "Weekly: answers standing questions in 03-Resources/Research Questions.md from the vault, grounded, into an axon:answers block. Disabled by default.",
 }
 
 // Purpose returns the human description for an automation, or a generic fallback.

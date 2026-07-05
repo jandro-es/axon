@@ -11,21 +11,22 @@ import (
 // (thresholds etc.) is applied where relevant.
 func Registry(profile config.Profile) map[string]Automation {
 	reg := map[string]Automation{
-		BudgetGuard{}.Name():      BudgetGuard{},
-		Heartbeat{}.Name():        Heartbeat{},
-		KnowledgeReindex{}.Name(): KnowledgeReindex{},
-		ContextExport{}.Name():    ContextExport{},
-		LinkSuggester{}.Name():    LinkSuggester{},
-		DailyLog{}.Name():         DailyLog{},
-		InboxTriage{}.Name():      InboxTriage{},
-		Compaction{}.Name():       Compaction{},
-		KnowledgeDigest{}.Name():  KnowledgeDigest{},
-		MemoryDistill{}.Name():    MemoryDistill{},
-		Capture{}.Name():          Capture{},
-		Briefing{}.Name():         Briefing{},
-		Resurfacer{}.Name():       Resurfacer{},
-		Subscriptions{}.Name():    Subscriptions{},
-		SessionDistill{}.Name():   SessionDistill{},
+		BudgetGuard{}.Name():       BudgetGuard{},
+		Heartbeat{}.Name():         Heartbeat{},
+		KnowledgeReindex{}.Name():  KnowledgeReindex{},
+		ContextExport{}.Name():     ContextExport{},
+		LinkSuggester{}.Name():     LinkSuggester{},
+		DailyLog{}.Name():          DailyLog{},
+		InboxTriage{}.Name():       InboxTriage{},
+		Compaction{}.Name():        Compaction{},
+		KnowledgeDigest{}.Name():   KnowledgeDigest{},
+		MemoryDistill{}.Name():     MemoryDistill{},
+		Capture{}.Name():           Capture{},
+		Briefing{}.Name():          Briefing{},
+		Resurfacer{}.Name():        Resurfacer{},
+		Subscriptions{}.Name():     Subscriptions{},
+		SessionDistill{}.Name():    SessionDistill{},
+		ResearchQuestions{}.Name(): ResearchQuestions{},
 	}
 	return reg
 }
