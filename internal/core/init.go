@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/embeddings"
 	"github.com/jandro-es/axon/internal/identity"
+	"github.com/jandro-es/axon/internal/ingestion"
 	"github.com/jandro-es/axon/internal/scaffold"
 	"github.com/jandro-es/axon/internal/ui"
 	"github.com/jandro-es/axon/internal/vault"
@@ -138,6 +140,11 @@ func Init(ctx context.Context, opts InitOptions) (InitReport, error) {
 	// that can't converge degrades to models.local_fallback at runtime.
 	if config.ParseModelRef(opts.Profile.Models.Classify).Provider == config.ProviderApple {
 		add(appleLMStep(ctx, opts))
+	}
+
+	// Step 5c — OCR provider prerequisite (only when ingestion.ocr is enabled).
+	if opts.Profile.Ingestion.OCRMode() != "off" {
+		add(ocrStep(ctx, opts))
 	}
 
 	// Step 6 — Vault scaffold (only where missing; never clobbers).
@@ -404,6 +411,47 @@ func appleLMStep(ctx context.Context, opts InitOptions) StepResult {
 			fmt.Sprintf("Apple Foundation Models helper not built at %s — run `axon init` (requires Xcode CLT)", helper)}
 	}
 	return StepResult{"local-models", StepAlready, "Apple Foundation Models helper present: " + helper}
+}
+
+// ocrStep provisions the configured OCR provider: it compiles the Apple OCR
+// helper (macOS + Xcode CLT), or checks the tesseract binaries. Warnings only —
+// OCR is a best-effort ingestion fallback, never an init blocker.
+func ocrStep(ctx context.Context, opts InitOptions) StepResult {
+	switch opts.Profile.Ingestion.OCRMode() {
+	case "apple":
+		if runtime.GOOS != "darwin" {
+			return StepResult{"ocr", StepWarn, "ingestion.ocr: apple set but this machine is not a Mac — use tesseract or off"}
+		}
+		if !embeddings.SwiftAvailable() {
+			return StepResult{"ocr", StepWarn, "Apple OCR helper needs the Swift compiler (Xcode Command Line Tools) — `xcode-select --install`"}
+		}
+		helper := opts.Profile.Ingestion.OCRHelper
+		if helper == "" {
+			helper = config.DefaultOCRHelperPath()
+		}
+		changed, err := ingestion.EnsureOCRHelper(ctx, helper)
+		if err != nil {
+			return StepResult{"ocr", StepWarn, "Apple OCR helper build failed: " + err.Error()}
+		}
+		verb := "already built"
+		if changed {
+			verb = "compiled"
+		}
+		return StepResult{"ocr", StepDone, fmt.Sprintf("Apple OCR helper %s: %s", verb, helper)}
+	case "tesseract":
+		var missing []string
+		for _, bin := range []string{"pdftoppm", "tesseract"} {
+			if _, err := exec.LookPath(bin); err != nil {
+				missing = append(missing, bin)
+			}
+		}
+		if len(missing) > 0 {
+			return StepResult{"ocr", StepWarn, "tesseract OCR needs on PATH: " + strings.Join(missing, ", ") + " — install poppler + tesseract"}
+		}
+		return StepResult{"ocr", StepDone, "tesseract OCR binaries present"}
+	default:
+		return StepResult{"ocr", StepDone, "OCR off"}
+	}
 }
 
 // ollamaReachable reports whether the Ollama API answers at host.

@@ -96,6 +96,10 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 			checks = append(checks, embeddingsCheck(p))
 			// 4b. Locally-routed model tiers (ADR-015), only when configured.
 			checks = append(checks, localModelsCheck(p)...)
+			// 4c. OCR provider prerequisite, only when ingestion.ocr is enabled.
+			if p.Ingestion.OCRMode() != "off" {
+				checks = append(checks, ocrCheck(p))
+			}
 			embChecked = true
 		}
 	}
@@ -142,6 +146,38 @@ func embeddingsCheck(p config.Profile) Check {
 	}
 	return binaryCheck("ollama", "ollama",
 		"Ollama found", "ollama not found on PATH (needed for local embeddings in Phase 2)")
+}
+
+// ocrCheck verifies the configured OCR provider's local prerequisite: the
+// compiled Apple helper, or the pdftoppm+tesseract binaries. Read-only and
+// tolerant — a missing prerequisite warns, never fails doctor.
+func ocrCheck(p config.Profile) Check {
+	const name = "ocr"
+	switch p.Ingestion.OCRMode() {
+	case "apple":
+		helper := p.Ingestion.OCRHelper
+		if helper == "" {
+			helper = config.DefaultOCRHelperPath()
+		}
+		st, err := os.Stat(helper)
+		if err != nil || st.Mode()&0o111 == 0 {
+			return Check{name, StatusWarn, fmt.Sprintf("Apple OCR helper not built at %s — run `axon init` (requires Xcode CLT)", helper)}
+		}
+		return Check{name, StatusOK, "Apple OCR helper present: " + helper}
+	case "tesseract":
+		var missing []string
+		for _, bin := range []string{"pdftoppm", "tesseract"} {
+			if _, err := exec.LookPath(bin); err != nil {
+				missing = append(missing, bin)
+			}
+		}
+		if len(missing) > 0 {
+			return Check{name, StatusWarn, "OCR (tesseract) needs on PATH: " + strings.Join(missing, ", ") + " — install poppler + tesseract"}
+		}
+		return Check{name, StatusOK, "tesseract OCR binaries present (pdftoppm, tesseract)"}
+	default:
+		return Check{name, StatusOK, "OCR off"}
+	}
 }
 
 // localModelsCheck reports the state of any locally-routed model tier

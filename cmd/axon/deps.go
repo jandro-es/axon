@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/jandro-es/axon/internal/agent"
 	"github.com/jandro-es/axon/internal/automations"
@@ -157,10 +158,11 @@ type services struct {
 func (d *profileDeps) buildServices(bus *events.Bus) services {
 	searcher := search.New(d.db, d.embedder).Configure(d.profile.Retrieval)
 	mgr := tokens.NewWithRouter(d.db, d.agentRouter(), searcher, bus, managerConfig(d.name, d.profile, d.cfg))
+	ocr, _ := ingestion.OCRFor(d.profile.Ingestion, runtime.GOOS) // off/misconfig → nil; doctor surfaces it
 	pipeline := &ingestion.Pipeline{
 		Vault: d.vault, DB: d.db, Embedder: d.embedder,
 		Enricher: ingestion.Heuristic{}, Fetcher: ingestion.NewHTTPFetcher(d.profile.Policy, d.profile.Ingestion.Auth...),
-		Policy: d.profile.Policy, Profile: d.name, Bus: bus,
+		Policy: d.profile.Policy, Profile: d.name, Bus: bus, OCR: ocr,
 	}
 	engine := automations.NewEngine(automations.EngineDeps{
 		Profile: d.name, Config: d.profile, DB: d.db, Vault: d.vault,
