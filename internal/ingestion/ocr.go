@@ -3,6 +3,8 @@ package ingestion
 import (
 	"context"
 	"fmt"
+
+	"github.com/jandro-es/axon/internal/config"
 )
 
 // OCR recovers text from a PDF whose text layer is empty (scanned pages).
@@ -33,4 +35,26 @@ func ocrFallback(ctx context.Context, ex Extracted, pdf []byte, o OCR) (Extracte
 		ex.Markdown = text
 	}
 	return ex, nil
+}
+
+// OCRFor builds the configured OCR provider, or nil when OCR is off. apple is
+// macOS-only; goos is runtime.GOOS (injectable in tests).
+func OCRFor(cfg config.IngestionConfig, goos string) (OCR, error) {
+	switch cfg.OCRMode() {
+	case "off":
+		return nil, nil
+	case "apple":
+		if goos != "darwin" {
+			return nil, fmt.Errorf("ingestion.ocr: apple requires macOS (running on %s) — use tesseract or off", goos)
+		}
+		helper := cfg.OCRHelper
+		if helper == "" {
+			helper = config.DefaultOCRHelperPath()
+		}
+		return NewAppleOCR(helper), nil
+	case "tesseract":
+		return NewTesseractOCR(), nil
+	default:
+		return nil, fmt.Errorf("ingestion.ocr: unknown provider %q", cfg.OCRMode())
+	}
 }
