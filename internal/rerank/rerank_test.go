@@ -20,7 +20,9 @@ func TestOllamaRerankOrdersByScore(t *testing.T) {
 	// Candidate 1 ("relevant") scores 9, candidate 0 scores 2 → order [1,0].
 	r := NewOllamaReranker("http://x", "m")
 	r.post = func(ctx context.Context, url string, body []byte) (int, []byte, error) {
-		if contains(body, "relevant") {
+		// NB: the scoring prompt template itself contains the word "relevant",
+		// so key off the candidate's unique phrase, not a template word.
+		if contains(body, "relevant passage") {
 			return http.StatusOK, []byte(`{"response":"9"}`), nil
 		}
 		return http.StatusOK, []byte(`{"response":"2"}`), nil
