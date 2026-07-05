@@ -8,6 +8,14 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **`vault_ask` + dashboard Ask panel (FR-111…FR-112, ADR-023)** — the
+  grounded `ask` engine on two more surfaces: a `vault_ask` MCP tool (Claude
+  Code + Desktop) and a dashboard **Ask** panel backed by `POST /api/ask`.
+  The endpoint is the dashboard's first token-spending action, guarded
+  identically to review actions (loopback + Host guard + JSON content type +
+  `X-Axon-Ask` preflight header) and gated by a new `dashboard.ask_enabled`
+  kill-switch (default on). `vault_ask` is excluded from the agentic
+  automation allowlist by construction.
 - **`axon ask` (FR-108…FR-110, roadmap 1.1 A1)** — grounded-or-silent answers
   from the vault: hybrid retrieval builds a bounded context, a deterministic
   gate refuses unanswerable questions for free, one synthesis-tier call

@@ -187,7 +187,7 @@ profiles:
       config_dir: "~/.axon/profiles/personal/claude"   # CLAUDE_CONFIG_DIR — isolates the account
       oauth_token: env:CLAUDE_CODE_OAUTH_TOKEN_PERSONAL # from `claude setup-token`, for headless automations
       # NEVER set ANTHROPIC_API_KEY in this mode (Claude Code would bill the API account)
-    dashboard: { host: "127.0.0.1", port: 7777 }
+    dashboard: { host: "127.0.0.1", port: 7777 }   # ask_enabled (default true) gates the Ask panel / POST /api/ask (ADR-023)
     embeddings: { provider: ollama, host: "http://localhost:11434", model: nomic-embed-text, dim: 768, batch_size: 32 }
     # provider: ollama | apple. `apple` uses Apple's on-device NLContextualEmbedding
     # (macOS 14+, no server; ADR-013): a Swift helper compiled by `axon init` (needs

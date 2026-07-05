@@ -290,3 +290,10 @@ body {
 .export-links { display: inline-flex; gap: 10px; font-size: 12px; }
 .export-links a { color: #5bb6f0; text-decoration: none; }
 .export-row { grid-column: span 12; display: flex; justify-content: flex-end; gap: 12px; }
+
+.ask-form { display: flex; gap: 8px; margin-bottom: 12px; }
+.ask-input { flex: 1; padding: 8px 10px; }
+.ask-answer { line-height: 1.5; }
+.ask-answer.refused { opacity: 0.85; }
+.ask-src-label { margin: 10px 0 2px; font-size: 0.85em; opacity: 0.7; }
+.ask-meta { font-size: 0.8em; opacity: 0.6; }
