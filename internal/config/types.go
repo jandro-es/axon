@@ -245,7 +245,13 @@ type ClaudeConfig struct {
 type DashboardConfig struct {
 	Host string `yaml:"host" validate:"required"`
 	Port int    `yaml:"port" validate:"required,min=1,max=65535"`
+	// AskEnabled gates the browser-triggered ask endpoint (ADR-023). Pointer
+	// default-ON: unset = enabled; set false to forbid dashboard token spend.
+	AskEnabled *bool `yaml:"ask_enabled,omitempty"`
 }
+
+// AskAllowed reports whether the dashboard Ask endpoint is enabled (default true).
+func (d DashboardConfig) AskAllowed() bool { return d.AskEnabled == nil || *d.AskEnabled }
 
 // EmbeddingsConfig configures the local embedding provider. dim MUST match the
 // model's output dimension; changing the model or provider forces a full

@@ -17,9 +17,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jandro-es/axon/internal/ask"
+	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/events"
 	"github.com/jandro-es/axon/internal/review"
+	"github.com/jandro-es/axon/internal/search"
 	"github.com/jandro-es/axon/internal/tokens"
 	"github.com/jandro-es/axon/internal/vault"
 )
@@ -38,6 +41,11 @@ type Config struct {
 	// Vault enables the Review tab's accept/dismiss actions (ADR-020). nil
 	// disables the review endpoints (read-only deployments).
 	Vault *vault.FS
+	// Searcher + Retrieval + AskEnabled power the Ask panel (ADR-023). A nil
+	// Searcher or AskEnabled=false disables POST /api/ask (404).
+	Searcher   *search.Searcher
+	Retrieval  config.RetrievalConfig
+	AskEnabled bool
 }
 
 // Server is the dashboard HTTP server.
@@ -74,6 +82,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/activity", s.jsonHandler(s.dataActivity))
 	mux.HandleFunc("GET /api/review", s.jsonHandler(s.dataReview))
 	mux.HandleFunc("POST /api/review/action", s.handleReviewAction)
+	mux.HandleFunc("POST /api/ask", s.handleAsk)
 	mux.HandleFunc("GET /api/export", s.handleExport)
 	mux.Handle("/", s.staticHandler())
 	return s.guardHost(mux)
@@ -274,6 +283,54 @@ func (s *Server) handleReviewAction(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writeJSON(w, map[string]any{"item": item})
+}
+
+// handleAsk answers a question over the vault, spending synthesis-tier tokens
+// through the chokepoint (ADR-023) — the dashboard's first token-spending
+// endpoint. Guarded identically to review actions (loopback + Host guard +
+// JSON content type + X-Axon-Ask header force a CORS preflight no cross-origin
+// page can pass) and gated by dashboard.ask_enabled.
+func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
+	if !s.cfg.AskEnabled || s.cfg.Searcher == nil {
+		http.Error(w, "ask is disabled for this profile", http.StatusNotFound)
+		return
+	}
+	if r.Header.Get("X-Axon-Ask") != "1" ||
+		!strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var in struct {
+		Question string `json:"question"`
+		TopK     int    `json:"top_k"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(in.Question) == "" {
+		http.Error(w, "question required", http.StatusBadRequest)
+		return
+	}
+	a, err := ask.Ask(r.Context(), ask.Deps{
+		Searcher: s.cfg.Searcher, Manager: s.cfg.Manager,
+		Config: config.Profile{Retrieval: s.cfg.Retrieval},
+	}, in.Question, in.TopK)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if s.cfg.Bus != nil {
+		kind := "ask.answer"
+		if a.Refused {
+			kind = "ask.refused"
+		}
+		s.cfg.Bus.Publish(events.Event{
+			Level: events.LevelInfo, Kind: kind, Message: "ask: " + in.Question,
+			Data: map[string]any{"profile": s.cfg.Profile, "refused": a.Refused, "tokens": a.Tokens},
+		})
+	}
+	writeJSON(w, a)
 }
 
 func queryInt(r *http.Request, key string, def int) int {
