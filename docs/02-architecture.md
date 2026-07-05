@@ -230,6 +230,33 @@ The two installations are **separate** (different machines, accounts, restrictio
 **Why:** FR-26's own wording is poll-based ("queued for ingestion on the next ingestion tick"), and the automation framework already supplies scheduling, enabled/schedule/catch-up/dry-run config, panic-safety, run accounting, the change-gate convention, and event plumbing — a watcher would re-invent all of it around a new dependency. Rejected: **fsnotify** (new dependency; debounce and partial-sync-write races with vault sync tools; still needs a scan-on-start for files that arrived while the daemon was down — at which point the poll *is* the design) and **a `POST /capture` route on the dashboard server** (that server's invariant is read-only: never writes the vault, never calls Claude). A separate localhost capture listener (bookmarklet/Shortcut target) is a possible future extension behind its own ADR.
 **Trade-offs:** minutes-level latency instead of seconds — acceptable for a sync-fed funnel and tunable via cron. Processed URLs are tracked in SQLite (derived), so a full reindex may re-fetch a URL once before the content-hash dedupe skips it. Failed items stay visible in the inbox rather than moving to a quarantine folder. (Spec: `docs/superpowers/specs/2026-07-03-universal-capture-design.md`; FR-26, FR-81…FR-83.)
 
+### ADR-026 — Local OCR provider seam for scanned PDFs *(accepted — built)*
+
+**Status:** Accepted (2026-07-05, roadmap 1.1 D2).
+
+**Context:** A scanned PDF has no text layer, so ingestion recovered nothing
+(docs/05 deferred OCR to a "C follow-up"). OCR must stay local-first (no cloud)
+and add no heavyweight Go dependency.
+
+**Decision:** Add a nil-able `ingestion.OCR` interface, used as a **fallback**
+only when the text-layer extraction yields below `minExtractedChars`. Two local
+providers, selected by `ingestion.ocr: off | apple | tesseract` (default off):
+- **apple** reuses the ADR-013 compiled-Swift-helper pattern (a second helper,
+  `axon-apple-ocr`, using PDFKit + Vision `VNRecognizeTextRequest`) — pure-Go
+  host, JSON over subprocess, on-device, macOS-only.
+- **tesseract** shells to the **detected system binaries** `pdftoppm` (poppler)
+  + `tesseract` — the new element this ADR records: AXON now depends on
+  user-installed system tools in the ingestion path, strictly local, detected at
+  runtime with actionable errors, never bundled.
+
+Recovered text is content (NFR-05), routed through the unchanged
+enrich/chunk/embed stages. OCR makes no Claude call.
+
+**Consequences:** Scanned PDFs become searchable on macOS (on-device) and on any
+platform with poppler+tesseract. No cloud dependency, no new Go module. Providers
+are opt-in and off by default; `axon init` provisions/checks them and `axon
+doctor` reports their state.
+
 ### ADR-025 — Pluggable ANN vector index (IVF-flat) behind the ADR-010 seam *(accepted — built)*
 **Decision:** Generalise the vector-search leg into a `db.VectorIndex` interface (`Candidates(ctx, q, query, limit)`) with two implementations: `BruteIndex` (today's exact full scan over `vec_chunks`, the default and source-of-truth) and `IVFIndex` (an in-house IVF-flat approximate index), selected by `retrieval.index: brute | ann`. IVF clusters the stored float32 vectors with **deterministic spherical k-means** (k≈√N, evenly-strided seed init — no RNG, so `reindex` is reproducible) into a new in-file `vec_centroids` table plus a nullable `vec_chunks.centroid` column; a query scores only the `nprobe` nearest centroids' lists **plus the always-scanned `centroid IS NULL` overflow**, so a freshly-ingested vector is never missed before the next rebuild. `IVFIndex` **auto-falls back to `BruteIndex`** when the index is unbuilt or the corpus is below `retrieval.ann.threshold` (default 10 000) — small vaults get identical, exact results for free — and at `nprobe ≥ k` the probe visits every list, returning bit-identical ordered ids to brute (the parity contract is proven, not hoped). `axon reindex` rebuilds the index after the embeddings pass via `core.RefreshVectorIndex` (full `BuildIVF` when empty, cheap `AssignPendingCentroids` for overflow otherwise); the reindex automation maintains it best-effort. `doctor` suggests enabling `ann` once the vector count passes the threshold and warns when `ann` is set but the index is unbuilt.
 **Why:** brute-force cosine is O(N) per query and degrades past ~10⁵ vectors; IVF gives a sub-linear candidate set with tunable recall while keeping the single pure-Go SQLite file — the centroids and assignment are *derived* from `vec_chunks`, so ADR-006 holds doubly (vault → vec_chunks → centroids) and the "no server-based vector DB" guardrail stands. Rejected: **HNSW / a third-party ANN library** (younger dependency, graph (de)serialization, heavier than the 10⁴–10⁵ range needs); a **server vector DB** (violates the standing guardrail); an **in-memory-only index** (a one-shot `axon ask`/MCP process would pay a full build every invocation — often slower than brute at 20 k). Default `brute` means zero behaviour change for existing vaults (S8).

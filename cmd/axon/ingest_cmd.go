@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"runtime"
 	"strings"
 
 	"github.com/dustin/go-humanize"
@@ -54,6 +55,7 @@ func newIngestCmd(gf *globalFlags) *cobra.Command {
 				enricher = ingestion.ClaudeEnricher{Manager: mgr, ModelKey: "routine"}
 			}
 
+			ocr, _ := ingestion.OCRFor(deps.profile.Ingestion, runtime.GOOS)
 			pipeline := &ingestion.Pipeline{
 				Vault:    deps.vault,
 				DB:       deps.db,
@@ -62,6 +64,7 @@ func newIngestCmd(gf *globalFlags) *cobra.Command {
 				Fetcher:  ingestion.NewHTTPFetcher(deps.profile.Policy, authRules...),
 				Policy:   deps.profile.Policy,
 				Profile:  deps.name,
+				OCR:      ocr,
 			}
 			_ = noApplyLinks
 			opts := ingestion.IngestOptions{

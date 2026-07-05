@@ -34,6 +34,9 @@ type Pipeline struct {
 	Policy   config.PolicyConfig
 	Bus      *events.Bus
 	Profile  string
+	// OCR, when non-nil, recovers text from scanned PDFs whose text layer is
+	// empty (fallback only). nil means OCR is off (ADR-026).
+	OCR OCR
 }
 
 // IngestOptions tune a single run.
@@ -95,7 +98,7 @@ func (p *Pipeline) Ingest(ctx context.Context, arg string, opts IngestOptions) (
 	}
 
 	// Stage 3+4 — extract main content and clean to Markdown.
-	ex, err := p.extract(in, doc)
+	ex, err := p.extract(ctx, in, doc)
 	if err != nil {
 		return res, err
 	}
@@ -204,12 +207,16 @@ func (p *Pipeline) read(ctx context.Context, in Input) (*Document, error) {
 	}
 }
 
-func (p *Pipeline) extract(in Input, doc *Document) (Extracted, error) {
+func (p *Pipeline) extract(ctx context.Context, in Input, doc *Document) (Extracted, error) {
 	switch in.Kind {
 	case KindURL:
 		return ExtractHTML(doc.Body, in.URL)
 	case KindPDF:
-		return ExtractPDF(doc.Body, in.Path)
+		ex, err := ExtractPDF(doc.Body, in.Path)
+		if err != nil {
+			return ex, err
+		}
+		return ocrFallback(ctx, ex, doc.Body, p.OCR)
 	default:
 		return ExtractFile(doc.Body, in.Path), nil
 	}
