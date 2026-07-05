@@ -26,7 +26,7 @@ from the model's own knowledge.
 **Gate:** every answer cites ≥1 vault source or refuses; the call is ledgered;
 `--json` emits answer + citations; scratch-vault smoke.
 
-### A2 — `vault_ask` MCP tool + dashboard Ask panel (M) · provisional FR-111…112, ADR-023
+### A2 — `vault_ask` MCP tool + dashboard Ask panel (M) · FR-111…112, ADR-023 *(built)*
 **Build:** the same engine exposed through the service layer as an MCP tool
 (read-only toward the vault) and as a dashboard panel. The dashboard half
 needs **ADR-023**: it extends ADR-020's enumerated mutation surface with a

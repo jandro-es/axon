@@ -646,6 +646,10 @@ Views (all live over SSE, updating within seconds):
   managed block, triage moves go through the link-rewriting `vault_move`.
   This is the dashboard's only mutation surface; resolved entries compact
   into `.axon/review-queue-archive.md` after a week.
+- **Ask** — ask a question answered only from your notes: grounded-or-silent
+  with `[[wikilink]]` citations (the same engine as `axon ask`). This is the
+  one dashboard action that spends tokens; disable it per profile with
+  `dashboard.ask_enabled: false`.
 - **Ingestion** — sources and embedding-queue depth.
 - **Vault growth** — notes, links, words, inbox backlog.
 - **Knowledge graph** — notes + wikilinks, filterable by folder/tag.
@@ -665,8 +669,9 @@ inside Obsidian for inbox/projects/knowledge/link-suggestions.
 - **MCP tools** (server `axon`, launched via `.claude/.mcp.json`):
   `vault_search`, `vault_read`, `vault_write`, `vault_patch`, `vault_move`
   (wikilink-safe rename), `vault_links`, `daily_append`, `memory_remember`,
-  `knowledge_ingest`, `knowledge_search`, `tokens_status`, `metrics_query`,
-  `automations_list`, `automations_run`. There is no `vault_delete`.
+  `knowledge_ingest`, `knowledge_search`, `vault_ask` (grounded RAG answer
+  with citations), `tokens_status`, `metrics_query`, `automations_list`,
+  `automations_run`. There is no `vault_delete`.
 - **Hooks** (`settings.json`, each a thin `axon hook` call):
   - `SessionStart` injects a budget + inbox + review-queue status block (no model
     call).
