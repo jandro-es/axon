@@ -18,10 +18,16 @@ import (
 	"github.com/jandro-es/axon/internal/tokens"
 )
 
-// minGroundedVector is the semantic floor for the grounding gate: with no
-// lexical match anywhere, the best hit must reach this cosine similarity or
-// ask refuses without spending a token (FR-108).
-const minGroundedVector = 0.30
+// Grounding-gate floors (FR-108), tuned against real nomic-embed-text
+// behaviour: unrelated questions still score ~0.36-0.43 cosine against any
+// prose and pick up stop-word bm25 hits around -2; genuinely related
+// questions score 0.6+ and match lexically at -5 or stronger. The gate only
+// needs to catch the clearly hopeless case for free — the model's NOT_FOUND
+// (validated) covers the grey zone at classify-scale cost.
+const (
+	minGroundedVector  = 0.45
+	minGroundedLexical = -2.5 // bm25: more negative = stronger; hits weaker than this don't ground
+)
 
 // ErrUngrounded marks a model answer that failed the citation contract
 // (FR-109). It survives the chokepoint's error wrapping, so callers can
@@ -104,11 +110,11 @@ func Ask(ctx context.Context, d Deps, question string, topK int) (Answer, error)
 	}
 }
 
-// grounded is the deterministic gate: a lexical match anywhere, or a
+// grounded is the deterministic gate: a lexical match of real strength, or a
 // semantic similarity at/above the floor. Zero hits always refuses.
 func grounded(hits []db.ChunkHit) bool {
 	for _, h := range hits {
-		if h.Lexical != 0 || h.Vector >= minGroundedVector {
+		if (h.Lexical != 0 && h.Lexical <= minGroundedLexical) || h.Vector >= minGroundedVector {
 			return true
 		}
 	}

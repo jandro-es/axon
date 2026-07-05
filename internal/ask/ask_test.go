@@ -60,8 +60,16 @@ func newAskDeps(t *testing.T, files map[string]string) (Deps, *agent.Fake, *sql.
 	return Deps{Searcher: searcher, Manager: mgr, Config: profile}, fake, d
 }
 
+// corpus seeds one target note plus filler: FTS5's bm25 IDF is near-zero in a
+// single-document index, so filler notes make a genuine lexical match score
+// with realistic strength (as in any real vault).
 var corpus = map[string]string{
 	"Notes/vectors.md": "# Vector Databases\n\nVector databases index embeddings for similarity search and hybrid retrieval.\n",
+	"Notes/f1.md":      "# Gardening\n\nTomatoes need full sun and regular watering through summer.\n",
+	"Notes/f2.md":      "# Cooking\n\nSlow braising tough cuts renders collagen into gelatin.\n",
+	"Notes/f3.md":      "# Travel\n\nShoulder season flights cost less and queues are shorter.\n",
+	"Notes/f4.md":      "# Music\n\nPractice scales slowly with a metronome before increasing tempo.\n",
+	"Notes/f5.md":      "# Fitness\n\nProgressive overload drives strength adaptation over weeks.\n",
 }
 
 func TestGroundedGate(t *testing.T) {
@@ -71,8 +79,10 @@ func TestGroundedGate(t *testing.T) {
 		want bool
 	}{
 		{"no hits", nil, false},
-		{"lexical match", []db.ChunkHit{{Path: "a.md", Lexical: -2.1}}, true},
+		{"strong lexical match", []db.ChunkHit{{Path: "a.md", Lexical: -5.2}}, true},
+		{"stop-word lexical noise", []db.ChunkHit{{Path: "a.md", Lexical: -1.9}}, false},
 		{"semantic above floor", []db.ChunkHit{{Path: "a.md", Vector: 0.55}}, true},
+		{"semantic in the unrelated band", []db.ChunkHit{{Path: "a.md", Vector: 0.40}}, false},
 		{"semantic below floor", []db.ChunkHit{{Path: "a.md", Vector: 0.10}}, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
