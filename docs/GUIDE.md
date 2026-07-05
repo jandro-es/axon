@@ -402,6 +402,25 @@ A typical loop:
 
 ## 7. Knowledge ingestion & search
 
+### Ask your vault
+
+`axon ask` answers a question **from your notes only** — grounded or silent:
+
+```bash
+axon ask "what did we decide about vector index sizing?"
+axon ask "summarise what I know about RRF" --json
+```
+
+Retrieval builds a bounded context (`retrieval.top_k` / `max_context_tokens`);
+when nothing relevant is retrieved AXON refuses **without spending a token**.
+Otherwise one synthesis-tier call answers with `[[wikilink]]` citations, and a
+code-enforced contract guarantees every citation resolves to a note the
+retrieval actually returned — an unverifiable answer is reported as a refusal
+(with the retrieved sources listed so you can read them yourself). `NOT_FOUND`
+means your notes genuinely don't answer it. Over-budget asks follow the
+standard downgrade ladder (a cheaper tier still answers); every run is
+ledgered under operation `ask`.
+
 `axon ingest <url|path>` runs the pipeline: **policy check → fetch/read →
 extract main content → clean to Markdown → redact → hash (idempotency) →
 summarise → write a linked note in `03-Resources/Knowledge/` → chunk → embed →
@@ -753,6 +772,7 @@ the vault is the source of truth, a full restore is: copy the vault back and run
 | `axon reindex [--embeddings]` | Rebuild notes mirror + link graph from the vault. |
 | `axon ingest <url\|path> [--dry-run] [--enrich] [--json]` | Run the ingestion pipeline; `--enrich` summarises with Claude (via the token manager) and reports tokens spent. |
 | `axon search <query> [--top-k N] [--json]` | Hybrid lexical + semantic search. |
+| `axon ask "<question>" [--top-k N] [--json]` | Grounded-or-silent RAG answer with `[[wikilink]]` citations; refuses (zero tokens) when retrieval finds nothing relevant. |
 | `axon subscribe <url> [--allow] \| list \| remove <url>` | Manage RSS/Atom feed subscriptions (verified add, seen-state, re-baselining remove). |
 | `axon configure [section …]` | Interactive menu (or scripted subcommands) for common settings: embeddings provider, model tiers, limits, automation toggles. |
 | `axon vault move <new-path>` | Relocate the vault, updating every AXON-owned reference (config + `.claude/` wiring). |
