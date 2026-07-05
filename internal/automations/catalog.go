@@ -27,6 +27,7 @@ var purposes = map[string]string{
 	"session-distill":    "Distills finished vault sessions into durable MEMORY entries (decisions, lessons, preferences) — one classify-tier call per session, once ever. Gated by memory.capture_sessions.",
 	"research-questions": "Weekly: answers standing questions in 03-Resources/Research Questions.md from the vault, grounded, into an axon:answers block. Disabled by default.",
 	"entity-pages":       "Extracts named people and projects from new notes into auto-maintained Entities/ index pages with wikilink-safe mention lists. Disabled by default.",
+	"project-pulse":      "Weekly: reads 01-Projects + USER goals into an axon:pulse block (progress, stalls, next actions) and nudges stale projects to the review queue. Narrative degrades to facts-only under budget. Disabled by default.",
 }
 
 // Purpose returns the human description for an automation, or a generic fallback.

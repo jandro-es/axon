@@ -153,6 +153,7 @@ profiles:
       subscriptions:     { enabled: true,  schedule: "0 * * * *",       model: routine,   budget_tokens: 60_000, catch_up: skip }
       session-distill:   { enabled: true,  schedule: "15 */2 * * *",    model: classify,  budget_tokens: 30_000, catch_up: skip }
       entity-pages:      { enabled: false, schedule: "0 9 * * 1",       model: classify,  budget_tokens: 60_000 }   # extract people/projects → Entities/ pages (opt-in)
+      project-pulse:     { enabled: false, schedule: "0 10 * * 1",      model: routine,   budget_tokens: 40_000 }   # weekly project pulse + stale-project nudges (opt-in)
 
     # Personal identity & memory layer (Component 12). Injected at SessionStart so
     # the assistant knows you. Optional block — these are the defaults.
