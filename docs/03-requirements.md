@@ -129,6 +129,18 @@ this slice.
 | FR-82 | M | **Capture bookkeeping.** Ticks are change-gated on the inbox listing hash; failed items are remembered in automation state and skipped until they change, surfaced once in `.axon/review-queue.md`, and emitted as events; every capture ingest is observable through the standard run rows and `ingest.*` events. Inbox notes are never modified by capture (cardinal rule 2). |
 | FR-83 | S | **Capture enrichment toggle.** `capture.enrich: heuristic \| claude` (default `heuristic`, zero tokens). `claude` routes enrichment through the token-manager chokepoint on the `routine` tier (ADR-015 local routing and fallback apply) and degrades to heuristic under budget denial. |
 
+### Ask your vault *(in build — roadmap 1.1 slice A1)*
+
+FR-108…FR-110 trace to `docs/14-roadmap-1.1.md` (Phase A) and the spec in
+`docs/superpowers/specs/2026-07-05-ask-design.md`. Priorities are relative to
+this slice.
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-108 | M | **Grounded-or-silent ask engine.** `internal/ask` answers a question from retrieved vault/knowledge context only: `search.Retrieve` builds the bounded context (`retrieval.top_k`/`max_context_tokens`); a deterministic pre-model gate refuses (zero tokens) when retrieval returns nothing or the best fused score is below a code-constant floor; one synthesis-tier chokepoint call with the context data-fenced; `NOT_FOUND` from the model surfaces as a grounded refusal. Read-only end to end. |
+| FR-109 | M | **Code-enforced citation contract.** Every answer must cite ≥1 `[[wikilink]]` and every citation must resolve to a *retrieved* source path; `ValidateOutput` rejects hallucinated or missing citations (chokepoint retry, then the failure surfaces as a refusal listing the retrieved sources). An unverifiable answer is treated as no answer. |
+| FR-110 | S | **`axon ask` CLI + observability.** `axon ask "<question>" [--top-k N] [--json]`: answer + cited sources (refusals show the reason and retrieved-but-uncited sources); exit 0 for answers and grounded refusals; every run ledgered under operation `ask` and streamed to the dashboard. |
+
 ### Session memory *(built 2026-07-04)*
 
 FR-97…FR-99 trace to ADR-021 and the spec in
