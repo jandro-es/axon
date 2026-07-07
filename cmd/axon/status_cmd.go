@@ -21,6 +21,7 @@ func managerConfig(name string, p config.Profile, cfg *config.Config) tokens.Con
 		Limits:         p.Limits,
 		Prices:         cfg.Prices,
 		RedactionRules: p.Policy.RedactionRules,
+		EvalMinPass:    p.Models.EvalMinPass,
 	}
 }
 
