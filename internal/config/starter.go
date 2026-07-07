@@ -50,6 +50,7 @@ profiles:
       classify:  claude-haiku-4-5
       routine:   claude-sonnet-5
       synthesis: claude-opus-4-8
+      eval_min_pass: 80                        # a local classify/routine tier must pass 'axon eval' at >= this %  (0 disables the gate)
 
     limits:
       daily_tokens:  1_500_000
