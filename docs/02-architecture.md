@@ -231,6 +231,54 @@ The two installations are **separate** (different machines, accounts, restrictio
 **Why:** FR-26's own wording is poll-based ("queued for ingestion on the next ingestion tick"), and the automation framework already supplies scheduling, enabled/schedule/catch-up/dry-run config, panic-safety, run accounting, the change-gate convention, and event plumbing — a watcher would re-invent all of it around a new dependency. Rejected: **fsnotify** (new dependency; debounce and partial-sync-write races with vault sync tools; still needs a scan-on-start for files that arrived while the daemon was down — at which point the poll *is* the design) and **a `POST /capture` route on the dashboard server** (that server's invariant is read-only: never writes the vault, never calls Claude). A separate localhost capture listener (bookmarklet/Shortcut target) is a possible future extension behind its own ADR.
 **Trade-offs:** minutes-level latency instead of seconds — acceptable for a sync-fed funnel and tunable via cron. Processed URLs are tracked in SQLite (derived), so a full reindex may re-fetch a URL once before the content-hash dedupe skips it. Failed items stay visible in the inbox rather than moving to a quarantine folder. (Spec: `docs/superpowers/specs/2026-07-03-universal-capture-design.md`; FR-26, FR-81…FR-83.)
 
+### ADR-028 — Temporal memory: validity intervals in Markdown + a derived fact index *(accepted — planned)*
+
+**Status:** Accepted (2026-07-07, roadmap 1.2 R1).
+
+**Context:** AXON's memory (`02-Areas/Profile/MEMORY.md`, `axon:memory` block) is
+an append-only dated log. 1.1's C1 added supersedence (tombstone the old entry +
+prepend the new via `identity.Reconcile`), but nothing models *time*: the leading
+date and the tombstone's "superseded DATE" already bracket a fact's validity
+interval, yet they are prose, not data. So injection can't prefer currently-valid
+facts, `ask` (R2) can't reason over conflicting dated claims, and there is no
+queryable index of what memory knows. The serious memory frameworks
+(Zep/Graphiti, Mem0, Letta) converge on timestamped facts with validity intervals
++ supersedence — AXON can adopt the shape while keeping the vault, not a DB,
+authoritative.
+
+**Decision:** Make validity intervals **machine-readable in the Markdown itself**
+and add a **derived SQLite `memory_facts` index** rebuilt from the block.
+(1) The `axon:memory` grammar extends **backward-compatibly**: an open fact's
+`valid_from` is its leading date; a superseded fact's tombstone becomes
+`- ~~…~~ (until DATE; superseded by "new")`, giving `valid_until` + a
+human-readable superseded-by pointer; `[kind]` gains `fact`. Legacy entries and
+legacy `(superseded DATE)` tombstones parse unchanged — no Markdown migration.
+(2) `memory_facts` (text, kind, source, valid_from, valid_until, superseded_by,
+struck, embedding) is **derived and disposable**, rebuilt from the block during
+`axon reindex` as a read-only Markdown→DB pass that never writes to the vault
+(S9/ADR-011 hold: delete the DB, reindex, every fact + interval returns).
+(3) Consolidation stays the single `memory-distill` call, moved synthesis→routine
+tier; contradiction detection stays model-driven (the C1 whole-memory feed);
+Accept **closes the superseded fact's interval** instead of only striking it.
+(4) SessionStart injection prefers newest-N *open* facts, parsing the block
+directly (no DB dependency — a hook must never fail). Deliberately **no
+entity/predicate graph and no bi-temporal (transaction-time) axis** — intervals +
+supersedence only; episodes remain the existing raw daily/session notes (no second
+`axon:episodes` block, no new pruning surface).
+
+**Consequences:** Memory gains a time model reusable by R2 (contradiction-aware
+ask), R8 (related) and R9 (resurfacing) without a schema rewrite; the vault stays
+the source of truth and human-readable. One new migration (`0005_memory_facts.sql`)
+and one derived table, maintained only by reindex — a projection, never
+authoritative, so ADR-006/011 extend cleanly (vault → memory_facts, like vault →
+notes/chunks). Rejected: a second `axon:episodes` managed block with episode
+pruning (new write surface + capture wiring for marginal single-user value);
+structured per-fact records/tables inside the block (hurts human readability and
+S9 byte-equivalence); entity/predicate columns and Graphiti-style bi-temporal
+modelling (explicitly out of PRD scope for one user); making the fact index
+authoritative (would violate the vault-source-of-truth invariant). (Spec:
+`docs/superpowers/specs/2026-07-07-temporal-memory-design.md`; FR-134…FR-137.)
+
 ### ADR-027 — Local reranking as a retrieval primitive (outside the chokepoint) *(accepted — built)*
 
 **Status:** Accepted (2026-07-05, roadmap 1.1 B2).
