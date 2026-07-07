@@ -279,6 +279,49 @@ modelling (explicitly out of PRD scope for one user); making the fact index
 authoritative (would violate the vault-source-of-truth invariant). (Spec:
 `docs/superpowers/specs/2026-07-07-temporal-memory-design.md`; FR-134…FR-137.)
 
+### ADR-029 — Eval-gated local-model promotion: an in-repo golden-set harness *(accepted — planned)*
+
+**Status:** Accepted (2026-07-07, roadmap 1.2 R5). This slice builds the harness
+(sub-slice #1); promotion-gating and the runtime cascade are noted follow-ons.
+
+**Decision:** Make local-model quality a **measured, reproducible property** via
+an `axon eval` harness over in-repo golden sets, and extend ADR-015's static
+"synthesis stays Claude / local is classify-routine only" gate toward an
+*evidence-gated promotion procedure*. Golden cases live versioned in the binary
+(`internal/eval/golden/<family>/*.yaml`, embedded), one file per self-contained
+example (family, system, prompt, grading criteria); v1 ships the `classify` and
+`routine` families (`synthesis` is measurable but never promoted). Grading is
+**hybrid**: deterministic for `classify` (semantic JSON / normalized-text
+equality), and for `routine` prose a `must_include` anchor-fact gate **plus** a
+Claude **LLM-as-judge** rubric returning `{pass,reason}`. Every eval call — the
+target model **and** the judge — runs through the token-manager chokepoint
+(ledgered; cardinal rule 1 holds), via a small consumer-defined `Chokepoint`
+interface satisfied by `*tokens.Manager`, so `internal/eval` never imports
+`agent`. Crucially, eval runs with **fail-fast fallback** (`local_fallback:
+fail`) and inspects `resp.Model`, scoring each case **passed-local / escalated /
+failed** — otherwise the default `claude` fall-forward (ADR-015) would silently
+measure Claude instead of the local model. `axon eval [--model <ref>] [--family
+…] [--json] [--min-pass <pct>]` prints a per-family scorecard; `--min-pass` sets
+only the process exit code (CI gate), not config state.
+
+**Why:** ADR-015 left promotion as a permanent "no" for anything above classify;
+the honest way to lift it is the embedding-model discipline (re-validate on
+model/version change) applied to chat models — thresholds grounded in AXON's own
+tasks, not vibes. Reusing the chokepoint keeps the observability invariant and
+the "only `tokens` imports `agent`" rule intact; self-contained fixtures keep
+`eval` from reaching into `automations`. Fail-fast measurement is the single
+non-obvious requirement — it is what makes the number trustworthy.
+
+**Trade-offs:** the harness measures the golden set, not production traffic — a
+small curated set can over- or under-state real quality (mitigated by drawing
+cases from real task families and growing the set over time). LLM-as-judge adds
+eval-time Claude tokens and some nondeterminism (mitigated: eval is explicit and
+infrequent; CI grades against `agent.Fake` so it stays deterministic and free).
+This slice deliberately **defers** persistence (`eval_runs`), the `doctor`
+eval-status check, config promotion-gating in `validateLocalRouting`, and the
+runtime local→verifier→Claude cascade to follow-on slices #2/#3. (Spec:
+`docs/superpowers/specs/2026-07-07-eval-harness-design.md`; FR-140, FR-141.)
+
 ### ADR-027 — Local reranking as a retrieval primitive (outside the chokepoint) *(accepted — built)*
 
 **Status:** Accepted (2026-07-05, roadmap 1.1 B2).

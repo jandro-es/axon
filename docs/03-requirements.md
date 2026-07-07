@@ -179,6 +179,19 @@ relative to this slice.
 | FR-136 | M | **Interval-aware supersedence.** Accepting a `reconcile` proposal closes the superseded fact's interval — `identity.Reconcile` sets `valid_until` + superseded-by and tombstones in place (never deletes, cardinal rule 2) — and prepends the new open fact; if the old fact is gone it still prepends (`matched=false`). `memory-distill` runs consolidation at the **routine** tier through the chokepoint (was synthesis), promoting facts with `[fact]` + `valid_from` + a `[[source]]` wikilink; detection stays the model-driven whole-memory feed (C1). |
 | FR-137 | S | **Valid-facts injection.** SessionStart memory injection prefers **currently-valid** facts — superseded/closed facts are excluded — selecting the newest open facts within the existing token ceiling, parsing the `axon:memory` block directly with **no DB dependency** (a hook must never fail); empty/legacy blocks behave exactly as before. |
 
+### Local-model eval harness *(roadmap 1.2 R5.1 — planned)*
+
+FR-140…FR-141 are the first of R5's three sub-slices (`docs/15-roadmap-1.2.md`,
+§R5), tracing to ADR-029 and the spec in
+`docs/superpowers/specs/2026-07-07-eval-harness-design.md`. Promotion-gating +
+`doctor` status (R5.2) and the runtime cascade (R5.3) are separate slices.
+Priorities are relative to this slice.
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-140 | M | **`axon eval` harness.** An `internal/eval` harness runs in-repo golden sets (`internal/eval/golden/<family>/*.yaml`, embedded; `classify` + `routine` families v1) against any `(provider, model)` pair. `axon eval [--model <ref>] [--family classify\|routine\|all] [--json] [--min-pass <pct>]` prints a per-family pass-rate scorecard. Every eval call — target model **and** judge — goes **through the token-manager chokepoint** (ledgered, cardinal rule 1) via a consumer-defined `Chokepoint` interface satisfied by `*tokens.Manager`; `eval` imports neither `agent` nor `automations`. Calls run **fail-fast** (`local_fallback: fail`) and inspect `resp.Model`, scoring each case **passed-local / escalated / failed** so a Claude fall-forward can never be miscounted as a local pass. `--min-pass` sets only the exit code (CI gate), not config state. No vault mutation. |
+| FR-141 | M | **Hybrid grading.** `classify` cases grade deterministically (semantic JSON equality via `expect_json`, or normalized-text equality via `expect_text`). `routine` cases grade by a `must_include` anchor-fact gate **plus**, when a `rubric` is set, one Claude **LLM-as-judge** call through the chokepoint returning `{pass,reason}` (`ValidateOutput`-guarded); the case passes iff both hold. In CI the judge is `agent.Fake` (deterministic, free) so CI exercises harness plumbing; real grading runs locally against Ollama. Malformed fixtures/judge output fail loudly, never silently pass. |
+
 ### Session memory *(built 2026-07-04)*
 
 FR-97…FR-99 trace to ADR-021 and the spec in
