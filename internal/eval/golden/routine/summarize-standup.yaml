@@ -1,0 +1,14 @@
+name: summarize-standup
+family: routine
+system: |
+  Summarize the note in a single sentence. Preserve every person name and date.
+prompt: |
+  Note: On 2026-06-30, Alice shipped the search reranker; Bob is blocked on Ollama setup.
+grade:
+  must_include:
+    - Alice
+    - Bob
+    - "2026-06-30"
+  rubric: |
+    PASS only if the summary is a single coherent sentence that says Alice shipped
+    the reranker and Bob is blocked (on Ollama). Otherwise FAIL.

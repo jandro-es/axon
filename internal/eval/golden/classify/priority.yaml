@@ -1,0 +1,9 @@
+name: priority-urgent
+family: classify
+system: |
+  Classify the note's priority as exactly one lowercase word: high, medium, or low.
+  Answer with the single word only.
+prompt: |
+  Note: "Production DB is down, customers cannot log in. Need a fix now."
+grade:
+  expect_text: high

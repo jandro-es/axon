@@ -1,0 +1,10 @@
+name: capture-kind-url
+family: classify
+system: |
+  You classify a captured item into exactly one kind. Respond with JSON only:
+  {"kind": "<article|note|task|link>"}. No prose.
+prompt: |
+  Captured text:
+  "https://go.dev/blog/error-handling-and-go — Error handling and Go, a blog post"
+grade:
+  expect_json: '{"kind":"article"}'
