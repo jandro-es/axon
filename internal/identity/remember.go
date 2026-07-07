@@ -54,12 +54,13 @@ func Remember(ctx context.Context, v *vault.FS, e Entry) (string, error) {
 
 // Reconcile supersedes an existing memory entry with a new one inside the
 // axon:memory managed block (cardinal rule 2). It tombstones the first
-// non-struck line whose text contains oldText — striking it and appending
-// " (superseded DATE)" — and prepends a fresh entry for newText
-// (source: reconcile), then re-writes only the block via vault.Patch. If no
-// line matches oldText (e.g. it was compacted since the proposal), the new
-// entry is still prepended and matched is false so the caller can report it.
-// Makes no model call. Params are oldText/newText to avoid shadowing `new`.
+// non-struck line whose text contains oldText — striking it and closing its
+// validity interval as " (until DATE; superseded by \"newText\")" — and
+// prepends a fresh open entry for newText (source: reconcile, valid_from DATE),
+// then re-writes only the block via vault.Patch. If no line matches oldText
+// (e.g. it was compacted since the proposal), the new entry is still prepended
+// and matched is false so the caller can report it. Makes no model call. Params
+// are oldText/newText to avoid shadowing `new`.
 func Reconcile(ctx context.Context, v *vault.FS, oldText, newText, date string) (bool, error) {
 	if strings.TrimSpace(newText) == "" {
 		return false, fmt.Errorf("reconcile: new entry text is empty")
@@ -80,11 +81,11 @@ func Reconcile(ctx context.Context, v *vault.FS, oldText, newText, date string) 
 	matched := false
 	for i, line := range entries {
 		if !matched && strings.Contains(line, oldText) && !strings.Contains(line, "~~") {
-			entries[i] = tombstone(line, date, "")
+			entries[i] = tombstone(line, date, newText)
 			matched = true
 		}
 	}
-	newEntry := FormatEntry(Entry{Text: newText, Source: "reconcile", Date: date})
+	newEntry := FormatEntry(Entry{Text: newText, Source: "reconcile", ValidFrom: date})
 	all := append([]string{newEntry}, entries...) // newest first
 	if err := v.Patch(ctx, MemoryPath, MemoryBlock, strings.Join(all, "\n")); err != nil {
 		return false, err
