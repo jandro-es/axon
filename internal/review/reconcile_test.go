@@ -70,8 +70,11 @@ func TestAcceptReconcileSupersedes(t *testing.T) {
 		t.Fatal("accepted reconcile should come back checked")
 	}
 	mem, _ := v.Read(ctx, identity.MemoryPath)
-	if !strings.Contains(mem.Body, "~~2026-06-01 — Prefers Go for daemons") || !strings.Contains(mem.Body, "(superseded") {
-		t.Fatalf("old entry not tombstoned:\n%s", mem.Body)
+	// Interval tombstone form; date-agnostic because Accept stamps the wall clock.
+	if !strings.Contains(mem.Body, "~~2026-06-01 — Prefers Go for daemons") ||
+		!strings.Contains(mem.Body, "(until ") ||
+		!strings.Contains(mem.Body, `superseded by "Uses Rust for daemons")`) {
+		t.Fatalf("old entry not tombstoned with interval:\n%s", mem.Body)
 	}
 	if !strings.Contains(mem.Body, "Uses Rust for daemons (source: reconcile)") {
 		t.Fatalf("new entry not added:\n%s", mem.Body)
