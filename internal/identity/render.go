@@ -108,6 +108,17 @@ func RecentEntries(ctx context.Context, v *vault.FS, n int) ([]string, error) {
 	return open, nil
 }
 
+// BlockLines returns every "- " entry line of the axon:memory block in block
+// order (newest-first), unfiltered — struck and open alike. reindex projects
+// all of them into memory_facts; RecentEntries (open-only) is for injection.
+func BlockLines(ctx context.Context, v *vault.FS) ([]string, error) {
+	body, err := readBody(ctx, v, MemoryPath)
+	if err != nil {
+		return nil, err
+	}
+	return parseEntries(extractBlock(body, MemoryBlock)), nil
+}
+
 // readBody returns a note's body (frontmatter stripped), or "" if absent.
 func readBody(ctx context.Context, v *vault.FS, path string) (string, error) {
 	if !v.Exists(path) {

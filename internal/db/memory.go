@@ -121,3 +121,32 @@ func boolInt(b bool) int {
 	}
 	return 0
 }
+
+// MemoryFactsMissingEmbedding returns facts with no stored embedding (id+text
+// only), for the best-effort backfill pass after reindex.
+func MemoryFactsMissingEmbedding(ctx context.Context, q Queryer2) ([]MemoryFact, error) {
+	rows, err := q.QueryContext(ctx,
+		`SELECT id, text FROM memory_facts WHERE embedding IS NULL ORDER BY id;`)
+	if err != nil {
+		return nil, fmt.Errorf("memory facts missing embedding: %w", err)
+	}
+	defer rows.Close()
+	var out []MemoryFact
+	for rows.Next() {
+		var f MemoryFact
+		if err := rows.Scan(&f.ID, &f.Text); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// SetMemoryFactEmbedding stores a fact's embedding BLOB.
+func SetMemoryFactEmbedding(ctx context.Context, q Execer, id int64, vec []float32) error {
+	if _, err := q.ExecContext(ctx,
+		`UPDATE memory_facts SET embedding = ? WHERE id = ?;`, EncodeVector(vec), id); err != nil {
+		return fmt.Errorf("set memory fact %d embedding: %w", id, err)
+	}
+	return nil
+}
