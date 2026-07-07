@@ -360,6 +360,46 @@ it untouched). (Spec:
 `docs/superpowers/specs/2026-07-07-eval-gated-promotion-design.md`; FR-142,
 FR-143.)
 
+### ADR-031 — Per-call verification cascade for the promoted local tier *(accepted — planned)*
+
+**Status:** Accepted (2026-07-07, roadmap 1.2 R5 sub-slice #3). Extends ADR-015,
+ADR-029, ADR-030.
+
+**Decision:** For an *already-admitted* local `routine` tier, add a per-call
+quality cascade in the chokepoint's local execution path (`runLocal`): after a
+successful, schema-valid local answer, a **cheap local judge** (a dedicated
+`models.verify: ollama:<model>` ref) scores the `(task, answer)` pair 0–10; a
+score below `models.verify_min_score` (default 6) **escalates the call to Claude**
+via the existing `fallbackClaudeKey` + budget path. The judge is a local
+(budget-exempt) call ledgered as `<op>:verify`; the Claude escalation ledgers
+normally — so a low-scored call ledgers all three legs (local answer + judge +
+Claude). Scope is `routine` only (synthesis is always Claude; classify is
+deterministically validated), **default off** (S8). The judge uses a concrete ref
+so it is never itself gated or verified (no recursion) and it never falls forward
+to Claude (a broken judge must not spend the Claude quota); escalation degrades to
+the retained local answer when the judge is inconclusive or Claude is
+budget-blocked.
+
+**Why:** R5.2's admission gate is binary and out-of-band — once a local tier is
+admitted, a well-formed-but-*wrong* answer is trusted blindly, since today's
+`runLocal` escalates only on error/schema-invalidity (FR-79). Per-call
+verification is the real-time net the roadmap's R5 gate asked for ("local attempt
+→ cheap local verifier → escalate to Claude on low confidence, all ledgered"). The
+judge is **ledgered through the chokepoint** — the deliberate contrast with
+ADR-027, where reranking is an un-ledgered *retrieval* primitive: a rerank call
+only reorders retrieved passages, whereas the verification judge **gates model
+spend** (it decides whether to buy a Claude answer), so it must be observable like
+every other call.
+
+**Trade-offs:** an escalated call costs local answer + local judge + Claude —
+paying twice locally to buy one second opinion; accepted because it fires only
+below the confidence floor and only when the operator opts in. A weak or
+mis-pulled judge model degrades toward always-keep-local (best-effort) rather than
+erroring; `doctor` surfaces the misconfiguration. Verification is stateless per
+call — outcomes live in the ledger + events, not a new table (no S9 surface).
+(Spec: `docs/superpowers/specs/2026-07-07-cascade-verification-design.md`; FR-144,
+FR-145.)
+
 ### ADR-027 — Local reranking as a retrieval primitive (outside the chokepoint) *(accepted — built)*
 
 **Status:** Accepted (2026-07-05, roadmap 1.1 B2).
