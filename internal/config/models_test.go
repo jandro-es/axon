@@ -35,6 +35,8 @@ func TestValidateLocalRouting(t *testing.T) {
 		{"local synthesis rejected", func(m *ModelsConfig) { m.Synthesis = "ollama:qwen3:8b" }, true},
 		{"empty ollama model rejected", func(m *ModelsConfig) { m.Classify = "ollama:" }, true},
 		{"bad fallback rejected", func(m *ModelsConfig) { m.LocalFallback = "retry" }, true},
+		{"eval_min_pass in range ok", func(m *ModelsConfig) { m.EvalMinPass = 80 }, false},
+		{"eval_min_pass over 100 rejected", func(m *ModelsConfig) { m.EvalMinPass = 150 }, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

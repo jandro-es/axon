@@ -60,5 +60,8 @@ func validateLocalRouting(m ModelsConfig) error {
 	if m.LocalFallback != "" && m.LocalFallback != "claude" && m.LocalFallback != "fail" {
 		return fmt.Errorf("models.local_fallback must be claude or fail (got %q)", m.LocalFallback)
 	}
+	if m.EvalMinPass < 0 || m.EvalMinPass > 100 {
+		return fmt.Errorf("models.eval_min_pass must be 0..100 (got %d)", m.EvalMinPass)
+	}
 	return nil
 }
