@@ -6,9 +6,35 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/eval"
 	"github.com/jandro-es/axon/internal/tokens"
 )
+
+func TestPersistEvalRunsWritesRows(t *testing.T) {
+	ctx := context.Background()
+	sqlDB, err := db.Open(db.MemoryDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+	if _, err := db.Migrate(sqlDB); err != nil {
+		t.Fatal(err)
+	}
+	rep := eval.Report{Families: []eval.FamilyReport{
+		{Family: eval.FamilyClassify, Model: "ollama:qwen", Total: 4, Passed: 3},
+	}}
+	if err := persistEvalRuns(ctx, sqlDB, rep, func(string) string { return "" }); err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := db.LatestEvalRun(ctx, sqlDB, "classify", "ollama:qwen")
+	if err != nil || !ok {
+		t.Fatalf("ok=%v err=%v", ok, err)
+	}
+	if got.PassPct != 75 {
+		t.Fatalf("pass_pct = %d, want 75", got.PassPct)
+	}
+}
 
 // stubCP is a Chokepoint that answers target calls with a fixed classify answer
 // and judge calls with pass:true — enough to exercise scorecard/JSON plumbing.
