@@ -12,9 +12,13 @@ import (
 // Entry is a durable memory record to append.
 type Entry struct {
 	Text   string // the fact/decision/lesson (single line)
-	Kind   string // optional: decision | lesson | preference
-	Source string // optional provenance, e.g. "session" or an ADR id
+	Kind   string // optional: fact | decision | lesson | preference
+	Source string // optional provenance, e.g. "session", "reconcile", or a [[wikilink]]
 	Date   string // YYYY-MM-DD; defaults to today (UTC) if empty
+	// ValidFrom, when set, is the fact's leading date (valid_from). It takes
+	// precedence over Date for the emitted line; existing callers that set only
+	// Date are unaffected.
+	ValidFrom string
 }
 
 // Remember prepends a dated entry to the axon:memory managed block in MEMORY.md
@@ -76,7 +80,7 @@ func Reconcile(ctx context.Context, v *vault.FS, oldText, newText, date string) 
 	matched := false
 	for i, line := range entries {
 		if !matched && strings.Contains(line, oldText) && !strings.Contains(line, "~~") {
-			entries[i] = tombstone(line, date)
+			entries[i] = tombstone(line, date, "")
 			matched = true
 		}
 	}
@@ -88,20 +92,33 @@ func Reconcile(ctx context.Context, v *vault.FS, oldText, newText, date string) 
 	return matched, nil
 }
 
-// tombstone strikes a memory entry line and tags it superseded, preserving the
-// dated fact for audit while marking it inactive.
-func tombstone(line, date string) string {
+// tombstone strikes a memory entry line and closes its validity interval,
+// preserving the dated fact for audit while marking it inactive. When
+// supersededBy is non-empty it emits the interval-explicit form
+// "- ~~<inner>~~ (until DATE; superseded by \"<supersededBy>\")" with quotes
+// sanitized to ' so the annotation cannot break parsing; when it is empty it
+// falls back to the legacy "(superseded DATE)" form.
+func tombstone(line, date, supersededBy string) string {
 	inner := strings.TrimPrefix(strings.TrimSpace(line), "- ")
-	return fmt.Sprintf("- ~~%s~~ (superseded %s)", inner, date)
+	if supersededBy == "" {
+		return fmt.Sprintf("- ~~%s~~ (superseded %s)", inner, date)
+	}
+	sb := strings.ReplaceAll(supersededBy, `"`, "'")
+	return fmt.Sprintf("- ~~%s~~ (until %s; superseded by \"%s\")", inner, date, sb)
 }
 
 // FormatEntry renders a single MEMORY bullet: "- DATE — text [kind] (source: …)".
+// DATE is ValidFrom when set, else Date — the leading date is the fact's valid_from.
 func FormatEntry(e Entry) string {
 	// Collapse internal newlines so one entry stays one line (the block is parsed
 	// line-by-line and injected verbatim).
 	text := strings.Join(strings.Fields(e.Text), " ")
+	date := e.ValidFrom
+	if date == "" {
+		date = e.Date
+	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "- %s — %s", e.Date, text)
+	fmt.Fprintf(&b, "- %s — %s", date, text)
 	if k := strings.TrimSpace(e.Kind); k != "" {
 		fmt.Fprintf(&b, " [%s]", k)
 	}
