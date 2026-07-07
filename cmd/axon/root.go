@@ -40,7 +40,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newMCPCmd(gf), newHookCmd(gf))
 	root.AddCommand(newServiceCmd(gf), newExportCmd(gf), newProfilesCmd(gf))
 	root.AddCommand(newUpdateCmd(gf), newSetupCmd(gf), newUninstallCmd(gf), newVaultCmd(gf))
-	root.AddCommand(newAutomationsCmd(gf), newHealthCmd(gf))
+	root.AddCommand(newAutomationsCmd(gf), newHealthCmd(gf), newEvalCmd(gf))
 	root.AddCommand(newStubCmds(gf)...)
 	return root
 }
