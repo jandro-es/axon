@@ -18,7 +18,8 @@ Detail is in `@docs/`. Do not duplicate it here; reference it.
 - `@docs/05…09` — component specs (ingestion, automation, token manager, agent bridge/MCP, dashboard).
 - `@docs/10-component-installer-bootstrap.md` — `axon init`, prereq checks, idempotency, profiles.
 - `@docs/11-build-roadmap.md` — phased plan with acceptance gates. **Build in this order.**
-- `@docs/14-roadmap-1.1.md` — the 1.1 plan (planning only; each slice needs its own spec + ADR before build).
+- `@docs/14-roadmap-1.1.md` — the 1.1 plan (shipped 2026-07-06; FR-108…133, ADR-023…027).
+- `@docs/15-roadmap-1.2.md` — the 1.2 plan ("remember & reason": R1 temporal memory, R2/R5/R7/R8/R9; planning only, each slice needs its own spec + ADR before build).
 
 ## Two cardinal rules (never violate)
 
