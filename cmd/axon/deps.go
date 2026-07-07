@@ -189,6 +189,30 @@ func (d *profileDeps) buildEngine(bus *events.Bus) *automations.Engine {
 	return d.buildServices(bus).engine
 }
 
+// evalManager builds a token manager for the eval harness: router-backed (local
+// refs reach Ollama) but with local_fallback forced to "fail" so a broken local
+// model surfaces as a failed case instead of silently measuring Claude (R5.1
+// measurement integrity). The returned resolver maps a model key — a family
+// alias or a concrete ref — to the bare model string the manager returns, so the
+// runner can flag escalation. Requires the database to be open.
+func (d *profileDeps) evalManager(bus *events.Bus) (tokens.Manager, func(string) string) {
+	p := d.profile
+	p.Models.LocalFallback = "fail"
+	mgr := tokens.NewWithRouter(d.db, d.agentRouter(), d.buildSearcher(), bus, managerConfig(d.name, p, d.cfg))
+	resolve := func(key string) string {
+		switch key {
+		case "classify":
+			key = p.Models.Classify
+		case "routine":
+			key = p.Models.Routine
+		case "synthesis":
+			key = p.Models.Synthesis
+		}
+		return config.ParseModelRef(key).Model
+	}
+	return mgr, resolve
+}
+
 // mcpDeps assembles the dependency set for the MCP server.
 func (d *profileDeps) mcpDeps(bus *events.Bus) mcp.Deps {
 	svc := d.buildServices(bus)
