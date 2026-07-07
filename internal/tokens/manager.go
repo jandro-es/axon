@@ -153,6 +153,13 @@ type Config struct {
 	// for automation prompts built from raw vault notes (NFR-05/NFR-14:
 	// redaction is enforced in code, not by asking the model nicely).
 	RedactionRules []string
+	// EvalMinPass mirrors models.eval_min_pass (percent, 0–100). 0 disables the
+	// promotion gate (FR-142). Set by managerConfig from the profile.
+	EvalMinPass int
+	// PromotionGateOff disables the gate for this manager regardless of
+	// EvalMinPass. Set ONLY by the eval harness's own manager so `axon eval`
+	// measures the real local model (chicken-and-egg guard).
+	PromotionGateOff bool
 	// Now optionally overrides the clock used for budget windows and ledger
 	// timestamps. Defaults to time.Now; set only by tests for determinism.
 	Now func() time.Time
@@ -236,6 +243,28 @@ func (m *manager) resolveRef(key string) config.ModelRef {
 	return config.ParseModelRef(m.resolveModel(key))
 }
 
+// isGatedTier reports whether a model key is a promotable family alias subject
+// to the eval-promotion gate (FR-142). Concrete refs (deliberate overrides) and
+// synthesis (always Claude) are never gated.
+func isGatedTier(key string) bool { return key == "classify" || key == "routine" }
+
+// latestEvalPass returns the most recent eval pass percent for (family, ref) via
+// a raw query on the manager's DB (no internal/db import; mirrors the ledger
+// SQL). ok is false when no row exists or the read fails (fail-closed: the caller
+// then treats the tier as unvetted).
+func (m *manager) latestEvalPass(ctx context.Context, family, ref string) (int, bool) {
+	if m.db == nil {
+		return 0, false
+	}
+	var pct int
+	if err := m.db.QueryRowContext(ctx,
+		`SELECT pass_pct FROM eval_runs WHERE family = ? AND model_ref = ?
+		 ORDER BY ran_at DESC, id DESC LIMIT 1;`, family, ref).Scan(&pct); err != nil {
+		return 0, false
+	}
+	return pct, true
+}
+
 // downgradeClaudeKey returns the next cheaper tier whose provider is Claude,
 // or "". Local tiers are skipped: they are budget-exempt already and never
 // the target of a budget downgrade (FR-78).
@@ -301,6 +330,21 @@ func (m *manager) estimateInput(ctx context.Context, ref config.ModelRef, call A
 // day/week windows, and decide proceed/downgrade/defer/deny (docs/07 §2).
 func (m *manager) Authorize(ctx context.Context, call AgentCall) (Authorization, error) {
 	ref := m.resolveRef(call.ModelKey)
+	// Eval-gated promotion (FR-142): an unvetted local classify/routine tier is
+	// retargeted to its Claude fallback before any budget/routing decision. Pure
+	// SQLite read — no Ollama call on the hot path.
+	if m.cfg.EvalMinPass > 0 && !m.cfg.PromotionGateOff &&
+		ref.Provider != config.ProviderClaude && isGatedTier(call.ModelKey) {
+		if pct, ok := m.latestEvalPass(ctx, call.ModelKey, m.resolveModel(call.ModelKey)); !ok || pct < m.cfg.EvalMinPass {
+			fbKey := m.fallbackClaudeKey(call.ModelKey)
+			m.emit(events.LevelWarn, "token.unvetted_local", call.Operation,
+				Authorization{Model: ref.Model, Provider: ref.Provider},
+				map[string]any{"tier": call.ModelKey, "ref": m.resolveModel(call.ModelKey),
+					"pass_pct": pct, "min_pass": m.cfg.EvalMinPass, "routed_to": fbKey})
+			call.ModelKey = fbKey
+			ref = m.resolveRef(call.ModelKey)
+		}
+	}
 	model := ref.Model
 	est := m.estimateInput(ctx, ref, call)
 	auth := Authorization{Decision: DecisionProceed, Model: model, Provider: ref.Provider, EstInput: est}

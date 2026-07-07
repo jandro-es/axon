@@ -279,7 +279,7 @@ modelling (explicitly out of PRD scope for one user); making the fact index
 authoritative (would violate the vault-source-of-truth invariant). (Spec:
 `docs/superpowers/specs/2026-07-07-temporal-memory-design.md`; FR-134…FR-137.)
 
-### ADR-029 — Eval-gated local-model promotion: an in-repo golden-set harness *(accepted — planned)*
+### ADR-029 — Eval-gated local-model promotion: an in-repo golden-set harness *(accepted — harness built; gating in ADR-030)*
 
 **Status:** Accepted (2026-07-07, roadmap 1.2 R5). This slice builds the harness
 (sub-slice #1); promotion-gating and the runtime cascade are noted follow-ons.
@@ -321,6 +321,44 @@ This slice deliberately **defers** persistence (`eval_runs`), the `doctor`
 eval-status check, config promotion-gating in `validateLocalRouting`, and the
 runtime local→verifier→Claude cascade to follow-on slices #2/#3. (Spec:
 `docs/superpowers/specs/2026-07-07-eval-harness-design.md`; FR-140, FR-141.)
+
+### ADR-030 — Eval-gated promotion: a runtime admission gate in the chokepoint *(accepted — planned)*
+
+**Status:** Accepted (2026-07-07, roadmap 1.2 R5 sub-slice #2). Extends ADR-029.
+
+**Decision:** Turn ADR-029's persisted eval results into an enforced promotion
+rule at runtime. A new DB-only `eval_runs` table records each `axon eval`
+outcome per `(family, model_ref, digest, pass_pct, ran_at)`; `axon eval`
+persists a row per family (fetching the Ollama digest once at persist time). The
+token-manager chokepoint gains an **admission gate** in `Authorize`: when a
+local classify/routine tier resolves and `models.eval_min_pass > 0`, it consults
+the latest `eval_runs` row for that `(family, ref)`; if absent or below
+threshold it **retargets to the tier's Claude fallback** (`fallbackClaudeKey`),
+emits `token.unvetted_local`, and proceeds through the normal budget path. The
+gate is a single indexed SQLite read — **no Ollama call on the hot path**.
+Version drift (digest change) is detected out-of-band by `doctor` and an
+optional, default-off `eval-drift` automation that re-runs the harness and
+refreshes the rows. `models.eval_min_pass` defaults to **0 (opt-in)** so existing
+installs are unchanged on upgrade; `axon init` scaffolds `80` for new installs.
+The eval harness's own manager sets `PromotionGateOff` so `axon eval` always
+measures the real local model (the chicken-and-egg guard).
+
+**Why:** Config validation is pure and runs before the DB opens, so it cannot
+consult eval results — and the determinism principle wants admission enforced in
+code on every path, not by asking nicely. The chokepoint already resolves tiers
+and owns the Claude-fallback machinery, making it the one place every automation
+and tool call is guaranteed to pass through. Keeping the hot-path gate a pure DB
+read (drift handled out-of-band) preserves the chokepoint's latency budget; the
+opt-in default avoids surprising existing local-tier users with Claude spend.
+
+**Trade-offs:** a drift window exists between a silent model regression and the
+next `doctor`/automation run that invalidates the stale pass — accepted here
+because R5.2 is admission-only; per-call verification of a *served* answer is the
+separate R5.3 cascade. `eval_runs` is DB-only and **S9-exempt** (it records
+machine-local measurements with no vault source to rebuild from; `reindex` leaves
+it untouched). (Spec:
+`docs/superpowers/specs/2026-07-07-eval-gated-promotion-design.md`; FR-142,
+FR-143.)
 
 ### ADR-027 — Local reranking as a retrieval primitive (outside the chokepoint) *(accepted — built)*
 

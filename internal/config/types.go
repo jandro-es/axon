@@ -301,6 +301,11 @@ type ModelsConfig struct {
 	// LocalFallback governs local-provider failures: "claude" (default)
 	// falls forward through the normal budget path; "fail" surfaces the error.
 	LocalFallback string `yaml:"local_fallback,omitempty"`
+	// EvalMinPass gates local-tier promotion (R5.2/FR-142): a local
+	// classify/routine model serves its tier only when its latest `axon eval`
+	// pass rate is >= this percent. 0 (default) disables the gate — local tiers
+	// route as configured. New installs scaffold 80; doctor nudges.
+	EvalMinPass int `yaml:"eval_min_pass,omitempty" validate:"omitempty,min=0,max=100"`
 	// AppleHelper overrides the Foundation Models helper binary path.
 	// Default: DefaultAppleLMHelperPath(). Ignored unless a tier is "apple".
 	AppleHelper string `yaml:"apple_helper,omitempty"`

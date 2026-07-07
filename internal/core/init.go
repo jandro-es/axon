@@ -455,6 +455,38 @@ func ocrStep(ctx context.Context, opts InitOptions) StepResult {
 }
 
 // ollamaReachable reports whether the Ollama API answers at host.
+// OllamaDigest returns the content digest of a pulled model from /api/tags, and
+// ok=false if Ollama is unreachable or the model is absent. Used out of the hot
+// path (eval persistence, doctor drift, eval-drift automation) — never in the
+// token gate.
+func OllamaDigest(ctx context.Context, host, model string) (string, bool) {
+	host = strings.TrimRight(host, "/")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, host+"/api/tags", nil)
+	if err != nil {
+		return "", false
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", false
+	}
+	defer resp.Body.Close()
+	var body struct {
+		Models []struct {
+			Name   string `json:"name"`
+			Digest string `json:"digest"`
+		} `json:"models"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return "", false
+	}
+	for _, mm := range body.Models {
+		if mm.Name == model {
+			return mm.Digest, true
+		}
+	}
+	return "", false
+}
+
 func ollamaReachable(ctx context.Context, host string) bool {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()

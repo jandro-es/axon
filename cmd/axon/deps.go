@@ -198,7 +198,9 @@ func (d *profileDeps) buildEngine(bus *events.Bus) *automations.Engine {
 func (d *profileDeps) evalManager(bus *events.Bus) (tokens.Manager, func(string) string) {
 	p := d.profile
 	p.Models.LocalFallback = "fail"
-	mgr := tokens.NewWithRouter(d.db, d.agentRouter(), d.buildSearcher(), bus, managerConfig(d.name, p, d.cfg))
+	mc := managerConfig(d.name, p, d.cfg)
+	mc.PromotionGateOff = true // eval measures the real local model (FR-142 guard)
+	mgr := tokens.NewWithRouter(d.db, d.agentRouter(), d.buildSearcher(), bus, mc)
 	resolve := func(key string) string {
 		switch key {
 		case "classify":

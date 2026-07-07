@@ -127,6 +127,7 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 			checks = append(checks, residencyCheck(p))
 			checks = append(checks, annIndexCheck(p, paths))
 			checks = append(checks, memoryFactsCheck(paths))
+			checks = append(checks, localModelsVettingChecks(paths, p)...)
 			// 8–9. Multi-client wiring (FR-75): is the AXON MCP server registered
 			// with each Claude client, and is each client's guarantee honest.
 			checks = append(checks, claudeCodeWiringCheck(paths.VaultPath))
@@ -213,6 +214,79 @@ func rerankCheck(p config.Profile) Check {
 		return Check{name, StatusWarn, fmt.Sprintf("reranker model %q not pulled — run `ollama pull %s`", model, model)}
 	}
 	return Check{name, StatusOK, "reranker ready: " + mode}
+}
+
+// vettingCheck renders the eval-promotion status for one gated local tier
+// (FR-143). Pure: the caller supplies the persisted row and live digest so it is
+// unit-testable without Ollama.
+func vettingCheck(name, tier, ref string, minPass int, row db.EvalRun, haveRow bool, curDigest string, digestKnown bool) Check {
+	switch {
+	case minPass == 0:
+		return Check{name, StatusWarn,
+			fmt.Sprintf("local tier %s is ungated — set models.eval_min_pass to require evals", ref)}
+	case !haveRow:
+		return Check{name, StatusWarn,
+			fmt.Sprintf("%s not vetted — run `axon eval --family %s --model %s`", ref, tier, ref)}
+	case row.PassPct < minPass:
+		return Check{name, StatusWarn,
+			fmt.Sprintf("%s scored %d%% below %d%% — routes to Claude until it passes", ref, row.PassPct, minPass)}
+	case digestKnown && row.Digest != "" && curDigest != "" && row.Digest != curDigest:
+		return Check{name, StatusWarn,
+			fmt.Sprintf("%s changed since eval (%s → %s) — re-run `axon eval`", ref, short(row.Digest), short(curDigest))}
+	default:
+		return Check{name, StatusOK, fmt.Sprintf("%s vetted %d%%", ref, row.PassPct)}
+	}
+}
+
+func short(d string) string {
+	if len(d) > 12 {
+		return d[:12]
+	}
+	return d
+}
+
+// localModelsVettingChecks emits one vettingCheck per gated local classify/
+// routine tier (FR-143). It opens the profile DB read-only (like
+// memoryFactsCheck) and fetches the live Ollama digest for drift detection —
+// out of the token hot path.
+func localModelsVettingChecks(paths config.ResolvedPaths, p config.Profile) []Check {
+	m := p.Models
+	ctx := context.Background()
+	var d *sql.DB
+	if _, err := os.Stat(paths.DBPath); err == nil {
+		if dd, oerr := sql.Open("sqlite", paths.DBPath); oerr == nil {
+			d = dd
+			defer func() { _ = d.Close() }()
+		}
+	}
+	var out []Check
+	for _, t := range []struct{ tier, ref string }{{"classify", m.Classify}, {"routine", m.Routine}} {
+		r := config.ParseModelRef(t.ref)
+		if r.Provider == config.ProviderClaude {
+			continue // Claude tiers are never gated
+		}
+		name := "eval-vetting:" + t.tier
+		if m.EvalMinPass == 0 {
+			out = append(out, vettingCheck(name, t.tier, t.ref, 0, db.EvalRun{}, false, "", false))
+			continue
+		}
+		var (
+			row  db.EvalRun
+			have bool
+		)
+		if d != nil {
+			row, have, _ = db.LatestEvalRun(ctx, d, t.tier, t.ref)
+		}
+		var (
+			cur   string
+			known bool
+		)
+		if r.Provider == config.ProviderOllama {
+			cur, known = OllamaDigest(ctx, m.OllamaHost, r.Model)
+		}
+		out = append(out, vettingCheck(name, t.tier, t.ref, m.EvalMinPass, row, have, cur, known))
+	}
+	return out
 }
 
 // localModelsCheck reports the state of any locally-routed model tier
