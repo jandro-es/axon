@@ -165,6 +165,20 @@ relative to their slice.
 | FR-132 | S | **Budget-degrading pulse narrative.** One routine-tier chokepoint call (local-routable, ADR-015) turns the facts plus bounded per-project excerpts (retrieve-don't-dump) into a 3–6 sentence pulse of progress / stalls / next actions, grounded strictly in the supplied text as data (NFR-05). Under budget denial the narrative degrades to a facts-only block (`_(pulse narrative skipped: budget)_`) — the pulse never fails on budget pressure. |
 | FR-133 | S | **Stale-project nudges.** Each project untouched for ≥3 weeks appends one `- [ ]` line to `.axon/review-queue.md` (`pulse: [[project]] untouched N weeks — review or archive?`), at most once ever (proposal memory keyed by path — never re-nags weekly). `--dry-run` reports both the pulse and the nudges without writing. |
 
+### Temporal memory *(roadmap 1.2 R1 — planned)*
+
+FR-134…FR-137 are the **1.2** headline (`docs/15-roadmap-1.2.md`, Phase R),
+tracing to ADR-028 and the spec in
+`docs/superpowers/specs/2026-07-07-temporal-memory-design.md`. Priorities are
+relative to this slice.
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-134 | M | **Interval-bearing fact grammar.** The `axon:memory` block carries machine-readable validity intervals: an open fact's `valid_from` is its leading date; a superseded fact is tombstoned as `- ~~…~~ (until DATE; superseded by "…")`, giving `valid_until` + a superseded-by pointer (quotes sanitized); `[kind]` extends to `fact | decision | lesson | preference`. The extension is backward-compatible — legacy entries and legacy `(superseded DATE)` tombstones parse correctly with **no Markdown migration**. `source` may be a `[[wikilink]]` or a plain token. |
+| FR-135 | M | **Derived `memory_facts` index.** A derived SQLite table (`0005_memory_facts.sql`: text, kind, source, valid_from, valid_until, superseded_by, struck, embedding, line_no) is rebuilt from the `axon:memory` block during `axon reindex` as a read-only Markdown→DB pass that **never writes to the vault**; deleting the DB and reindexing reproduces it row-for-row (S9). Embeddings fill best-effort via the existing nomic embedder (nullable when Ollama is down). `axon doctor` reports fact count (open/superseded) and flags any unparseable block line. |
+| FR-136 | M | **Interval-aware supersedence.** Accepting a `reconcile` proposal closes the superseded fact's interval — `identity.Reconcile` sets `valid_until` + superseded-by and tombstones in place (never deletes, cardinal rule 2) — and prepends the new open fact; if the old fact is gone it still prepends (`matched=false`). `memory-distill` runs consolidation at the **routine** tier through the chokepoint (was synthesis), promoting facts with `[fact]` + `valid_from` + a `[[source]]` wikilink; detection stays the model-driven whole-memory feed (C1). |
+| FR-137 | S | **Valid-facts injection.** SessionStart memory injection prefers **currently-valid** facts — superseded/closed facts are excluded — selecting the newest open facts within the existing token ceiling, parsing the `axon:memory` block directly with **no DB dependency** (a hook must never fail); empty/legacy blocks behave exactly as before. |
+
 ### Session memory *(built 2026-07-04)*
 
 FR-97…FR-99 trace to ADR-021 and the spec in

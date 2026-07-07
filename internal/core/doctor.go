@@ -19,6 +19,8 @@ import (
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/embeddings"
+	"github.com/jandro-es/axon/internal/identity"
+	"github.com/jandro-es/axon/internal/vault"
 )
 
 // CheckStatus is the outcome of a single doctor check.
@@ -124,6 +126,7 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 			checks = append(checks, portFreeCheck(p.Dashboard.Host, p.Dashboard.Port))
 			checks = append(checks, residencyCheck(p))
 			checks = append(checks, annIndexCheck(p, paths))
+			checks = append(checks, memoryFactsCheck(paths))
 			// 8–9. Multi-client wiring (FR-75): is the AXON MCP server registered
 			// with each Claude client, and is each client's guarantee honest.
 			checks = append(checks, claudeCodeWiringCheck(paths.VaultPath))
@@ -394,6 +397,42 @@ func residencyCheck(p config.Profile) Check {
 // enabling ann once the corpus is large, and warn when ann is enabled but the
 // index has not been built. Read-only and tolerant — a missing/unreadable DB is
 // reported as ok and never fails doctor.
+// memoryFactsCheck reports the derived memory_facts index size (open/superseded)
+// and flags any axon:memory block line that fails ParseFact — a parse anomaly
+// means someone hand-edited a fact into an unparseable shape. Advisory: a
+// missing/unreadable DB or absent layer is reported ok and never fails doctor.
+func memoryFactsCheck(paths config.ResolvedPaths) Check {
+	const name = "memory-facts"
+	ctx := context.Background()
+
+	// Flag unparseable block lines directly from the vault (no DB needed).
+	v := vault.NewFS(paths.VaultPath)
+	if lines, err := identity.BlockLines(ctx, v); err == nil {
+		for _, line := range lines {
+			if _, ok := identity.ParseFact(line); !ok {
+				return Check{name, StatusWarn,
+					fmt.Sprintf("MEMORY.md has an unparseable memory line: %q — fix it in Obsidian", line)}
+			}
+		}
+	}
+
+	if _, err := os.Stat(paths.DBPath); err != nil {
+		return Check{name, StatusOK, "no database yet"}
+	}
+	d, err := sql.Open("sqlite", paths.DBPath)
+	if err != nil {
+		return Check{name, StatusOK, "database not readable; skipped"}
+	}
+	defer func() { _ = d.Close() }()
+
+	total, open, superseded, err := db.MemoryFactCounts(ctx, d)
+	if err != nil {
+		return Check{name, StatusOK, "memory facts not counted; skipped"}
+	}
+	return Check{name, StatusOK,
+		fmt.Sprintf("%d facts (%d open / %d superseded)", total, open, superseded)}
+}
+
 func annIndexCheck(p config.Profile, paths config.ResolvedPaths) Check {
 	const name = "ann-index"
 	if _, err := os.Stat(paths.DBPath); err != nil {

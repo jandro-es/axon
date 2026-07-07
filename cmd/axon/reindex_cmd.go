@@ -69,6 +69,9 @@ func newReindexCmd(gf *globalFlags) *cobra.Command {
 						if err := core.RefreshVectorIndex(cmd.Context(), sqlDB, profile.Retrieval); err != nil {
 							return "", fmt.Errorf("refresh vector index: %w", err)
 						}
+						if _, err := core.EmbedPendingMemoryFacts(cmd.Context(), sqlDB, embedder); err != nil {
+							return "", fmt.Errorf("embed memory facts: %w", err)
+						}
 						return fmt.Sprintf("re-embedded %d/%d chunks via %s", re.Embedded, re.Total, profile.Embeddings.Model), nil
 					})
 				}
@@ -94,6 +97,9 @@ func newReindexCmd(gf *globalFlags) *cobra.Command {
 				}
 				if err := core.RefreshVectorIndex(cmd.Context(), sqlDB, profile.Retrieval); err != nil {
 					return fmt.Errorf("refresh vector index: %w", err)
+				}
+				if _, err := core.EmbedPendingMemoryFacts(cmd.Context(), sqlDB, embedder); err != nil {
+					return fmt.Errorf("embed memory facts: %w", err)
 				}
 				fmt.Fprintf(out, "%s re-embedded %d/%d chunks via %s\n", st.Green(ui.IconOK), re.Embedded, re.Total, st.Cyan(profile.Embeddings.Model))
 			}

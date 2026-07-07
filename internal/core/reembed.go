@@ -54,3 +54,37 @@ func ReembedPending(ctx context.Context, sqlDB *sql.DB, embedder embeddings.Prov
 	}
 	return res, nil
 }
+
+// EmbedPendingMemoryFacts fills embeddings for memory_facts rows that have none,
+// best-effort (ADR-028): a nil embedder or an unreachable Ollama leaves them
+// NULL — the interval/injection paths do not need them, and the next reindex
+// with Ollama up backfills. Embeddings are local and free, so this respects the
+// token rule trivially. Returns how many facts were embedded.
+func EmbedPendingMemoryFacts(ctx context.Context, sqlDB *sql.DB, embedder embeddings.Provider) (int, error) {
+	if embedder == nil {
+		return 0, nil
+	}
+	pending, err := db.MemoryFactsMissingEmbedding(ctx, sqlDB)
+	if err != nil || len(pending) == 0 {
+		return 0, err
+	}
+	texts := make([]string, len(pending))
+	for i, f := range pending {
+		texts[i] = f.Text
+	}
+	vecs, err := embedder.Embed(ctx, texts)
+	if err != nil {
+		return 0, nil // best-effort: Ollama down; leave embeddings NULL
+	}
+	n := 0
+	for i, f := range pending {
+		if i >= len(vecs) {
+			break
+		}
+		if err := db.SetMemoryFactEmbedding(ctx, sqlDB, f.ID, vecs[i]); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
+}

@@ -80,8 +80,11 @@ func Render(ctx context.Context, v *vault.FS, opts RenderOptions) (string, error
 	return out, nil
 }
 
-// RecentEntries returns up to n newest entries (newest first) from the
-// axon:memory managed block in MEMORY.md.
+// RecentEntries returns up to n newest currently-valid entries (newest first)
+// from the axon:memory managed block in MEMORY.md. Superseded/closed facts —
+// struck lines and any with a valid_until — are excluded so SessionStart
+// injection prefers currently-valid facts (FR-137). Legacy untyped lines (no
+// kind, no interval) are open and included. Pure block parse, no DB dependency.
 func RecentEntries(ctx context.Context, v *vault.FS, n int) ([]string, error) {
 	if n <= 0 {
 		n = 10
@@ -90,11 +93,30 @@ func RecentEntries(ctx context.Context, v *vault.FS, n int) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	entries := parseEntries(extractBlock(body, MemoryBlock))
-	if len(entries) > n {
-		entries = entries[:n]
+	all := parseEntries(extractBlock(body, MemoryBlock))
+	open := make([]string, 0, len(all))
+	for _, line := range all {
+		f, ok := ParseFact(line)
+		if !ok || f.Struck || f.ValidUntil != "" {
+			continue
+		}
+		open = append(open, line)
 	}
-	return entries, nil
+	if len(open) > n {
+		open = open[:n]
+	}
+	return open, nil
+}
+
+// BlockLines returns every "- " entry line of the axon:memory block in block
+// order (newest-first), unfiltered — struck and open alike. reindex projects
+// all of them into memory_facts; RecentEntries (open-only) is for injection.
+func BlockLines(ctx context.Context, v *vault.FS) ([]string, error) {
+	body, err := readBody(ctx, v, MemoryPath)
+	if err != nil {
+		return nil, err
+	}
+	return parseEntries(extractBlock(body, MemoryBlock)), nil
 }
 
 // readBody returns a note's body (frontmatter stripped), or "" if absent.

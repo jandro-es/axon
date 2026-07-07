@@ -8,6 +8,7 @@ import (
 
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
+	"github.com/jandro-es/axon/internal/identity"
 	"github.com/jandro-es/axon/internal/ingestion"
 	"github.com/jandro-es/axon/internal/vault"
 )
@@ -143,6 +144,12 @@ func Reindex(ctx context.Context, v *vault.FS, sqlDB *sql.DB) (ReindexResult, er
 		}
 	}
 
+	// Rebuild the derived memory fact index from the axon:memory block (ADR-028).
+	// Read-only Markdown→DB: this NEVER writes to the vault (S9).
+	if err := rebuildMemoryFacts(ctx, v, tx); err != nil {
+		return res, err
+	}
+
 	if err := tx.Commit(); err != nil {
 		return res, fmt.Errorf("commit reindex: %w", err)
 	}
@@ -180,6 +187,34 @@ func rechunkNote(ctx context.Context, tx db.DBTX, noteID int64, body string) (bo
 		}
 	}
 	return len(chunks) > 0, nil
+}
+
+// rebuildMemoryFacts projects every axon:memory block line into the derived
+// memory_facts table inside the reindex transaction. It reads MEMORY.md and
+// ParseFacts each bullet; unparseable lines are skipped (they are surfaced by
+// doctor, never indexed). Embeddings are left NULL here and backfilled
+// best-effort after the transaction (EmbedPendingMemoryFacts). Read-only w.r.t.
+// the vault.
+func rebuildMemoryFacts(ctx context.Context, v *vault.FS, tx db.DBTX) error {
+	lines, err := identity.BlockLines(ctx, v)
+	if err != nil {
+		return err
+	}
+	facts := make([]db.MemoryFact, 0, len(lines))
+	now := nowStamp()
+	for i, line := range lines {
+		f, ok := identity.ParseFact(line)
+		if !ok {
+			continue
+		}
+		facts = append(facts, db.MemoryFact{
+			Text: f.Text, Kind: f.Kind, Source: f.Source,
+			ValidFrom: f.ValidFrom, ValidUntil: f.ValidUntil,
+			SupersededBy: f.SupersededBy, Struck: f.Struck,
+			LineNo: i, Updated: now,
+		})
+	}
+	return db.ReplaceMemoryFacts(ctx, tx, facts)
 }
 
 // resolveTarget maps a wikilink target to a note id using the path/basename
