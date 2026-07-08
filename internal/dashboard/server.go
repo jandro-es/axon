@@ -332,7 +332,7 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 		}
 		s.cfg.Bus.Publish(events.Event{
 			Level: events.LevelInfo, Kind: kind, Message: "ask: " + in.Question,
-			Data: map[string]any{"profile": s.cfg.Profile, "refused": a.Refused, "tokens": a.Tokens},
+			Data: map[string]any{"profile": s.cfg.Profile, "refused": a.Refused, "conflicted": a.Conflicted, "tokens": a.Tokens},
 		})
 	}
 	writeJSON(w, a)

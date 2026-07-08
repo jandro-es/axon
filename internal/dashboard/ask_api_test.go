@@ -20,7 +20,7 @@ import (
 	"github.com/jandro-es/axon/internal/vault"
 )
 
-func askTestServer(t *testing.T, enabled bool) *httptest.Server {
+func askTestServer(t *testing.T, enabled bool) (*httptest.Server, *agent.Fake) {
 	t.Helper()
 	d, err := db.Open(db.MemoryDSN)
 	if err != nil {
@@ -63,7 +63,7 @@ func askTestServer(t *testing.T, enabled bool) *httptest.Server {
 	})
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
-	return srv
+	return srv, fake
 }
 
 func postAskReq(t *testing.T, url, question string, withHeader bool) *http.Response {
@@ -82,7 +82,7 @@ func postAskReq(t *testing.T, url, question string, withHeader bool) *http.Respo
 }
 
 func TestAskAPIHappyPath(t *testing.T) {
-	srv := askTestServer(t, true)
+	srv, _ := askTestServer(t, true)
 	res := postAskReq(t, srv.URL, "what are vector databases for similarity search", true)
 	if res.StatusCode != 200 {
 		t.Fatalf("status = %d", res.StatusCode)
@@ -99,15 +99,34 @@ func TestAskAPIHappyPath(t *testing.T) {
 	}
 }
 
+func TestAskAPIConflictedCarried(t *testing.T) {
+	srv, fake := askTestServer(t, true)
+	fake.Reply = "CONFLICT\nSources disagree about similarity search [[Notes/vectors]]."
+	res := postAskReq(t, srv.URL, "what are vector databases for similarity search", true)
+	if res.StatusCode != 200 {
+		t.Fatalf("status = %d", res.StatusCode)
+	}
+	var a struct {
+		Conflicted bool `json:"conflicted"`
+		Refused    bool `json:"refused"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&a); err != nil {
+		t.Fatal(err)
+	}
+	if a.Refused || !a.Conflicted {
+		t.Fatalf("want conflicted answer, got %+v", a)
+	}
+}
+
 func TestAskAPIGuardAndToggle(t *testing.T) {
-	srv := askTestServer(t, true)
+	srv, _ := askTestServer(t, true)
 	if res := postAskReq(t, srv.URL, "q", false); res.StatusCode != http.StatusForbidden {
 		t.Fatalf("no-header status = %d, want 403", res.StatusCode)
 	}
 	if res := postAskReq(t, srv.URL, "   ", true); res.StatusCode != http.StatusBadRequest {
 		t.Fatalf("empty-question status = %d, want 400", res.StatusCode)
 	}
-	off := askTestServer(t, false)
+	off, _ := askTestServer(t, false)
 	if res := postAskReq(t, off.URL, "q", true); res.StatusCode != http.StatusNotFound {
 		t.Fatalf("disabled status = %d, want 404", res.StatusCode)
 	}
