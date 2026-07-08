@@ -117,7 +117,7 @@ MCP tool (default set + agentic **read** allowlist — zero-spend), and `GET
 **Related** SPA tab. Advisory `doctor` `related` check. Provisional FR-144/145
 reassigned to FR-148/149/150 (R5 consumed 140–145).
 
-### R9 — Resurfacing with review scheduling (S) · provisional FR-146/147 (extends resurfacer + review queue; no ADR)
+### R9 — Resurfacing with review scheduling (S) · FR-151/152/153 (extends resurfacer + review queue; no ADR) ✅ **BUILT 2026-07-08**
 **Build:** upgrade the resurfacer from "similar old note" to a light
 **FSRS-flavoured review queue for ideas** — stale-but-relevant notes and
 R1-detected "this new note echoes/contradicts `[[old note]]`" pairs scheduled into
@@ -125,6 +125,18 @@ the weekly review at spaced intervals, with proposal memory so items surface onc
 per interval.
 **Gate:** a resurfaced item declined this week does not reappear next week;
 intervals lengthen on acceptance.
+**Shipped:** per-pair `{rung, due, last}` schedule (interval ladder
+`resurfacing.intervals_weeks`, default `[1,2,4,8,16]`, leech-capped) persisted as
+JSON in `automation_state` (`resurfacer:schedule`; DB-wipe → base interval, S9-safe).
+Each run applies its own queue+archive outcomes once (`review.Outcomes`, `last`
+anchor): **dismiss +1 rung, accept +2** — intervals lengthen more on acceptance. A
+candidate surfaces only when not already pending and new-or-due. The "echoes"
+signal IS the existing recent↔dormant vector similarity (zero-model); a distinct
+**opt-in** routine-tier contradiction check (gated on `budget_tokens > 0` +
+`resurfacing.contradiction_max_checks`, default 3) reclassifies genuinely
+contradictory pairs into a new `contradicts` review kind (Accept links the pair).
+Provisional FR-146/147 reassigned to FR-151/152/153 (R2 consumed 146/147). No new
+ADR. Provisional numbers: FR-146/147 → **FR-151/152/153**.
 
 ### R7 — Near-duplicate merge proposals (M, 1.1 B3 carry-over) · provisional FR-148/149, ADR-030
 **Build:** an embedding sweep reusing the resurfacer primitives
@@ -144,7 +156,7 @@ zero broken links and both originals recoverable from the archive.
 | 2 | R5 local-tier promotion + `axon eval` ✅ **done** | M | Frees budget for everything after; independent lane, can run alongside R1. Shipped R5.1/R5.2/R5.3 (FR-140…145, ADR-029…031). |
 | 3 | R2 contradiction-aware ask ✅ **done** | S | Cheap once R1's intervals exist. Shipped FR-146/147, no ADR. |
 | 4 | R8 related-notes surface ✅ **done** | S | Zero-model, high visible value; exercises the ANN seam. Shipped FR-148/149/150, no ADR. |
-| 5 | R9 resurfacing/review scheduling | S | Rides R1's signals + resurfacer primitives. |
+| 5 | R9 resurfacing/review scheduling ✅ **done** | S | Rides R1's signals + resurfacer primitives. Shipped FR-151/152/153, no ADR. |
 | 6 | R7 merge proposals | M | Own destructive-op design pass (ADR-030); deliberately last. |
 
 **Two long poles:** R1 (memory representation touches `MEMORY.md` format,
