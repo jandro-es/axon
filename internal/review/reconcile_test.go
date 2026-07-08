@@ -34,17 +34,18 @@ func TestLoadParsesReconcile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var it *Item
+	var found bool
+	var note, target string
 	for i := range items {
 		if items[i].Kind == "reconcile" {
-			it = &items[i]
+			found, note, target = true, items[i].Note, items[i].Target
 		}
 	}
-	if it == nil {
+	if !found {
 		t.Fatalf("reconcile item not parsed: %+v", items)
 	}
-	if it.Note != "Uses Rust for daemons" || it.Target != "Prefers Go for daemons" {
-		t.Fatalf("reconcile fields = %+v", it)
+	if note != "Uses Rust for daemons" || target != "Prefers Go for daemons" {
+		t.Fatalf("reconcile fields = note=%q target=%q", note, target)
 	}
 }
 

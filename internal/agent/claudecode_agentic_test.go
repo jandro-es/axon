@@ -150,14 +150,13 @@ func TestAgenticRunBudgetKill(t *testing.T) {
 	if !errors.Is(err, ErrRunBudgetExceeded) {
 		t.Fatalf("err = %v, want ErrRunBudgetExceeded", err)
 	}
+	// Both turns accumulated: 900+50+2000+100 = 3050. The deref lives in the
+	// else-branches so it is provably reached only when resp != nil (SA5011).
 	if resp == nil {
 		t.Fatal("killed run must return accumulated usage")
-	}
-	// Both turns accumulated: 900+50+2000+100 = 3050.
-	if got := resp.Usage.InputTokens + resp.Usage.OutputTokens; got != 3050 {
+	} else if got := resp.Usage.InputTokens + resp.Usage.OutputTokens; got != 3050 {
 		t.Fatalf("accumulated tokens = %d, want 3050", got)
-	}
-	if resp.Text != "" {
+	} else if resp.Text != "" {
 		t.Fatalf("killed run has no result text, got %q", resp.Text)
 	}
 }
