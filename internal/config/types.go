@@ -45,6 +45,9 @@ type Profile struct {
 	// Ingestion tunes URL fetching beyond the egress policy — per-domain auth
 	// headers for sources behind SSO (Confluence, internal wikis). Optional.
 	Ingestion IngestionConfig `yaml:"ingestion"`
+	// Resurfacing tunes the R9 spaced-repetition review scheduler (FR-151…153).
+	// Optional: absent → the Go defaults via the accessors below.
+	Resurfacing ResurfacingConfig `yaml:"resurfacing"`
 	// Interop wires optional external/community MCP backends (FR-54). Optional.
 	Interop InteropConfig `yaml:"interop"`
 	// Capture tunes the capture automation (ADR-016). Optional: an absent block
@@ -376,6 +379,34 @@ func (r RetrievalConfig) RerankOverfetchOr() int {
 type ANNConfig struct {
 	Threshold int `yaml:"threshold,omitempty"` // min vectors before ann engages
 	NProbe    int `yaml:"nprobe,omitempty"`    // clusters probed per query
+}
+
+// ResurfacingConfig tunes the resurfacer's spaced-repetition schedule and the
+// opt-in contradiction check (R9). Zero values take the documented defaults.
+type ResurfacingConfig struct {
+	// IntervalsWeeks is the spaced-repetition ladder in weeks (rung 0..N; the
+	// last rung is the leech cap). Empty → [1,2,4,8,16].
+	IntervalsWeeks []int `yaml:"intervals_weeks,omitempty" validate:"omitempty,dive,gt=0"`
+	// ContradictionMaxChecks caps model calls per run for note-contradiction
+	// detection. 0 → default 3. Set explicitly to control spend; the path is
+	// still gated on the resurfacer having budget_tokens > 0.
+	ContradictionMaxChecks int `yaml:"contradiction_max_checks,omitempty" validate:"omitempty,gte=0"`
+}
+
+// IntervalsWeeksOr returns the configured ladder or the default [1,2,4,8,16].
+func (r ResurfacingConfig) IntervalsWeeksOr() []int {
+	if len(r.IntervalsWeeks) == 0 {
+		return []int{1, 2, 4, 8, 16}
+	}
+	return r.IntervalsWeeks
+}
+
+// ContradictionMaxChecksOr returns the per-run model-call cap, default 3.
+func (r ResurfacingConfig) ContradictionMaxChecksOr() int {
+	if r.ContradictionMaxChecks <= 0 {
+		return 3
+	}
+	return r.ContradictionMaxChecks
 }
 
 // IndexMode returns the configured vector backend, defaulting to "brute".

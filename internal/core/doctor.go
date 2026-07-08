@@ -112,6 +112,8 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 			if p.Models.VerifyMode() != "off" {
 				checks = append(checks, verifyCheck(p))
 			}
+			// 4f. R9 resurfacer schedule + contradiction path (advisory).
+			checks = append(checks, resurfaceCheck(p))
 			embChecked = true
 		}
 	}
@@ -249,6 +251,21 @@ func verifyCheck(p config.Profile) Check {
 		return Check{name, StatusWarn, fmt.Sprintf("verify model %q not pulled — run `ollama pull %s`", model, model)}
 	}
 	return Check{name, StatusOK, fmt.Sprintf("verify ready: %s, floor %d/10", mode, p.Models.VerifyMinScoreOr())}
+}
+
+// resurfaceCheck reports the R9 resurfacer's spaced-repetition + contradiction
+// configuration. Advisory (always StatusOK) — mirrors rerankCheck's tone; the
+// resurfacer works zero-model by default and the contradiction path is opt-in.
+func resurfaceCheck(p config.Profile) Check {
+	const name = "resurface"
+	weeks := p.Resurfacing.IntervalsWeeksOr()
+	auto, ok := p.Automations["resurfacer"]
+	active := ok && auto.BudgetTokens > 0 && p.Resurfacing.ContradictionMaxChecksOr() > 0
+	state := "contradiction path off (zero-model resurfacing; set resurfacer.budget_tokens to enable)"
+	if active {
+		state = fmt.Sprintf("contradiction path active (routine tier, ≤%d checks/run)", p.Resurfacing.ContradictionMaxChecksOr())
+	}
+	return Check{name, StatusOK, fmt.Sprintf("resurfacer ladder %v weeks; %s", weeks, state)}
 }
 
 // vettingCheck renders the eval-promotion status for one gated local tier

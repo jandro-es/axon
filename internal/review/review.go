@@ -33,7 +33,7 @@ const (
 // Item is one review-queue entry.
 type Item struct {
 	ID      string   `json:"id"`
-	Kind    string   `json:"kind"` // link | pair | triage | resurface | info
+	Kind    string   `json:"kind"` // link | pair | triage | resurface | contradicts | reconcile | info
 	Section string   `json:"section"`
 	Line    string   `json:"line"`
 	Checked bool     `json:"checked"`
@@ -44,14 +44,15 @@ type Item struct {
 }
 
 var (
-	sectionRe    = regexp.MustCompile(`^## (.+)$`)
-	sectionForRe = regexp.MustCompile(`^## Link suggestions for \[\[([^\]]+)\]\]`)
-	lineRe       = regexp.MustCompile(`^- \[([ x])\] (.*)$`)
-	linkToRe     = regexp.MustCompile(`^link to \[\[([^\]]+)\]\]`)
-	pairRe       = regexp.MustCompile(`^\[\[([^\]]+)\]\] ↔ \[\[([^\]]+)\]\]`)
-	triageRe     = regexp.MustCompile(`^triage \[\[([^\]]+)\]\] → (\S+) \(tags: ([^)]*)\)`)
-	resurfaceRe  = regexp.MustCompile(`^resurface \[\[([^\]]+)\]\] — related to recent \[\[([^\]]+)\]\]`)
-	reconcileRe  = regexp.MustCompile(`^reconcile: "(.+)" supersedes "(.+)"$`)
+	sectionRe     = regexp.MustCompile(`^## (.+)$`)
+	sectionForRe  = regexp.MustCompile(`^## Link suggestions for \[\[([^\]]+)\]\]`)
+	lineRe        = regexp.MustCompile(`^- \[([ x])\] (.*)$`)
+	linkToRe      = regexp.MustCompile(`^link to \[\[([^\]]+)\]\]`)
+	pairRe        = regexp.MustCompile(`^\[\[([^\]]+)\]\] ↔ \[\[([^\]]+)\]\]`)
+	triageRe      = regexp.MustCompile(`^triage \[\[([^\]]+)\]\] → (\S+) \(tags: ([^)]*)\)`)
+	resurfaceRe   = regexp.MustCompile(`^resurface \[\[([^\]]+)\]\] — related to recent \[\[([^\]]+)\]\]`)
+	contradictsRe = regexp.MustCompile(`^contradicts \[\[([^\]]+)\]\] ⚡ \[\[([^\]]+)\]\]`)
+	reconcileRe   = regexp.MustCompile(`^reconcile: "(.+)" supersedes "(.+)"$`)
 )
 
 // Load parses the queue file. A missing file is an empty queue.
@@ -109,6 +110,9 @@ func Load(ctx context.Context, v *vault.FS) ([]Item, error) {
 		case resurfaceRe.MatchString(body):
 			rm := resurfaceRe.FindStringSubmatch(body)
 			it.Kind, it.Target, it.Note = "resurface", rm[1], rm[2]
+		case contradictsRe.MatchString(body):
+			cm := contradictsRe.FindStringSubmatch(body)
+			it.Kind, it.Note, it.Target = "contradicts", cm[1], cm[2]
 		case reconcileRe.MatchString(body):
 			rm := reconcileRe.FindStringSubmatch(body)
 			it.Kind, it.Note, it.Target = "reconcile", rm[1], rm[2]
@@ -132,7 +136,7 @@ func Accept(ctx context.Context, v *vault.FS, id string) (Item, error) {
 	}
 	suffix := "✓ applied"
 	switch it.Kind {
-	case "link", "pair", "resurface":
+	case "link", "pair", "resurface", "contradicts":
 		if err := appendToLinksBlock(ctx, v, it.Note, it.Target); err != nil {
 			return Item{}, err
 		}
@@ -317,4 +321,58 @@ func compact(content string, now time.Time) (kept, archived string) {
 		}
 	}
 	return keepB.String(), archB.String()
+}
+
+// Outcome is a resolved resurface/contradicts item's verdict, read back so the
+// resurfacer can advance its spaced-repetition schedule (R9). Recent is the
+// recently-touched note; Dormant is the older one.
+type Outcome struct {
+	Recent  string `json:"recent"`
+	Dormant string `json:"dormant"`
+	Kind    string `json:"kind"`    // resurface | contradicts
+	Applied bool   `json:"applied"` // ✓ applied (accept) vs ✗ dismissed
+	Date    string `json:"date"`    // YYYY-MM-DD resolution date
+}
+
+// Outcomes returns every RESOLVED resurface/contradicts item across the live
+// queue and the archive, so a caller can react to accepts/dismisses even after
+// compaction moved a line out (FR-151). Missing files → no outcomes.
+func Outcomes(ctx context.Context, v *vault.FS) ([]Outcome, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	var out []Outcome
+	for _, rel := range []string{queuePath, archivePath} {
+		data, err := os.ReadFile(filepath.Join(v.Root(), filepath.FromSlash(rel)))
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf("read %s: %w", rel, err)
+		}
+		for _, raw := range strings.Split(string(data), "\n") {
+			m := lineRe.FindStringSubmatch(raw)
+			if m == nil || m[1] != "x" { // only resolved lines
+				continue
+			}
+			body := m[2]
+			dm := resolvedDateRe.FindStringSubmatch(body)
+			if dm == nil {
+				continue // resolved but no parseable date — skip, never guess
+			}
+			o := Outcome{Applied: strings.Contains(body, "✓ applied"), Date: dm[1]}
+			switch {
+			case resurfaceRe.MatchString(body):
+				rm := resurfaceRe.FindStringSubmatch(body)
+				o.Kind, o.Dormant, o.Recent = "resurface", rm[1], rm[2]
+			case contradictsRe.MatchString(body):
+				cm := contradictsRe.FindStringSubmatch(body)
+				o.Kind, o.Recent, o.Dormant = "contradicts", cm[1], cm[2]
+			default:
+				continue
+			}
+			out = append(out, o)
+		}
+	}
+	return out, nil
 }

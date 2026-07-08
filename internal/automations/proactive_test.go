@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jandro-es/axon/internal/agent"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
 )
@@ -202,6 +203,135 @@ func TestResurfacerDryRunWritesNothing(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(rc.Vault.Root(), ".axon", "review-queue.md")); !os.IsNotExist(err) {
 		t.Fatal("dry-run wrote the review queue")
+	}
+}
+
+// bumpUpdated keeps a note inside the recent window as the run clock advances.
+func bumpUpdated(t *testing.T, rc RunCtx, path, updated string) {
+	t.Helper()
+	if _, err := rc.DB.ExecContext(context.Background(),
+		`UPDATE notes SET updated = ? WHERE path = ?`, updated, path); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func countPendingResurface(t *testing.T, rc RunCtx) int {
+	t.Helper()
+	q, _ := os.ReadFile(filepath.Join(rc.Vault.Root(), ".axon", "review-queue.md"))
+	return strings.Count(string(q), "- [ ] resurface [[")
+}
+
+// resolveFirstPending flips the first pending queue line to resolved with a mark.
+func resolveFirstPending(t *testing.T, rc RunCtx, mark, date string) {
+	t.Helper()
+	rel := filepath.Join(".axon", "review-queue.md")
+	abs := filepath.Join(rc.Vault.Root(), rel)
+	data, err := os.ReadFile(abs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(data), "\n")
+	for i, l := range lines {
+		if strings.HasPrefix(l, "- [ ] ") {
+			lines[i] = strings.Replace(l, "- [ ]", "- [x]", 1) + " — " + mark + " " + date
+			break
+		}
+	}
+	if err := rc.Vault.RewriteSystemFile(".axon/review-queue.md", strings.Join(lines, "\n")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestResurfacerSpacedRepetition(t *testing.T) {
+	rc, _ := newRC(t, nil)
+	ctx := context.Background()
+	setNow := func(d string) {
+		day, _ := time.Parse("2006-01-02", d)
+		rc.Now = func() time.Time { return day.Add(12 * time.Hour) }
+	}
+	// Seed a recent+dormant pair that are cosine >= 0.75.
+	seedVecNote(t, rc, "01-Projects/current.md", "2026-02-28", []float32{1, 0})
+	seedVecNote(t, rc, "03-Resources/ancient.md", "2025-09-01", []float32{0.95, 0.05})
+
+	// Run 1 (2026-03-02): the pair is proposed.
+	setNow("2026-03-02")
+	bumpUpdated(t, rc, "01-Projects/current.md", "2026-03-01")
+	if _, err := (Resurfacer{}).Run(ctx, rc); err != nil {
+		t.Fatal(err)
+	}
+	if got := countPendingResurface(t, rc); got != 1 {
+		t.Fatalf("run1 pending resurface = %d, want 1", got)
+	}
+
+	// User dismisses it.
+	resolveFirstPending(t, rc, "✗ dismissed", "2026-03-03")
+	if got := countPendingResurface(t, rc); got != 0 {
+		t.Fatalf("after dismiss pending = %d, want 0", got)
+	}
+
+	// Run 2 (2026-03-09, one week later): must NOT reappear (Due is 2 weeks out).
+	setNow("2026-03-09")
+	bumpUpdated(t, rc, "01-Projects/current.md", "2026-03-08")
+	if _, err := (Resurfacer{}).Run(ctx, rc); err != nil {
+		t.Fatal(err)
+	}
+	if got := countPendingResurface(t, rc); got != 0 {
+		t.Fatalf("declined item reappeared next week: pending = %d", got)
+	}
+
+	// Run 3 (2026-03-18, past the 2-week interval): it resurfaces again.
+	setNow("2026-03-18")
+	bumpUpdated(t, rc, "01-Projects/current.md", "2026-03-17")
+	if _, err := (Resurfacer{}).Run(ctx, rc); err != nil {
+		t.Fatal(err)
+	}
+	if got := countPendingResurface(t, rc); got != 1 {
+		t.Fatalf("item did not resurface after its interval elapsed: pending = %d", got)
+	}
+}
+
+func TestResurfacerContradictionPath(t *testing.T) {
+	rc, fake := newRC(t, nil)
+	ctx := context.Background()
+	rc.BudgetTokens = 5000 // activate the model path
+	fake.RespondFn = func(r agent.Request) (*agent.Response, error) {
+		return &agent.Response{Text: "New says X; Old says not-X"}, nil
+	}
+	recent := rc.now().UTC().AddDate(0, 0, -2).Format("2006-01-02")
+	dormant := rc.now().UTC().AddDate(0, 0, -200).Format("2006-01-02")
+	seedVecNote(t, rc, "01-Projects/current.md", recent, []float32{1, 0})
+	seedVecNote(t, rc, "03-Resources/ancient.md", dormant, []float32{0.95, 0.05})
+
+	if _, err := (Resurfacer{}).Run(ctx, rc); err != nil {
+		t.Fatal(err)
+	}
+	q, _ := os.ReadFile(filepath.Join(rc.Vault.Root(), ".axon", "review-queue.md"))
+	if !strings.Contains(string(q), "- [ ] contradicts [[") {
+		t.Fatalf("expected a contradicts line, got:\n%s", q)
+	}
+	if strings.Contains(string(q), "- [ ] resurface [[") {
+		t.Fatalf("flagged pair should NOT also appear as a plain resurface line:\n%s", q)
+	}
+}
+
+func TestResurfacerContradictionDormantByDefault(t *testing.T) {
+	rc, fake := newRC(t, nil)
+	ctx := context.Background()
+	rc.BudgetTokens = 0 // default: no budget → no model path
+	recent := rc.now().UTC().AddDate(0, 0, -2).Format("2006-01-02")
+	dormant := rc.now().UTC().AddDate(0, 0, -200).Format("2006-01-02")
+	seedVecNote(t, rc, "01-Projects/current.md", recent, []float32{1, 0})
+	seedVecNote(t, rc, "03-Resources/ancient.md", dormant, []float32{0.95, 0.05})
+
+	if _, err := (Resurfacer{}).Run(ctx, rc); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.Calls) != 0 {
+		t.Fatalf("model called with zero budget: %+v", fake.Calls)
+	}
+	q, _ := os.ReadFile(filepath.Join(rc.Vault.Root(), ".axon", "review-queue.md"))
+	if !strings.Contains(string(q), "resurface [[") {
+		t.Fatalf("expected the plain zero-model resurface line:\n%s", q)
 	}
 }
 

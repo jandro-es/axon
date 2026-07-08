@@ -131,3 +131,43 @@ func saveProposalMemory(ctx context.Context, rc RunCtx, stateKey string, propose
 		rc.Log.Warn("proposal memory: persist", "key", stateKey, "err", err)
 	}
 }
+
+// loadSchedule reads the resurfacer's spaced-repetition schedule from its
+// automation_state row (empty on any problem — worst case a pair resurfaces at
+// base interval, a graceful S9 degradation).
+func loadSchedule(ctx context.Context, rc RunCtx, stateKey string) resurfaceSchedule {
+	out := resurfaceSchedule{}
+	raw, err := db.GetCursor(ctx, rc.DB, stateKey)
+	if err != nil || raw == "" {
+		return out
+	}
+	_ = json.Unmarshal([]byte(raw), &out)
+	if out == nil {
+		out = resurfaceSchedule{}
+	}
+	return out
+}
+
+// saveSchedule persists the schedule, capped at proposalMemoryCap newest by Due
+// so it can't grow without bound.
+func saveSchedule(ctx context.Context, rc RunCtx, stateKey string, s resurfaceSchedule) {
+	if len(s) > proposalMemoryCap {
+		keys := make([]string, 0, len(s))
+		for k := range s {
+			keys = append(keys, k)
+		}
+		sort.Slice(keys, func(i, j int) bool { return s[keys[i]].Due > s[keys[j]].Due })
+		trimmed := resurfaceSchedule{}
+		for _, k := range keys[:proposalMemoryCap] {
+			trimmed[k] = s[k]
+		}
+		s = trimmed
+	}
+	raw, err := json.Marshal(s)
+	if err != nil {
+		return
+	}
+	if err := db.SetCursor(ctx, rc.DB, stateKey, string(raw), rc.now().UTC().Format(time.RFC3339)); err != nil {
+		rc.Log.Warn("resurface schedule: persist", "key", stateKey, "err", err)
+	}
+}
