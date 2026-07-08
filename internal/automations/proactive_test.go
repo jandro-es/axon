@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jandro-es/axon/internal/agent"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
 )
@@ -286,6 +287,51 @@ func TestResurfacerSpacedRepetition(t *testing.T) {
 	}
 	if got := countPendingResurface(t, rc); got != 1 {
 		t.Fatalf("item did not resurface after its interval elapsed: pending = %d", got)
+	}
+}
+
+func TestResurfacerContradictionPath(t *testing.T) {
+	rc, fake := newRC(t, nil)
+	ctx := context.Background()
+	rc.BudgetTokens = 5000 // activate the model path
+	fake.RespondFn = func(r agent.Request) (*agent.Response, error) {
+		return &agent.Response{Text: "New says X; Old says not-X"}, nil
+	}
+	recent := rc.now().UTC().AddDate(0, 0, -2).Format("2006-01-02")
+	dormant := rc.now().UTC().AddDate(0, 0, -200).Format("2006-01-02")
+	seedVecNote(t, rc, "01-Projects/current.md", recent, []float32{1, 0})
+	seedVecNote(t, rc, "03-Resources/ancient.md", dormant, []float32{0.95, 0.05})
+
+	if _, err := (Resurfacer{}).Run(ctx, rc); err != nil {
+		t.Fatal(err)
+	}
+	q, _ := os.ReadFile(filepath.Join(rc.Vault.Root(), ".axon", "review-queue.md"))
+	if !strings.Contains(string(q), "- [ ] contradicts [[") {
+		t.Fatalf("expected a contradicts line, got:\n%s", q)
+	}
+	if strings.Contains(string(q), "- [ ] resurface [[") {
+		t.Fatalf("flagged pair should NOT also appear as a plain resurface line:\n%s", q)
+	}
+}
+
+func TestResurfacerContradictionDormantByDefault(t *testing.T) {
+	rc, fake := newRC(t, nil)
+	ctx := context.Background()
+	rc.BudgetTokens = 0 // default: no budget → no model path
+	recent := rc.now().UTC().AddDate(0, 0, -2).Format("2006-01-02")
+	dormant := rc.now().UTC().AddDate(0, 0, -200).Format("2006-01-02")
+	seedVecNote(t, rc, "01-Projects/current.md", recent, []float32{1, 0})
+	seedVecNote(t, rc, "03-Resources/ancient.md", dormant, []float32{0.95, 0.05})
+
+	if _, err := (Resurfacer{}).Run(ctx, rc); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.Calls) != 0 {
+		t.Fatalf("model called with zero budget: %+v", fake.Calls)
+	}
+	q, _ := os.ReadFile(filepath.Join(rc.Vault.Root(), ".axon", "review-queue.md"))
+	if !strings.Contains(string(q), "resurface [[") {
+		t.Fatalf("expected the plain zero-model resurface line:\n%s", q)
 	}
 }
 
