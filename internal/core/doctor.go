@@ -130,6 +130,7 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 			checks = append(checks, portFreeCheck(p.Dashboard.Host, p.Dashboard.Port))
 			checks = append(checks, residencyCheck(p))
 			checks = append(checks, annIndexCheck(p, paths))
+			checks = append(checks, relatedCheck(p, paths))
 			checks = append(checks, memoryFactsCheck(paths))
 			checks = append(checks, localModelsVettingChecks(paths, p)...)
 			// 8–9. Multi-client wiring (FR-75): is the AXON MCP server registered
@@ -570,6 +571,29 @@ func annIndexCheck(p config.Profile, paths config.ResolvedPaths) Check {
 		return Check{name, StatusWarn, fmt.Sprintf("%d vectors indexed — set `retrieval.index: ann` and run `axon reindex` for faster search", vectors)}
 	}
 	return Check{name, StatusOK, fmt.Sprintf("brute-force search (%d vectors, threshold %d)", vectors, threshold)}
+}
+
+// relatedCheck reports the related-notes surface (R8): whether the endpoint is
+// enabled and how many vectors it has to work with. Advisory — never fails.
+// The ANN seam's own health is covered by annIndexCheck; this does not duplicate it.
+func relatedCheck(p config.Profile, paths config.ResolvedPaths) Check {
+	const name = "related"
+	if !p.Dashboard.RelatedAllowed() {
+		return Check{name, StatusOK, "related-notes endpoint disabled (dashboard.related_enabled: false)"}
+	}
+	if _, err := os.Stat(paths.DBPath); err != nil {
+		return Check{name, StatusOK, "related-notes enabled; no database yet"}
+	}
+	d, err := sql.Open("sqlite", paths.DBPath)
+	if err != nil {
+		return Check{name, StatusOK, "related-notes enabled; database not readable, skipped"}
+	}
+	defer func() { _ = d.Close() }()
+	vectors, err := db.CountVectors(context.Background(), d)
+	if err != nil {
+		return Check{name, StatusOK, "related-notes enabled; vectors not counted"}
+	}
+	return Check{name, StatusOK, fmt.Sprintf("related-notes enabled (%d vectors indexed)", vectors)}
 }
 
 // apiKeyCheck implements the cardinal-rule guard: warn if ANTHROPIC_API_KEY is
