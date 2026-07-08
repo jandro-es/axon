@@ -496,7 +496,11 @@ type AskIn struct {
 // grounded-or-silent, with [[wikilink]] citations, spending synthesis-tier
 // tokens through the chokepoint. Read-only toward the vault.
 func (t *Tools) Ask(ctx context.Context, in AskIn) (ask.Answer, error) {
-	return ask.Ask(ctx, ask.Deps{
+	a, err := ask.Ask(ctx, ask.Deps{
 		Searcher: t.deps.Searcher, Manager: t.deps.Manager, Config: t.deps.Config,
 	}, in.Question, in.TopK)
+	if err == nil && a.Conflicted {
+		a.Text = "⚠ Sources conflict — " + a.Text
+	}
+	return a, err
 }

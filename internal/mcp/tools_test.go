@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jandro-es/axon/internal/agent"
@@ -292,6 +293,31 @@ func TestVaultAskTool(t *testing.T) {
 	}
 	if len(out.Citations) != 1 || out.Citations[0] != "Notes/vectors.md" {
 		t.Fatalf("citations = %v", out.Citations)
+	}
+}
+
+func TestVaultAskSurfacesConflict(t *testing.T) {
+	ctx := context.Background()
+	tools, v, fake := newTestTools(t, map[string]string{
+		"Notes/vectors.md": "# Vector Databases\n\nVector databases index embeddings for similarity search.\n",
+		"Notes/f1.md":      "# Gardening\n\nTomatoes need full sun.\n",
+		"Notes/f2.md":      "# Cooking\n\nBraising renders collagen to gelatin.\n",
+		"Notes/f3.md":      "# Travel\n\nShoulder season is cheaper.\n",
+	})
+	if _, err := core.Reindex(ctx, v, tools.deps.DB); err != nil {
+		t.Fatal(err)
+	}
+	fake.Reply = "CONFLICT\nSources disagree about similarity search [[Notes/vectors]]."
+
+	out, err := tools.Ask(ctx, AskIn{Question: "what are vector databases for similarity search"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !out.Conflicted {
+		t.Fatalf("Conflicted must ride through Tools.Ask: %+v", out)
+	}
+	if !strings.HasPrefix(out.Text, "⚠ Sources conflict") {
+		t.Fatalf("conflicted MCP answer should carry the note: %q", out.Text)
 	}
 }
 

@@ -125,6 +125,62 @@ func TestAskHappyPathWithValidCitation(t *testing.T) {
 	}
 }
 
+func TestAskFlagsConflict(t *testing.T) {
+	// Two notes that BOTH match the query so both resolve as retrieved sources
+	// (the citation contract requires every cite to be a retrieved source); the
+	// filler gives bm25 realistic IDF, as in `corpus`.
+	files := map[string]string{
+		"Notes/old.md": "# Vector Databases 2024\n\nVector databases embeddings similarity: we use FAISS for indexing.\n",
+		"Notes/new.md": "# Vector Databases 2026\n\nVector databases embeddings similarity: we switched to Qdrant for indexing.\n",
+		"Notes/f1.md":  "# Gardening\n\nTomatoes need full sun and regular watering through summer.\n",
+		"Notes/f2.md":  "# Cooking\n\nSlow braising tough cuts renders collagen into gelatin.\n",
+		"Notes/f3.md":  "# Travel\n\nShoulder season flights cost less and queues are shorter.\n",
+		"Notes/f4.md":  "# Music\n\nPractice scales slowly with a metronome before increasing tempo.\n",
+	}
+	d, fake, _ := newAskDeps(t, files)
+	fake.Reply = "CONFLICT\nSources disagree: [[Notes/old]] says FAISS, [[Notes/new]] says Qdrant (newer)."
+	a, err := Ask(context.Background(), d, "vector databases embeddings similarity indexing", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Refused {
+		t.Fatalf("conflict answer must not refuse: %+v", a)
+	}
+	if !a.Conflicted {
+		t.Fatalf("want Conflicted, got %+v", a)
+	}
+	if strings.HasPrefix(a.Text, "CONFLICT") {
+		t.Fatalf("CONFLICT marker must be stripped from Text: %q", a.Text)
+	}
+	if len(a.Citations) != 2 {
+		t.Fatalf("both conflicting sources must be cited, got %v", a.Citations)
+	}
+}
+
+func TestAskPlainAnswerNotConflicted(t *testing.T) {
+	d, fake, _ := newAskDeps(t, corpus)
+	fake.Reply = "Vector databases index embeddings for similarity search [[Notes/vectors]]."
+	a, err := Ask(context.Background(), d, "vector databases embeddings similarity", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Conflicted {
+		t.Fatalf("plain answer must not be conflicted: %+v", a)
+	}
+}
+
+func TestAskConflictMarkerWithoutCitationStillRefuses(t *testing.T) {
+	d, fake, _ := newAskDeps(t, corpus)
+	fake.Reply = "CONFLICT\nThey disagree but I cite nothing."
+	a, err := Ask(context.Background(), d, "vector databases embeddings similarity", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.Refused || !strings.Contains(a.Reason, "citation") {
+		t.Fatalf("a CONFLICT reply with no wikilink must refuse as ungrounded: %+v", a)
+	}
+}
+
 func TestAskRejectsHallucinatedCitation(t *testing.T) {
 	d, fake, _ := newAskDeps(t, corpus)
 	fake.Reply = "Databases are cool [[Made/up-note]]."
