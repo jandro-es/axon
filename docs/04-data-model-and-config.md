@@ -217,7 +217,9 @@ profiles:
     # cost_usd null, and do NOT accrue to budget_windows (FR-78) — budgets keep
     # meaning Claude quota. Optional keys: ollama_host (default
     # http://localhost:11434, independent of embeddings.host), local_fallback
-    # (claude|fail, default claude — FR-79), apple_helper (helper path override).
+    # (claude|fail, default claude — FR-79), apple_helper (helper path override),
+    # verify (off|ollama:<model>, default off — R5.3 per-call verification of
+    # local routine answers, FR-144), verify_min_score (0–10, default 6).
     models:   { classify: claude-haiku-4-5, routine: claude-sonnet-5, synthesis: claude-opus-4-8 }
     # capture: the FR-26 capture funnel (ADR-016). Optional; defaults shown.
     # The capture automation itself is scheduled via automations.capture.

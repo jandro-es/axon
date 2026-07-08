@@ -37,6 +37,12 @@ func TestValidateLocalRouting(t *testing.T) {
 		{"bad fallback rejected", func(m *ModelsConfig) { m.LocalFallback = "retry" }, true},
 		{"eval_min_pass in range ok", func(m *ModelsConfig) { m.EvalMinPass = 80 }, false},
 		{"eval_min_pass over 100 rejected", func(m *ModelsConfig) { m.EvalMinPass = 150 }, true},
+		{"verify ollama ok", func(m *ModelsConfig) { m.Verify = "ollama:judge" }, false},
+		{"verify off ok", func(m *ModelsConfig) { m.Verify = "off" }, false},
+		{"verify claude rejected", func(m *ModelsConfig) { m.Verify = "claude-haiku-4-5" }, true},
+		{"verify apple rejected", func(m *ModelsConfig) { m.Verify = "apple" }, true},
+		{"verify empty-model rejected", func(m *ModelsConfig) { m.Verify = "ollama:" }, true},
+		{"verify_min_score over range rejected", func(m *ModelsConfig) { m.VerifyMinScore = 11 }, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

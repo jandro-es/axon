@@ -306,6 +306,17 @@ type ModelsConfig struct {
 	// pass rate is >= this percent. 0 (default) disables the gate — local tiers
 	// route as configured. New installs scaffold 80; doctor nudges.
 	EvalMinPass int `yaml:"eval_min_pass,omitempty" validate:"omitempty,min=0,max=100"`
+	// Verify, set to "ollama:<model>", enables per-call verification of local
+	// routine answers (R5.3/FR-144): after a successful local routine response a
+	// cheap local judge scores it 0–10; a score below VerifyMinScore escalates
+	// the call to Claude. "" or "off" disables (default). Only the routine tier
+	// is verified — synthesis is always Claude, classify is deterministically
+	// validated.
+	Verify string `yaml:"verify,omitempty"`
+	// VerifyMinScore is the 0–10 confidence floor below which a verified local
+	// routine answer escalates to Claude. 0 (unset) → default 6. Ignored when
+	// verify is off.
+	VerifyMinScore int `yaml:"verify_min_score,omitempty" validate:"omitempty,min=0,max=10"`
 	// AppleHelper overrides the Foundation Models helper binary path.
 	// Default: DefaultAppleLMHelperPath(). Ignored unless a tier is "apple".
 	AppleHelper string `yaml:"apple_helper,omitempty"`
