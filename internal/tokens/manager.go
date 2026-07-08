@@ -644,9 +644,87 @@ func (m *manager) runLocal(ctx context.Context, call AgentCall, auth Authorizati
 			return res, err
 		}
 		res.LedgerID = ledgerID
+		if m.verifyActive(call, auth) {
+			return m.verifyAndMaybeEscalate(ctx, call, auth, res)
+		}
 		return res, nil
 	}
 	return fallForward(lastErr)
+}
+
+// verifyActive reports whether a successful local answer should be judged before
+// it is trusted (R5.3/FR-144): the routine family alias, an ollama provider, and
+// verify configured. The judge itself uses a concrete ref, so it never re-enters
+// this predicate.
+func (m *manager) verifyActive(call AgentCall, auth Authorization) bool {
+	return call.ModelKey == "routine" &&
+		auth.Provider == config.ProviderOllama &&
+		m.cfg.Models.VerifyMode() != "off"
+}
+
+// runJudge issues one local judge call scoring answer 0–10 for the task in call,
+// using the configured verify model (a concrete ollama ref). Ledgered as
+// "<op>:verify" (budget-exempt). Best-effort: any transport/parse failure returns
+// ok=false (the caller keeps the local answer). It never falls forward to Claude
+// — a broken judge must not spend the Claude quota. (ADR-031.)
+func (m *manager) runJudge(ctx context.Context, call AgentCall, answer string) (int, bool) {
+	ref := config.ParseModelRef(m.cfg.Models.VerifyMode())
+	ag, err := m.router.Resolve(ref.Provider)
+	if err != nil {
+		return 0, false
+	}
+	sys, prompt := buildVerifyPrompt(call.System, call.Messages, answer)
+	judge := AgentCall{Operation: call.Operation + ":verify", RunID: call.RunID}
+	vAuth := Authorization{
+		Decision: DecisionProceed, Model: ref.Model, Provider: config.ProviderOllama,
+		EstInput: m.estimator.Estimate(sys + "\n" + prompt),
+	}
+	resp, err := ag.Run(ctx, agent.Request{
+		Operation: judge.Operation,
+		Model:     ref.Model,
+		System:    m.applyRedaction(sys),
+		Prompt:    m.applyRedaction(prompt),
+	})
+	if err != nil {
+		m.recordFailure(ctx, judge, vAuth, AgentResult{Auth: vAuth, Model: ref.Model})
+		return 0, false
+	}
+	vres := AgentResult{Auth: vAuth, Model: ref.Model, Text: resp.Text, Usage: resp.Usage}
+	if vres.Usage.InputTokens+vres.Usage.OutputTokens == 0 {
+		vres.Usage.InputTokens = vAuth.EstInput
+		vres.Usage.OutputTokens = HeuristicEstimator{}.Estimate(resp.Text)
+	}
+	if _, lerr := m.record(ctx, judge, vAuth, vres); lerr != nil {
+		m.emit(events.LevelError, "token.error", judge.Operation, vAuth,
+			map[string]any{"error": "ledger write after verify judge: " + lerr.Error()})
+	}
+	return parseVerifyScore(resp.Text)
+}
+
+// verifyAndMaybeEscalate judges a successful local routine answer and, below the
+// floor, escalates the call to Claude through the normal budget path. The local
+// answer (already ledgered by the caller) and the judge call are both ledgered
+// before any escalation. Degrades to the local answer if the judge is
+// inconclusive OR Claude is unavailable (budget deny/defer or adapter error) — S8.
+func (m *manager) verifyAndMaybeEscalate(ctx context.Context, call AgentCall, auth Authorization, local AgentResult) (AgentResult, error) {
+	score, ok := m.runJudge(ctx, call, local.Text)
+	floor := m.cfg.Models.VerifyMinScoreOr()
+	if !ok || score >= floor {
+		m.emit(events.LevelInfo, "token.verify_pass", call.Operation, auth,
+			map[string]any{"score": score, "scored": ok, "floor": floor})
+		return local, nil
+	}
+	esc := call
+	esc.ModelKey = m.fallbackClaudeKey("routine")
+	m.emit(events.LevelWarn, "token.verify_escalate", call.Operation, auth,
+		map[string]any{"score": score, "floor": floor, "escalate_to": esc.ModelKey})
+	res, err := m.Run(ctx, esc)
+	if err != nil {
+		m.emit(events.LevelWarn, "token.verify_escalate_failed", call.Operation, auth,
+			map[string]any{"score": score, "error": err.Error()})
+		return local, nil
+	}
+	return res, nil
 }
 
 // record writes the ledger row, updates day/week budgets and emits the event.

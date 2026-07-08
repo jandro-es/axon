@@ -42,6 +42,22 @@ func (m ModelsConfig) Fallback() string {
 	return m.LocalFallback
 }
 
+// VerifyMode returns the configured verifier ref, or "off" when unset/"off".
+func (m ModelsConfig) VerifyMode() string {
+	if m.Verify == "" {
+		return "off"
+	}
+	return m.Verify
+}
+
+// VerifyMinScoreOr returns the escalation floor, defaulting to 6.
+func (m ModelsConfig) VerifyMinScoreOr() int {
+	if m.VerifyMinScore <= 0 {
+		return 6
+	}
+	return m.VerifyMinScore
+}
+
 // validateLocalRouting applies the ADR-015 cross-field rules that struct tags
 // can't express. Empty tier strings are skipped (profiles are partial
 // overrides); struct-tag `required` covers the top-level config.
@@ -62,6 +78,14 @@ func validateLocalRouting(m ModelsConfig) error {
 	}
 	if m.EvalMinPass < 0 || m.EvalMinPass > 100 {
 		return fmt.Errorf("models.eval_min_pass must be 0..100 (got %d)", m.EvalMinPass)
+	}
+	if v := m.Verify; v != "" && v != "off" {
+		if ref := ParseModelRef(v); ref.Provider != ProviderOllama || ref.Model == "" {
+			return fmt.Errorf("models.verify must be off or a local ollama:<model> (got %q): the verifier is a cheap local judge, never Claude or apple", v)
+		}
+	}
+	if m.VerifyMinScore < 0 || m.VerifyMinScore > 10 {
+		return fmt.Errorf("models.verify_min_score must be 0..10 (got %d)", m.VerifyMinScore)
 	}
 	return nil
 }

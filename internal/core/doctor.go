@@ -108,6 +108,10 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 			if p.Retrieval.RerankMode() != "off" {
 				checks = append(checks, rerankCheck(p))
 			}
+			// 4e. Verification cascade prerequisite, only when models.verify is set.
+			if p.Models.VerifyMode() != "off" {
+				checks = append(checks, verifyCheck(p))
+			}
 			embChecked = true
 		}
 	}
@@ -214,6 +218,36 @@ func rerankCheck(p config.Profile) Check {
 		return Check{name, StatusWarn, fmt.Sprintf("reranker model %q not pulled — run `ollama pull %s`", model, model)}
 	}
 	return Check{name, StatusOK, "reranker ready: " + mode}
+}
+
+// verifyCheck reports the R5.3 verification cascade's prerequisites (FR-145):
+// verify must name a local ollama model, the routine tier must itself be local
+// (else verification never triggers), and the judge model must be pulled.
+// Warn-only, mirroring rerankCheck — a broken verifier just keeps local answers.
+func verifyCheck(p config.Profile) Check {
+	const name = "verify"
+	mode := p.Models.VerifyMode()
+	if !strings.HasPrefix(mode, "ollama:") {
+		return Check{name, StatusWarn, fmt.Sprintf("models.verify %q not recognised — use off or ollama:<model>", mode)}
+	}
+	if config.ParseModelRef(p.Models.Routine).Provider != config.ProviderOllama {
+		return Check{name, StatusWarn, "models.verify is set but the routine tier is not local — verification never triggers"}
+	}
+	model := strings.TrimPrefix(mode, "ollama:")
+	host := p.Models.OllamaHost
+	if host == "" {
+		host = "http://localhost:11434"
+	}
+	host = strings.TrimRight(host, "/")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if !ollamaReachable(ctx, host) {
+		return Check{name, StatusWarn, fmt.Sprintf("verify Ollama not reachable at %s — start `ollama serve` (routine answers stay local, unverified)", host)}
+	}
+	if !ollamaModelPresent(ctx, host, model) {
+		return Check{name, StatusWarn, fmt.Sprintf("verify model %q not pulled — run `ollama pull %s`", model, model)}
+	}
+	return Check{name, StatusOK, fmt.Sprintf("verify ready: %s, floor %d/10", mode, p.Models.VerifyMinScoreOr())}
 }
 
 // vettingCheck renders the eval-promotion status for one gated local tier

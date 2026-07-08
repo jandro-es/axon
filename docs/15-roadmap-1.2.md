@@ -81,6 +81,12 @@ confidence, all ledgered. `synthesis` (user-facing prose) stays Claude until the
 harness says otherwise *per task family* — grounded in evals, not vibes.
 ADR-029 extends ADR-015 (eval-gated promotion; the synthesis gate becomes a
 procedure, not a permanent "no").
+**Status (2026-07-08): R5 COMPLETE.** Shipped in three sub-slices — R5.1 eval
+harness + `axon eval` (FR-140/141, ADR-029), R5.2 eval-gated admission gate
+(FR-142/143, ADR-030), R5.3 per-call cascade-with-verification (FR-144/145,
+ADR-031: a successful local `routine` answer is judged by a cheap local model and
+escalates to Claude below `models.verify_min_score`, all ledgered, default off).
+With R1 already shipped, the **R1 + R5 release criterion for 1.2.0 is met.**
 **Gate:** with a passing local routine model configured, a full automation cycle
 runs with measurably fewer Claude tokens (target: ≥50% of routine-tier calls
 local) and zero unledgered calls; with Ollama down, everything degrades to Claude
@@ -119,7 +125,7 @@ zero broken links and both originals recoverable from the archive.
 | Order | Slice | Size | Why here |
 |-------|-------|------|----------|
 | 1 | R1 temporal memory | M | The headline; entities it links to already exist (R3 shipped). Unlocks R2/R9. |
-| 2 | R5 local-tier promotion + `axon eval` | M | Frees budget for everything after; independent lane, can run alongside R1. |
+| 2 | R5 local-tier promotion + `axon eval` ✅ **done** | M | Frees budget for everything after; independent lane, can run alongside R1. Shipped R5.1/R5.2/R5.3 (FR-140…145, ADR-029…031). |
 | 3 | R2 contradiction-aware ask | S | Cheap once R1's intervals exist. |
 | 4 | R8 related-notes surface | S | Zero-model, high visible value; exercises the ANN seam. |
 | 5 | R9 resurfacing/review scheduling | S | Rides R1's signals + resurfacer primitives. |
