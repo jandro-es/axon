@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jandro-es/axon/internal/db"
+	"github.com/jandro-es/axon/internal/review"
 	"github.com/jandro-es/axon/internal/tokens"
 )
 
@@ -144,7 +145,7 @@ const (
 	resurfaceDormantDays    = 90
 	resurfaceThreshold      = 0.75
 	resurfaceMaxProposals   = 5
-	resurfacerProposedState = "resurfacer:proposed"
+	resurfacerScheduleState = "resurfacer:schedule"
 )
 
 // Resurfacer proposes connections between recently-touched notes and dormant
@@ -173,6 +174,9 @@ func (Resurfacer) DetectChange(ctx context.Context, rc RunCtx) (Change, error) {
 
 func (Resurfacer) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 	now := rc.now().UTC()
+	today := now.Format("2006-01-02")
+	ladder := ladderDays(rc.Config.Resurfacing.IntervalsWeeksOr())
+
 	recent, err := db.NotesUpdatedSince(ctx, rc.DB, now.AddDate(0, 0, -resurfaceRecentDays).Format("2006-01-02"), 50)
 	if err != nil {
 		return RunResult{}, err
@@ -181,10 +185,33 @@ func (Resurfacer) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 	if err != nil {
 		return RunResult{}, err
 	}
+
+	sched := loadSchedule(ctx, rc, resurfacerScheduleState)
+
+	// 1. Apply new outcomes from the queue + archive (idempotent via LastOutcome).
+	if outs, oerr := review.Outcomes(ctx, rc.Vault); oerr == nil {
+		for _, o := range outs {
+			key := pairKey(o.Recent, o.Dormant)
+			cur, ok := sched[key]
+			if !ok {
+				continue // an outcome for a pair we never scheduled — ignore
+			}
+			if o.Date > cur.LastOutcome { // strictly newer → apply once
+				sched[key] = advance(cur, o.Applied, o.Date, ladder)
+			}
+		}
+	} else {
+		rc.Log.Warn("resurfacer: read outcomes", "err", oerr)
+	}
+
 	if len(recent) == 0 || len(dormant) == 0 {
+		if !rc.DryRun {
+			saveSchedule(ctx, rc, resurfacerScheduleState, sched)
+		}
 		return RunResult{Summary: "resurfacer: nothing to compare (recent or dormant set empty)"}, nil
 	}
 
+	// 2. Mean vectors for candidate scoring.
 	present := map[int64]bool{}
 	dormantByID := map[int64]db.NoteStamp{}
 	for _, n := range recent {
@@ -199,9 +226,23 @@ func (Resurfacer) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 		return RunResult{}, err
 	}
 
-	proposed := loadProposalMemory(ctx, rc, resurfacerProposedState)
+	// 3. Pending pairs already sitting unresolved in the queue — never duplicate.
+	pending := map[string]bool{}
+	if items, lerr := review.Load(ctx, rc.Vault); lerr == nil {
+		for _, it := range items {
+			if it.Checked {
+				continue
+			}
+			if it.Kind == "resurface" || it.Kind == "contradicts" {
+				pending[pairKey(it.Note, it.Target)] = true
+			}
+		}
+	}
+
+	// 4. Build candidate pairs (sim >= threshold, not already linked, due).
 	type pair struct {
 		recent, dormant db.NoteStamp
+		key             string
 		sim             float64
 	}
 	var pairs []pair
@@ -227,10 +268,14 @@ func (Resurfacer) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 			if existing != nil && (existing[stripExt(d.Path)] || existing[base(d.Path)]) {
 				continue
 			}
-			if proposed[pairKey(r.Path, d.Path)] {
-				continue
+			key := pairKey(stripExt(r.Path), stripExt(d.Path))
+			if pending[key] {
+				continue // already awaiting the user's decision
 			}
-			pairs = append(pairs, pair{recent: r, dormant: d, sim: sim})
+			if it, in := sched[key]; in && !isDue(it, today) {
+				continue // scheduled but its interval has not elapsed
+			}
+			pairs = append(pairs, pair{recent: r, dormant: d, key: key, sim: sim})
 		}
 	}
 	sort.Slice(pairs, func(i, j int) bool { return pairs[i].sim > pairs[j].sim })
@@ -238,13 +283,18 @@ func (Resurfacer) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 		pairs = pairs[:resurfaceMaxProposals]
 	}
 
+	// 5. (Contradiction reclassification is inserted here — see FR-152.)
+
+	// 6. Emit queue lines + schedule new/refreshed entries.
 	var changes, queue []string
 	for _, p := range pairs {
 		line := fmt.Sprintf("resurface [[%s]] — related to recent [[%s]] (sim %.2f, dormant since %s)",
 			stripExt(p.dormant.Path), stripExt(p.recent.Path), p.sim, p.dormant.Updated)
 		changes = append(changes, line)
 		queue = append(queue, "- [ ] "+line)
-		proposed[pairKey(p.recent.Path, p.dormant.Path)] = true
+		it := sched[p.key]
+		it.Due = dueAfter(now, it.Rung, ladder) // anchor the next interval from now
+		sched[p.key] = it
 	}
 
 	if rc.DryRun {
@@ -255,8 +305,8 @@ func (Resurfacer) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 		if aerr := rc.Vault.Append(".axon/review-queue.md", header+strings.Join(queue, "\n")+"\n"); aerr != nil {
 			return RunResult{}, aerr
 		}
-		saveProposalMemory(ctx, rc, resurfacerProposedState, proposed)
 	}
+	saveSchedule(ctx, rc, resurfacerScheduleState, sched)
 	return RunResult{Summary: fmt.Sprintf("resurfaced %d pair(s)", len(changes)), Changes: changes}, nil
 }
 
