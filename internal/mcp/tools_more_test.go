@@ -6,7 +6,38 @@ import (
 	"time"
 
 	"github.com/jandro-es/axon/internal/core"
+	"github.com/jandro-es/axon/internal/db"
 )
+
+func TestRelatedTool(t *testing.T) {
+	ctx := context.Background()
+	tools, _, _ := newTestTools(t, map[string]string{})
+	d := tools.deps.DB // the migrated in-memory DB the Searcher reads
+	seed := func(path string, vec []float32) {
+		id, err := db.UpsertNote(ctx, d, db.NoteRow{Path: path, Title: path})
+		if err != nil {
+			t.Fatal(err)
+		}
+		cid, err := db.InsertChunk(ctx, d, db.ChunkRow{NoteID: &id, Text: path, ContentHash: path})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := db.UpsertChunkVector(ctx, d, cid, "fake", vec); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seed("a.md", []float32{1, 0, 0, 0})
+	seed("b.md", []float32{0.95, 0.05, 0, 0})
+	seed("c.md", []float32{0, 1, 0, 0})
+
+	out, err := tools.Related(ctx, RelatedIn{Path: "a.md", TopK: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Related) != 1 || out.Related[0].Path != "b.md" {
+		t.Fatalf("want [b.md], got %+v", out.Related)
+	}
+}
 
 func TestReadTool(t *testing.T) {
 	ctx := context.Background()
