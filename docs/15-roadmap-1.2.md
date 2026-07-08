@@ -60,12 +60,20 @@ old fact's interval and the `MEMORY.md` projection reads correctly; `reindex`
 rebuilds the fact index byte-equivalently (S9); SessionStart injection prefers
 *currently-valid* facts and stays within its token ceiling.
 
-### R2 — Contradiction-aware ask (S) · provisional FR-138/139 (rides R1; no ADR)
+### R2 — Contradiction-aware ask (S) · FR-146/147 (rides R1; no ADR) ✅ **BUILT 2026-07-08**
 **Build:** when retrieval surfaces sources that disagree, the answer says so —
 both claims cited with their dates, newest-valid preferred, no silent averaging.
 Rides on R1's intervals. No consumer product does this well yet.
 **Gate:** a vault seeded with two dated, conflicting notes yields an answer that
 flags the conflict and cites both; non-conflicting corpora are unaffected.
+**Shipped:** one clause on the existing grounded-ask synthesis prompt makes the
+model emit a leading `CONFLICT` sentinel on genuine disagreement; `ask` strips it
+into an additive `Answer.Conflicted bool` (grounding gate, `NOT_FOUND`, and the
+citation contract unchanged — a `CONFLICT` reply with no resolvable wikilink still
+refuses). Surfaced on `vault_ask` (a `⚠ Sources conflict` note) and the dashboard
+`/api/ask` response + event (`conflicted`). One chokepoint call, no extra tokens,
+non-conflicting answers unchanged. Provisional FR-138/139 reassigned to FR-146/147
+(R5 consumed 140–145).
 
 ### R5 — Local synthesis validation & routine-tier promotion (M) · provisional FR-140…143, ADR-029
 **Build:** turn the ADR-015 validation gate into a **promotion procedure**. An
@@ -126,7 +134,7 @@ zero broken links and both originals recoverable from the archive.
 |-------|-------|------|----------|
 | 1 | R1 temporal memory | M | The headline; entities it links to already exist (R3 shipped). Unlocks R2/R9. |
 | 2 | R5 local-tier promotion + `axon eval` ✅ **done** | M | Frees budget for everything after; independent lane, can run alongside R1. Shipped R5.1/R5.2/R5.3 (FR-140…145, ADR-029…031). |
-| 3 | R2 contradiction-aware ask | S | Cheap once R1's intervals exist. |
+| 3 | R2 contradiction-aware ask ✅ **done** | S | Cheap once R1's intervals exist. Shipped FR-146/147, no ADR. |
 | 4 | R8 related-notes surface | S | Zero-model, high visible value; exercises the ANN seam. |
 | 5 | R9 resurfacing/review scheduling | S | Rides R1's signals + resurfacer primitives. |
 | 6 | R7 merge proposals | M | Own destructive-op design pass (ADR-030); deliberately last. |
