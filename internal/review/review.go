@@ -33,7 +33,7 @@ const (
 // Item is one review-queue entry.
 type Item struct {
 	ID      string   `json:"id"`
-	Kind    string   `json:"kind"` // link | pair | triage | resurface | info
+	Kind    string   `json:"kind"` // link | pair | triage | resurface | contradicts | reconcile | info
 	Section string   `json:"section"`
 	Line    string   `json:"line"`
 	Checked bool     `json:"checked"`
@@ -44,12 +44,12 @@ type Item struct {
 }
 
 var (
-	sectionRe    = regexp.MustCompile(`^## (.+)$`)
-	sectionForRe = regexp.MustCompile(`^## Link suggestions for \[\[([^\]]+)\]\]`)
-	lineRe       = regexp.MustCompile(`^- \[([ x])\] (.*)$`)
-	linkToRe     = regexp.MustCompile(`^link to \[\[([^\]]+)\]\]`)
-	pairRe       = regexp.MustCompile(`^\[\[([^\]]+)\]\] ↔ \[\[([^\]]+)\]\]`)
-	triageRe     = regexp.MustCompile(`^triage \[\[([^\]]+)\]\] → (\S+) \(tags: ([^)]*)\)`)
+	sectionRe     = regexp.MustCompile(`^## (.+)$`)
+	sectionForRe  = regexp.MustCompile(`^## Link suggestions for \[\[([^\]]+)\]\]`)
+	lineRe        = regexp.MustCompile(`^- \[([ x])\] (.*)$`)
+	linkToRe      = regexp.MustCompile(`^link to \[\[([^\]]+)\]\]`)
+	pairRe        = regexp.MustCompile(`^\[\[([^\]]+)\]\] ↔ \[\[([^\]]+)\]\]`)
+	triageRe      = regexp.MustCompile(`^triage \[\[([^\]]+)\]\] → (\S+) \(tags: ([^)]*)\)`)
 	resurfaceRe   = regexp.MustCompile(`^resurface \[\[([^\]]+)\]\] — related to recent \[\[([^\]]+)\]\]`)
 	contradictsRe = regexp.MustCompile(`^contradicts \[\[([^\]]+)\]\] ⚡ \[\[([^\]]+)\]\]`)
 	reconcileRe   = regexp.MustCompile(`^reconcile: "(.+)" supersedes "(.+)"$`)
