@@ -58,8 +58,9 @@ Written as Markdown notes in `.axon/dashboards/` (and/or `MOCs/`), e.g.:
 These let the human work entirely inside Obsidian while the operational dashboard handles the system telemetry.
 
 ## 5. Health & diagnostics
-- `GET /health` → daemon, DB, Ollama, scheduler, last successful run per automation; plus the active embeddings provider/model/dim, the running `version`, and `latest_version`/`update_available` from the daily cached release check (never a live network call).
+- `GET /health` → daemon, DB, Ollama, scheduler, last successful run per automation; plus the active embeddings provider/model/dim, the running `version`, and `latest_version`/`update_available` from the daily cached release check (never a live network call). Also carries `ask_enabled`/`capture_enabled`/`related_enabled` so the SPA hides disabled tabs.
 - Powers `axon doctor` and a header status pill on the dashboard.
+- `GET /api/related?path=…` → `{related:[{path, similarity}]}`, the **Related** tab's data source and the documented loopback endpoint an Obsidian sidebar plugin can consume (R8/FR-150). **Zero model calls** — pure vector math over the ANN seam. Gated by `dashboard.related_enabled` (default-ON) + an `X-Axon-Related` header (CORS-preflight-forcing) on top of the loopback/Host guard.
 
 ## 6. Acceptance checks
 - Triggering an ingest or automation shows up in the activity feed and the relevant chart within ≤5s (FR-60/FR-62/S4).

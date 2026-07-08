@@ -664,6 +664,55 @@ function AskTab({ span }) {
   )
 }
 
+/* ── related tab (R8/FR-150) — read-only, zero-model ─────────────────────── */
+function getRelated(path) {
+  return fetch('/api/related?path=' + encodeURIComponent(path), {
+    headers: { 'X-Axon-Related': '1' },
+  }).then(async (r) => {
+    if (!r.ok) throw new Error(await r.text())
+    return r.json()
+  })
+}
+
+function RelatedTab({ span }) {
+  const [p, setP] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [rows, setRows] = useState(null)
+  const [err, setErr] = useState(null)
+
+  const submit = (e) => {
+    e.preventDefault()
+    if (!p.trim() || busy) return
+    setBusy(true); setErr(null); setRows(null)
+    getRelated(p.trim())
+      .then((d) => setRows(d.related || []))
+      .catch((e2) => setErr(String(e2.message || e2)))
+      .finally(() => setBusy(false))
+  }
+
+  return (
+    <Card title="Related notes" meta="embedding similarity — no tokens spent" span={span}>
+      <form className="ask-form" onSubmit={submit}>
+        <input className="ask-input" placeholder="Vault-relative note path, e.g. 01-Projects/Axon.md"
+               value={p} onChange={(e) => setP(e.target.value)} />
+        <button type="submit" disabled={busy || !p.trim()}>{busy ? 'Finding…' : 'Find related'}</button>
+      </form>
+      {err && <Empty>{err}</Empty>}
+      {rows && rows.length === 0 && <Empty>No related notes found for that path.</Empty>}
+      {rows && rows.length > 0 && (
+        <ul className="related-list">
+          {rows.map((r) => (
+            <li key={r.path}>
+              <span className="related-path">{r.path}</span>
+              <span className="related-sim">{r.similarity.toFixed(3)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  )
+}
+
 /* ── review tab (ADR-020) ────────────────────────────────────────────────── */
 function postReviewAction(id, action) {
   return fetch('/api/review/action', {
@@ -744,7 +793,7 @@ function ReviewTab({ span }) {
 /* ── app shell ───────────────────────────────────────────────────────────── */
 const TABS = [
   ['overview', 'Overview'], ['tokens', 'Tokens'], ['automations', 'Automations'], ['review', 'Review'],
-  ['ask', 'Ask'], ['knowledge', 'Knowledge'], ['graph', 'Graph'], ['activity', 'Activity'],
+  ['ask', 'Ask'], ['related', 'Related'], ['knowledge', 'Knowledge'], ['graph', 'Graph'], ['activity', 'Activity'],
 ]
 
 export default function App() {
@@ -785,7 +834,7 @@ export default function App() {
       </header>
 
       <nav className="nav">
-        {TABS.filter(([id]) => id !== 'ask' || health?.ask_enabled !== false).map(([id, label]) => (
+        {TABS.filter(([id]) => (id !== 'ask' || health?.ask_enabled !== false) && (id !== 'related' || health?.related_enabled !== false)).map(([id, label]) => (
           <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>{label}{id === 'review' && reviewMeta?.pending ? ` · ${reviewMeta.pending}` : ''}</button>
         ))}
       </nav>
@@ -835,6 +884,7 @@ export default function App() {
 
           {tab === 'review' && <ReviewTab span="span-12" />}
           {tab === 'ask' && <AskTab span="span-12" />}
+          {tab === 'related' && <RelatedTab span="span-12" />}
 
           {tab === 'graph' && <GraphCard graph={graph} simEdges={simEdges} onToggleSim={setSimEdges} span="span-12" />}
 

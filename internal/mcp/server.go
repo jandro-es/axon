@@ -134,6 +134,13 @@ func toolRegistry() []toolReg {
 					return nil, out, err
 				})
 		}},
+		{"vault_related", func(s *mcp.Server, t *Tools) {
+			mcp.AddTool(s, &mcp.Tool{Name: "vault_related", Description: "Notes most similar to a given note, by embedding similarity. Read-only and spends NO tokens (unlike vault_ask). Path is vault-relative."},
+				func(ctx context.Context, _ *mcp.CallToolRequest, in RelatedIn) (*mcp.CallToolResult, RelatedOut, error) {
+					out, err := t.Related(ctx, in)
+					return nil, out, err
+				})
+		}},
 	}
 }
 

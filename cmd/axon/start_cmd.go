@@ -112,6 +112,7 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 					Retrieval:      deps.profile.Retrieval,
 					AskEnabled:     deps.profile.Dashboard.AskAllowed(),
 					CaptureEnabled: deps.profile.Dashboard.CaptureAllowed(),
+					RelatedEnabled: deps.profile.Dashboard.RelatedAllowed(),
 					Health: func(context.Context) map[string]any {
 						h := map[string]any{
 							"embeddings_provider": deps.profile.Embeddings.Provider,

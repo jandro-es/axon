@@ -35,7 +35,7 @@ func newRootCmd() *cobra.Command {
 
 	root.AddCommand(newConfigCmd(gf), newConfigureCmd(gf), newDoctorCmd(gf), newVersionCmd())
 	root.AddCommand(newInitCmd(gf), newReindexCmd(gf), newOnboardCmd(gf))
-	root.AddCommand(newIngestCmd(gf), newSearchCmd(gf), newAskCmd(gf), newStatusCmd(gf), newSubscribeCmd(gf))
+	root.AddCommand(newIngestCmd(gf), newSearchCmd(gf), newAskCmd(gf), newRelatedCmd(gf), newStatusCmd(gf), newSubscribeCmd(gf))
 	root.AddCommand(newRunCmd(gf), newStartCmd(gf), newStopCmd(gf))
 	root.AddCommand(newMCPCmd(gf), newHookCmd(gf))
 	root.AddCommand(newServiceCmd(gf), newExportCmd(gf), newProfilesCmd(gf))

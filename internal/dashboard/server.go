@@ -49,6 +49,9 @@ type Config struct {
 	// CaptureEnabled + Vault power POST /api/capture and GET /capture (ADR-024).
 	// A nil Vault or CaptureEnabled=false disables both (404).
 	CaptureEnabled bool
+	// RelatedEnabled + Searcher power GET /api/related (R8/FR-150). A nil
+	// Searcher or RelatedEnabled=false disables it (404). Zero model calls.
+	RelatedEnabled bool
 }
 
 // Server is the dashboard HTTP server.
@@ -88,6 +91,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/ask", s.handleAsk)
 	mux.HandleFunc("POST /api/capture", s.handleCapture)
 	mux.HandleFunc("GET /capture", s.handleCapturePage)
+	mux.HandleFunc("GET /api/related", s.handleRelated)
 	mux.HandleFunc("GET /api/export", s.handleExport)
 	mux.Handle("/", s.staticHandler())
 	return s.guardHost(mux)
@@ -336,6 +340,33 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writeJSON(w, a)
+}
+
+// handleRelated serves the notes most similar to a given note — read-only,
+// zero model calls (contrast handleAsk). Gated by dashboard.related_enabled and
+// an X-Axon-Related header (forces a CORS preflight no cross-origin page passes),
+// on top of the loopback bind + Host guard. This is also the documented loopback
+// endpoint an Obsidian sidebar plugin consumes.
+func (s *Server) handleRelated(w http.ResponseWriter, r *http.Request) {
+	if !s.cfg.RelatedEnabled || s.cfg.Searcher == nil {
+		http.Error(w, "related is disabled for this profile", http.StatusNotFound)
+		return
+	}
+	if r.Header.Get("X-Axon-Related") != "1" {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	path := strings.TrimSpace(r.URL.Query().Get("path"))
+	if path == "" {
+		http.Error(w, "path required", http.StatusBadRequest)
+		return
+	}
+	related, err := s.cfg.Searcher.Related(r.Context(), path, queryInt(r, "top_k", 0))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]any{"related": related})
 }
 
 func queryInt(r *http.Request, key string, def int) int {

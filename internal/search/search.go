@@ -7,6 +7,8 @@ package search
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/jandro-es/axon/internal/config"
@@ -167,4 +169,79 @@ func (s *Searcher) Retrieve(ctx context.Context, query string, topK, maxContextT
 		}
 	}
 	return Retrieved{Hits: hits, Context: strings.TrimSpace(b.String()), Sources: sources}, nil
+}
+
+// Related-notes surface (R8/FR-148): the top notes most similar to a given
+// note, by pure vector math over the ANN seam — zero model calls, read-only.
+const (
+	relatedDefaultTopK    = 10  // default result count when topK ≤ 0
+	relatedMinSimilarity  = 0.3 // cosine floor; drops clearly-unrelated notes
+	relatedChunkOverfetch = 8   // chunk headroom so chunk→note dedup still fills topK
+)
+
+// RelatedNote is one entry in a note's related list.
+type RelatedNote struct {
+	Path       string  `json:"path"`
+	Similarity float64 `json:"similarity"` // raw cosine in [-1,1], typically (0,1]
+}
+
+// Related returns the notes most similar to notePath, ranked by cosine over the
+// note's mean chunk vector. It makes NO model call: the target's vector is read
+// from the DB and matched against candidates through the ANN VectorIndex seam
+// (ADR-025), which auto-falls back to exact brute below retrieval.ann.threshold.
+// An unknown path is an error; a known-but-unembedded note returns an empty list.
+func (s *Searcher) Related(ctx context.Context, notePath string, topK int) ([]RelatedNote, error) {
+	if topK <= 0 {
+		topK = relatedDefaultTopK
+	}
+	id, err := db.GetNoteIDByPath(ctx, s.DB, notePath)
+	if err != nil {
+		return nil, err
+	}
+	if id == nil {
+		return nil, fmt.Errorf("note %q not found in the index (run `axon reindex`?)", notePath)
+	}
+	means, err := db.NoteMeanVectors(ctx, s.DB, map[int64]bool{*id: true})
+	if err != nil {
+		return nil, err
+	}
+	mean, ok := means[*id]
+	if !ok || len(mean) == 0 {
+		return nil, nil // note has no embedded chunks yet
+	}
+	// Overfetch chunk candidates (empty Query ⇒ vector-only) so chunk→note
+	// collapse still yields topK distinct notes after excluding the target.
+	hits, err := db.HybridSearch(ctx, s.DB, db.SearchOpts{
+		QueryVector: mean,
+		TopK:        (topK + 1) * relatedChunkOverfetch,
+		Index:       s.vindex(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	best := map[string]float64{} // note path -> max cosine
+	for _, h := range hits {
+		if h.NoteID == nil || *h.NoteID == *id || h.Path == "" {
+			continue // skip orphan chunks and the target's own chunks
+		}
+		if h.Vector > best[h.Path] {
+			best[h.Path] = h.Vector
+		}
+	}
+	out := make([]RelatedNote, 0, len(best))
+	for path, sim := range best {
+		if sim >= relatedMinSimilarity {
+			out = append(out, RelatedNote{Path: path, Similarity: sim})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Similarity != out[j].Similarity {
+			return out[i].Similarity > out[j].Similarity
+		}
+		return out[i].Path < out[j].Path // stable tie-break
+	})
+	if len(out) > topK {
+		out = out[:topK]
+	}
+	return out, nil
 }

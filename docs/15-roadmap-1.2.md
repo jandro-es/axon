@@ -100,7 +100,7 @@ runs with measurably fewer Claude tokens (target: ≥50% of routine-tier calls
 local) and zero unledgered calls; with Ollama down, everything degrades to Claude
 transparently.
 
-### R8 — Ambient related-notes surface (S) · provisional FR-144/145 (rides ADR-025; likely no ADR)
+### R8 — Ambient related-notes surface (S) · FR-148/149/150 (rides ADR-025; no ADR) ✅ **BUILT 2026-07-08**
 **Build:** expose the embeddings AXON already has as a **live "related to what I'm
 looking at" surface** — `axon related <note>`, a `vault_related` MCP tool, and a
 dashboard panel, plus a documented loopback endpoint an Obsidian sidebar plugin
@@ -108,6 +108,14 @@ can consume. Zero model calls — pure vector math over the ANN seam. (Smart
 Connections charges ~$20/mo for exactly this.)
 **Gate:** the related list for a note returns in <100 ms warm, respects the ANN
 seam (B1/ADR-025), and makes **no** model call.
+**Shipped:** `search.Searcher.Related(notePath, topK)` reads the note's mean chunk
+vector and matches it through the existing ANN `VectorIndex` seam (`db.HybridSearch`
+with a `QueryVector`, empty `Query` — no embedding computed), collapses chunk→note,
+excludes the target, floors and sorts. Surfaced on `axon related`, the `vault_related`
+MCP tool (default set + agentic **read** allowlist — zero-spend), and `GET
+/api/related` (gated by `dashboard.related_enabled`, `X-Axon-Related` header) driving a
+**Related** SPA tab. Advisory `doctor` `related` check. Provisional FR-144/145
+reassigned to FR-148/149/150 (R5 consumed 140–145).
 
 ### R9 — Resurfacing with review scheduling (S) · provisional FR-146/147 (extends resurfacer + review queue; no ADR)
 **Build:** upgrade the resurfacer from "similar old note" to a light
@@ -135,7 +143,7 @@ zero broken links and both originals recoverable from the archive.
 | 1 | R1 temporal memory | M | The headline; entities it links to already exist (R3 shipped). Unlocks R2/R9. |
 | 2 | R5 local-tier promotion + `axon eval` ✅ **done** | M | Frees budget for everything after; independent lane, can run alongside R1. Shipped R5.1/R5.2/R5.3 (FR-140…145, ADR-029…031). |
 | 3 | R2 contradiction-aware ask ✅ **done** | S | Cheap once R1's intervals exist. Shipped FR-146/147, no ADR. |
-| 4 | R8 related-notes surface | S | Zero-model, high visible value; exercises the ANN seam. |
+| 4 | R8 related-notes surface ✅ **done** | S | Zero-model, high visible value; exercises the ANN seam. Shipped FR-148/149/150, no ADR. |
 | 5 | R9 resurfacing/review scheduling | S | Rides R1's signals + resurfacer primitives. |
 | 6 | R7 merge proposals | M | Own destructive-op design pass (ADR-030); deliberately last. |
 

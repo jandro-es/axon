@@ -504,3 +504,24 @@ func (t *Tools) Ask(ctx context.Context, in AskIn) (ask.Answer, error) {
 	}
 	return a, err
 }
+
+// --- related (ambient related-notes, FR-149; zero model call) ---------------
+
+type RelatedIn struct {
+	Path string `json:"path" jsonschema:"vault-relative path of the note to find related notes for"`
+	TopK int    `json:"top_k,omitempty" jsonschema:"max related notes to return (default 10)"`
+}
+
+type RelatedOut struct {
+	Related []search.RelatedNote `json:"related"`
+}
+
+// Related returns the notes most similar to a note by pure vector math over the
+// ANN seam — read-only, spends NO tokens (contrast vault_ask).
+func (t *Tools) Related(ctx context.Context, in RelatedIn) (RelatedOut, error) {
+	rel, err := t.deps.Searcher.Related(ctx, in.Path, in.TopK)
+	if err != nil {
+		return RelatedOut{}, err
+	}
+	return RelatedOut{Related: rel}, nil
+}

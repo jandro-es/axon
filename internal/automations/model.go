@@ -24,7 +24,7 @@ var agenticWriteTools = map[string]bool{
 // agenticReadTools is the read surface agentic runs have always had (ADR-017).
 var agenticReadTools = map[string]bool{
 	"vault_search": true, "vault_read": true, "vault_links": true,
-	"knowledge_search": true, "tokens_status": true,
+	"knowledge_search": true, "tokens_status": true, "vault_related": true,
 }
 
 // validateAgenticTools rejects any tool outside the read + managed-block-safe
