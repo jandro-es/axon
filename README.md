@@ -28,6 +28,9 @@ vault stays plain Markdown; everything else is derived and disposable.
   CLI or any Claude client.
 - **Ask your vault**: `axon ask` answers questions from your notes only —
   grounded or silent, with `[[wikilink]]` citations enforced in code.
+- **Related notes**: `axon related <note>` (also a `vault_related` MCP tool and a
+  dashboard panel) surfaces the notes most similar to one you're looking at —
+  pure vector math, zero model calls.
 
 **The vault maintains itself.** Eighteen scheduled automations — inbox triage,
 daily log, note compaction, link suggestions, a morning **briefing**, a weekly
