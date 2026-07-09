@@ -30,6 +30,7 @@ func Registry(profile config.Profile) map[string]Automation {
 		EntityPages{}.Name():       EntityPages{},
 		ProjectPulse{}.Name():      ProjectPulse{},
 		EvalDrift{}.Name():         EvalDrift{},
+		MergeProposals{}.Name():    MergeProposals{},
 	}
 	return reg
 }
