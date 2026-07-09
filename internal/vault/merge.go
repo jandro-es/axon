@@ -217,9 +217,12 @@ func extractManagedBlock(body, name string) string {
 	return inner
 }
 
+// zeroWidthSpace is inserted into axon managed-block markers to make them inert.
+const zeroWidthSpace = "\u200b"
+
 // neutralizeMarkers makes any axon managed-block comment markers inert (inserts a
 // zero-width space after "axon") so appended loser content can't corrupt the
 // survivor's block structure.
 func neutralizeMarkers(text string) string {
-	return strings.ReplaceAll(text, "<!-- axon:", "<!-- axon​:")
+	return strings.ReplaceAll(text, "<!-- axon:", "<!-- axon"+zeroWidthSpace+":")
 }

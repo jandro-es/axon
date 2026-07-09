@@ -138,15 +138,28 @@ contradictory pairs into a new `contradicts` review kind (Accept links the pair)
 Provisional FR-146/147 reassigned to FR-151/152/153 (R2 consumed 146/147). No new
 ADR. Provisional numbers: FR-146/147 → **FR-151/152/153**.
 
-### R7 — Near-duplicate merge proposals (M, 1.1 B3 carry-over) · provisional FR-148/149, ADR-030
+### R7 — Near-duplicate merge proposals (M, 1.1 B3 carry-over) · FR-154/155/156, ADR-032 ✅ **BUILT 2026-07-10**
 **Build:** an embedding sweep reusing the resurfacer primitives
 (`db.NoteMeanVectors`/`db.Cosine`) and the shared proposal-memory helpers,
 proposing note merges to the review queue. **Accept semantics get their own
-design pass (ADR-030)** — merge is the closest thing to a destructive op AXON has;
+design pass (ADR-032)** — merge is the closest thing to a destructive op AXON has;
 direction: merged note + originals archived + inbound links rewritten, never
 deletion. Deliberately last (unchanged from the 1.1 reasoning).
 **Gate:** duplicates surface once (proposal memory); an accepted merge leaves
 zero broken links and both originals recoverable from the archive.
+**Shipped:** new zero-model `merge-proposals` automation (weekly, disabled by
+default) — all-pairs `db.Cosine` over `db.NoteMeanVectors`, `sim ≥ merge.threshold`
+(default 0.92), deduped against pending + dismissed-pair proposal memory, capped at
+`merge.max_proposals` (5), emitting `merge [[a]] + [[b]] (sim)` lines. New `merge`
+review kind resolves through **`vault.Merge`** (ADR-032, the destructive-op pass):
+survivor by inbound-link centrality keeps its prose + gains the loser's body in an
+additive `axon:merged` block (loser markers neutralized), all inbound links retarget
+to the survivor (self-link, never dangling), loser archived **archive-first** to
+`.trash/merged/` then removed — never deleted. `merge{threshold,max_proposals}`
+config; advisory `doctor` `merge` check. No MCP tool, no agent-driven merge
+(user-approved via the review queue only). Provisional FR-148/149 → **FR-154/155/156**;
+provisional ADR-030 → **ADR-032**. **With R7 shipped, the 1.2 net-new slate
+(R1,R2,R5,R7,R8,R9) is complete.**
 
 ## Suggested build order & sizing
 
@@ -157,7 +170,7 @@ zero broken links and both originals recoverable from the archive.
 | 3 | R2 contradiction-aware ask ✅ **done** | S | Cheap once R1's intervals exist. Shipped FR-146/147, no ADR. |
 | 4 | R8 related-notes surface ✅ **done** | S | Zero-model, high visible value; exercises the ANN seam. Shipped FR-148/149/150, no ADR. |
 | 5 | R9 resurfacing/review scheduling ✅ **done** | S | Rides R1's signals + resurfacer primitives. Shipped FR-151/152/153, no ADR. |
-| 6 | R7 merge proposals | M | Own destructive-op design pass (ADR-030); deliberately last. |
+| 6 | R7 merge proposals ✅ **done** | M | Own destructive-op design pass (ADR-032); deliberately last. Shipped FR-154/155/156. |
 
 **Two long poles:** R1 (memory representation touches `MEMORY.md` format,
 SessionStart injection, the C1 reconcile flow, and reindex) and R5 (eval harness +

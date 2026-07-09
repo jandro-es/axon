@@ -84,6 +84,9 @@ Extracts named people/projects from notes updated in the lookback window (one st
 ### project-pulse (weekly, 1.1 C3 — off by default)
 Reads `01-Projects/` + the USER goals and writes an `axon:pulse` block in `01-Projects/Project Pulse.md`: deterministic per-project facts (last-touched, active/stale, linked goal) plus one budget-degrading routine-tier narrative (progress/stalls/next). Nudges projects untouched ≥3 weeks to the review queue once (proposal memory). Composes the briefing + resurfacer patterns.
 
+### merge-proposals (weekly, zero-model — 1.2 R7, off by default)
+Sweeps note mean-vectors for **near-duplicates**: all-pairs `db.Cosine` over `db.NoteMeanVectors`, proposing any pair with `sim ≥ merge.threshold` (default 0.92) as a `merge [[a]] + [[b]] (sim …)` line in the review queue (deduped against pending items + dismissed-pair proposal memory, capped at `merge.max_proposals`). **No model call** — the cosine is the rationale. Accepting a proposal runs the wikilink-safe `vault.Merge` (ADR-032): the more inbound-linked note survives, keeps its prose and gains the loser's body in an `axon:merged` block, all inbound links retarget to the survivor, and the loser is archived intact to `.trash/merged/` — **never deleted** (zero broken links, both originals recoverable). No MCP tool; user-approved via the review queue only.
+
 > This is an illustrative tour, not the full catalog — the authoritative, always-current list (including `capture`, `subscriptions`, `session-distill`, `memory-distill`) is the `purposes` map surfaced by `axon automations`.
 
 ## 4. Agent adapter — Claude Code (`claude -p`) is the default path

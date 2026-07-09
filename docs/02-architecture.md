@@ -400,6 +400,45 @@ call — outcomes live in the ledger + events, not a new table (no S9 surface).
 (Spec: `docs/superpowers/specs/2026-07-07-cascade-verification-design.md`; FR-144,
 FR-145.)
 
+### ADR-032 — Near-duplicate merge as a wikilink-safe, archive-never-delete op *(accepted — built)*
+
+**Status:** Accepted (2026-07-10, roadmap 1.2 R7). The destructive-op design pass
+the roadmap reserved for merge.
+
+**Context:** Near-duplicate merge is the closest thing AXON has to a destructive
+operation — it collapses two notes into one. The vault's constitution has **no
+`vault.delete`** and every mutation must be wikilink-safe (cardinal rule 2). Merge
+must reconcile "combine these two notes" with "never lose content and never break a
+link."
+
+**Decision:** A merge accept runs a single new vault primitive
+`vault.Merge(ctx, a, b) (survivor, err)`, not a delete. It: (1) picks the
+**survivor** by inbound-link centrality (ties → most-recently-modified → lexical
+path), so the fewest links move; (2) **archive-first** copies the loser intact to
+`.trash/merged/` — a system dir excluded from `List`/index/sweep, recoverable by
+hand — before anything else, so a crash duplicates content rather than losing it;
+(3) preserves the loser's body in the survivor's additive `axon:merged` managed
+block (loser managed-block markers neutralized first); (4) retargets every inbound
+`[[loser]]` link/embed to the survivor (survivor included → a self-link, never a
+dangling `.trash/` link); (5) removes the original loser. Detection
+(`merge-proposals`) makes **zero model calls** (mean-vector cosine is the
+rationale); accept spends no tokens either. Merge is **user-approved through the
+review queue only** — no MCP `vault_merge` tool, no agent-driven merge.
+
+**Why:** merge is a genuine risk surface, so its safety is in code, not intent —
+archive-first ordering, link retargeting, and marker neutralization make "zero
+broken links, both originals recoverable" a structural guarantee rather than a hope.
+Keeping it off the MCP surface and out of agent reach means a prompt-injected agent
+can never trigger it (extends the docs/15 non-goal on agent-driven `vault_move`).
+
+**Trade-offs:** the survivor's `axon:merged` block accumulates loser bodies across
+repeated merges (verbose but never lossy); `.trash/` grows until the user prunes it
+(deliberate — recoverability over tidiness); pairwise only (N-way duplicates stack
+through repeated merges). Disabled by default (S8); no new DB table, detection reads
+derived vectors only (S9). (Spec:
+`docs/superpowers/specs/2026-07-10-r7-merge-proposals-design.md`; FR-154, FR-155,
+FR-156.)
+
 ### ADR-027 — Local reranking as a retrieval primitive (outside the chokepoint) *(accepted — built)*
 
 **Status:** Accepted (2026-07-05, roadmap 1.1 B2).
