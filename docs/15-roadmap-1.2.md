@@ -13,13 +13,15 @@ deserves it. Same constitution: local-first, every model call through the
 chokepoint, every write wikilink-safe, everything toggleable, all-off still useful
 (S8), the vault rebuilds the DB and never the reverse (S9).
 
-This document is the 1.2 *plan*, in the style of the
+This document is the 1.2 roadmap, in the style of the
 [1.1 roadmap](14-roadmap-1.1.md), graduated from the vault planning notes
-(`Axon 1.2–1.3 — PRD / Purpose / Development Plan / Research Notes`). Every slice
-below still requires its own design cycle (brainstorm → spec → **ADR** → FR rows)
-before any code; the FR/ADR numbers here are **provisional** (current maxima:
-FR-133, ADR-027) and are assigned for real in those cycles. A slice isn't "done"
-until its acceptance gate passes.
+(`Axon 1.2–1.3 — PRD / Purpose / Development Plan / Research Notes`). **Status
+(2026-07-10): 1.2 is COMPLETE and released** — the whole net-new slate (R1, R2,
+R5, R7, R8, R9) shipped, each through its own design cycle (brainstorm → spec →
+**ADR** → FR rows). Final IDs: **FR-134…156, ADR-028…032** (current maxima FR-156,
+ADR-032). The per-slice ✅ BUILT annotations below record what shipped; the
+provisional FR/ADR numbers in the original plan text were reassigned during each
+build (noted inline).
 
 ## Carry-over reconciliation *(read this first)*
 

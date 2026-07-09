@@ -585,7 +585,7 @@ The standard automations (each toggleable in config, gated by `allowed_automatio
 | `context-export` | no | Writes a portable snapshot bundle to `.axon/exports/`. |
 | `link-suggester` | no | Vector-similarity sweep proposing Zettelkasten links to the review queue; remembers what it proposed, so a dismissed suggestion stays dismissed. |
 | `capture` | no* | The inbox funnel: ingests URLs pasted into inbox notes and files dropped into `00-Inbox/` (archives the originals). *`capture.enrich: claude` is optional. |
-| `resurfacer` | no | Weekly vector sweep proposing connections between recently-touched and dormant notes (with proposal memory). |
+| `resurfacer` | no* | Weekly vector sweep proposing connections between recently-touched and dormant notes, scheduled at lengthening (FSRS-flavoured) intervals so a declined item returns later, not next week. *An opt-in routine-tier contradiction check (set `budget_tokens > 0`) reclassifies genuinely contradictory pairs. |
 | `subscriptions` | no* | Hourly RSS/Atom polling into the ingestion pipeline (§7). *`subscriptions.enrich: claude` is optional. |
 | `briefing` | yes | Morning orientation block in the daily note: deterministic facts + one short narrative (degrades to facts-only under budget pressure). |
 | `daily-log` | yes | Synthesises today's note into its `axon:summary` block. |
@@ -594,6 +594,11 @@ The standard automations (each toggleable in config, gated by `allowed_automatio
 | `knowledge-digest` | yes | Weekly digest of newly ingested sources (agentic by default: reads the week's sources for grounded wikilinks). |
 | `memory-distill` | yes | Distils recent activity into durable entries in `MEMORY.md`'s managed block (§18). |
 | `session-distill` | yes | Distils finished Claude Code sessions (recorded by the Stop/SessionEnd hooks) into MEMORY entries — decisions, lessons, preferences (§18). |
+| `research-questions` | yes | Weekly: answers standing questions in `03-Resources/Research Questions.md` from your vault (grounded), into an `axon:answers` block. Off by default. |
+| `entity-pages` | yes | Extracts named people/projects from new notes into auto-maintained `Entities/` index pages with wikilink-safe mention lists. Off by default. |
+| `project-pulse` | yes | Weekly: reads `01-Projects/` + USER goals into an `axon:pulse` block (progress, stalls, next actions); nudges stale projects to the review queue. Off by default. |
+| `eval-drift` | no† | Re-runs `axon eval` for a gated local tier when its Ollama model digest changes, keeping promotion evidence-based. Off by default. †Local (budget-exempt) eval calls only. |
+| `merge-proposals` | no | Weekly near-duplicate sweep (mean-vector cosine ≥ 0.92): proposes note merges to the review queue. Accepting runs the wikilink-safe `vault.Merge` — the survivor keeps its prose and gains the loser's content, inbound links retarget, and the loser is archived to `.trash/merged/`, never deleted. Off by default. |
 
 **Agentic runs.** `knowledge-digest` and `compaction` run *agentically* by
 default: Claude runs headlessly with a small allowlist of AXON's own MCP tools
@@ -678,15 +683,24 @@ Views (all live over SSE, updating within seconds):
 - **Usage & budget** — day/week gauges + guard state (matches `axon status`).
 - **Runs** — automation timeline with status/skip-reasons.
 - **Review** — every pending proposal (link suggestions, structured triage
-  moves, resurfaced connections) with one-click **accept / dismiss**. Accepts
-  are wikilink-safe by construction: links land in the note's `axon:links`
-  managed block, triage moves go through the link-rewriting `vault_move`.
-  This is the dashboard's only mutation surface; resolved entries compact
-  into `.axon/review-queue-archive.md` after a week.
+  moves, resurfaced connections, contradiction flags, and near-duplicate merge
+  proposals) with one-click **accept / dismiss**. Accepts are wikilink-safe by
+  construction: links land in the note's `axon:links` managed block, triage
+  moves go through the link-rewriting `vault_move`, and an accepted merge runs
+  `vault.Merge` (survivor keeps its prose + gains the loser's content, links
+  retarget, the loser is archived to `.trash/merged/` — never deleted). This is
+  the dashboard's only mutation surface; resolved entries compact into
+  `.axon/review-queue-archive.md` after a week.
 - **Ask** — ask a question answered only from your notes: grounded-or-silent
-  with `[[wikilink]]` citations (the same engine as `axon ask`). This is the
-  one dashboard action that spends tokens; disable it per profile with
+  with `[[wikilink]]` citations (the same engine as `axon ask`). When your notes
+  disagree, the answer leads with a **⚠ Sources conflict** flag and cites both
+  dated claims (newest-valid preferred) rather than silently averaging. This is
+  the one dashboard action that spends tokens; disable it per profile with
   `dashboard.ask_enabled: false`.
+- **Related** — for a selected note, the most similar notes by embedding
+  similarity (pure vector math over the ANN seam — **no model call, zero
+  tokens**; the same engine as `axon related` and the `vault_related` MCP tool).
+  Disable it per profile with `dashboard.related_enabled: false`.
 - **Ingestion** — sources and embedding-queue depth.
 - **Vault growth** — notes, links, words, inbox backlog.
 - **Knowledge graph** — notes + wikilinks, filterable by folder/tag.
@@ -705,10 +719,12 @@ inside Obsidian for inbox/projects/knowledge/link-suggestions.
 
 - **MCP tools** (server `axon`, launched via `.claude/.mcp.json`):
   `vault_search`, `vault_read`, `vault_write`, `vault_patch`, `vault_move`
-  (wikilink-safe rename), `vault_links`, `daily_append`, `memory_remember`,
+  (wikilink-safe rename), `vault_links`, `vault_related` (most-similar notes by
+  embedding, read-only/zero-token), `daily_append`, `memory_remember`,
   `knowledge_ingest`, `knowledge_search`, `vault_ask` (grounded RAG answer
   with citations), `tokens_status`, `metrics_query`, `automations_list`,
-  `automations_run`. There is no `vault_delete`.
+  `automations_run`. There is no `vault_delete` and no `vault_merge` (merge is
+  user-approved through the review queue only).
 - **Hooks** (`settings.json`, each a thin `axon hook` call):
   - `SessionStart` injects a budget + inbox + review-queue status block (no model
     call).
@@ -814,7 +830,9 @@ the vault is the source of truth, a full restore is: copy the vault back and run
 | `axon reindex [--embeddings]` | Rebuild notes mirror + link graph from the vault. |
 | `axon ingest <url\|path> [--dry-run] [--enrich] [--json]` | Run the ingestion pipeline; `--enrich` summarises with Claude (via the token manager) and reports tokens spent. |
 | `axon search <query> [--top-k N] [--json]` | Hybrid lexical + semantic search. |
-| `axon ask "<question>" [--top-k N] [--json]` | Grounded-or-silent RAG answer with `[[wikilink]]` citations; refuses (zero tokens) when retrieval finds nothing relevant. |
+| `axon ask "<question>" [--top-k N] [--json]` | Grounded-or-silent RAG answer with `[[wikilink]]` citations; refuses (zero tokens) when retrieval finds nothing relevant. Flags source conflicts when your notes disagree. |
+| `axon related <note> [--top-k N] [--json]` | Most-similar notes to a given note by embedding similarity — pure vector math, **no model call**. |
+| `axon eval [--family F] [--model M] [--json]` | Run the local-model eval harness (golden sets graded pass/fail) to vet an `(provider, model)` pair before promoting a local tier. |
 | `axon subscribe <url> [--allow] \| list \| remove <url>` | Manage RSS/Atom feed subscriptions (verified add, seen-state, re-baselining remove). |
 | `axon configure [section …]` | Interactive menu (or scripted subcommands) for common settings: embeddings provider, model tiers, limits, automation toggles. |
 | `axon vault move <new-path>` | Relocate the vault, updating every AXON-owned reference (config + `.claude/` wiring). |

@@ -135,6 +135,24 @@ CREATE TABLE vec_centroids (           -- k≈√N spherical-k-means centroids
 );
 -- vec_chunks gains: centroid INTEGER (nullable; NULL = unassigned overflow, always scanned)
 
+-- Temporal memory facts (R1/ADR-028) — a DERIVED, disposable projection of the
+-- axon:memory block in MEMORY.md; reindex delete-all+inserts these rows from
+-- Markdown (the vault is the source of truth). Never authoritative.
+CREATE TABLE memory_facts (
+  id            INTEGER PRIMARY KEY,
+  text          TEXT NOT NULL,
+  kind          TEXT,
+  source        TEXT,
+  valid_from    TEXT NOT NULL,
+  valid_until   TEXT,                    -- NULL = currently valid (open interval)
+  superseded_by TEXT,
+  struck        INTEGER NOT NULL DEFAULT 0,
+  embedding     BLOB,                    -- little-endian float32, same codec as vec_chunks
+  line_no       INTEGER,
+  updated       TEXT NOT NULL
+);
+CREATE INDEX idx_memory_facts_open ON memory_facts(valid_until) WHERE valid_until IS NULL;
+
 -- Token ledger (every Claude call)
 CREATE TABLE token_ledger (
   id              INTEGER PRIMARY KEY,
@@ -198,7 +216,7 @@ profiles:
       config_dir: "~/.axon/profiles/personal/claude"   # CLAUDE_CONFIG_DIR — isolates the account
       oauth_token: env:CLAUDE_CODE_OAUTH_TOKEN_PERSONAL # from `claude setup-token`, for headless automations
       # NEVER set ANTHROPIC_API_KEY in this mode (Claude Code would bill the API account)
-    dashboard: { host: "127.0.0.1", port: 7777 }   # ask_enabled (default true) gates the Ask panel / POST /api/ask (ADR-023); capture_enabled (default true) gates POST /api/capture + the served /capture page (ADR-024) — set false to forbid browser vault writes
+    dashboard: { host: "127.0.0.1", port: 7777 }   # ask_enabled (default true) gates the Ask panel / POST /api/ask (ADR-023); capture_enabled (default true) gates POST /api/capture + the served /capture page (ADR-024) — set false to forbid browser vault writes; related_enabled (default true) gates GET /api/related + the Related tab (R8/FR-150)
     embeddings: { provider: ollama, host: "http://localhost:11434", model: nomic-embed-text, dim: 768, batch_size: 32 }
     # provider: ollama | apple. `apple` uses Apple's on-device NLContextualEmbedding
     # (macOS 14+, no server; ADR-013): a Swift helper compiled by `axon init` (needs
@@ -233,6 +251,19 @@ profiles:
     # ann.nprobe clusters are probed per query (higher = more recall). Enable ann
     # then run `axon reindex` to build vec_centroids; `axon doctor` advises when.
     retrieval: { top_k: 8, max_context_tokens: 12_000, index: brute, ann: { threshold: 10_000, nprobe: 8 } }
+    # resurfacing: the R9 resurfacer's spaced-repetition schedule + opt-in
+    # contradiction check. intervals_weeks: the rung ladder in weeks (default
+    # [1,2,4,8,16]; the last rung is the leech cap). contradiction_max_checks:
+    # per-run routine-tier model calls for note-contradiction detection (default
+    # 3; still gated on the resurfacer automation having budget_tokens > 0).
+    resurfacing: { intervals_weeks: [1, 2, 4, 8, 16], contradiction_max_checks: 3 }
+    # merge: the R7 near-duplicate merge-proposals sweep (ADR-032). threshold:
+    # minimum mean-vector cosine to propose a pair (default 0.92). max_proposals:
+    # per-run cap (default 5). The merge-proposals automation is zero-model and
+    # off by default; accepting a proposal runs the wikilink-safe vault.Merge
+    # (survivor keeps prose + gains the loser's body, inbound links retarget, the
+    # loser is archived to .trash/merged/ — never deleted).
+    merge: { threshold: 0.92, max_proposals: 5 }
     policy:
       data_residency: local-only
       egress_allowlist: ["localhost", "*"]

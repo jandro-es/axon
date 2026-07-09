@@ -21,6 +21,7 @@ A stdio MCP server (`github.com/modelcontextprotocol/go-sdk` — the official Go
 | `daily_append` | `content, date?` | `{ok, path}` | appends to today's (or given) daily note |
 | `knowledge_ingest` | `target, dry_run?` | `{status, note_path, title, suggested_links}` | runs Component 05 pipeline; URLs only via MCP (no local files) |
 | `knowledge_search` | `query, top_k?` | hybrid results | currently an alias of `vault_search` (source-scoping pending) |
+| `vault_ask` | `question, top_k?` | `{answer, citations[], conflicted}` | grounded-or-silent RAG answer with `[[wikilink]]` citations; spends tokens (chokepoint); flags source conflicts (R2). Excluded from the agentic allowlist |
 | `tokens_status` | `—` | `{day, week, guard}` | from Component 07 (cost field pending, api_key mode) |
 | `metrics_query` | `since_days?` | ledger aggregates by day/operation/model + budget windows | |
 | `automations_list` | `—` | `[{name, essential, allowed, last_run}]` | |

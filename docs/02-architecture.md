@@ -231,7 +231,7 @@ The two installations are **separate** (different machines, accounts, restrictio
 **Why:** FR-26's own wording is poll-based ("queued for ingestion on the next ingestion tick"), and the automation framework already supplies scheduling, enabled/schedule/catch-up/dry-run config, panic-safety, run accounting, the change-gate convention, and event plumbing — a watcher would re-invent all of it around a new dependency. Rejected: **fsnotify** (new dependency; debounce and partial-sync-write races with vault sync tools; still needs a scan-on-start for files that arrived while the daemon was down — at which point the poll *is* the design) and **a `POST /capture` route on the dashboard server** (that server's invariant is read-only: never writes the vault, never calls Claude). A separate localhost capture listener (bookmarklet/Shortcut target) is a possible future extension behind its own ADR.
 **Trade-offs:** minutes-level latency instead of seconds — acceptable for a sync-fed funnel and tunable via cron. Processed URLs are tracked in SQLite (derived), so a full reindex may re-fetch a URL once before the content-hash dedupe skips it. Failed items stay visible in the inbox rather than moving to a quarantine folder. (Spec: `docs/superpowers/specs/2026-07-03-universal-capture-design.md`; FR-26, FR-81…FR-83.)
 
-### ADR-028 — Temporal memory: validity intervals in Markdown + a derived fact index *(accepted — planned)*
+### ADR-028 — Temporal memory: validity intervals in Markdown + a derived fact index *(accepted — built)*
 
 **Status:** Accepted (2026-07-07, roadmap 1.2 R1).
 
@@ -279,7 +279,7 @@ modelling (explicitly out of PRD scope for one user); making the fact index
 authoritative (would violate the vault-source-of-truth invariant). (Spec:
 `docs/superpowers/specs/2026-07-07-temporal-memory-design.md`; FR-134…FR-137.)
 
-### ADR-029 — Eval-gated local-model promotion: an in-repo golden-set harness *(accepted — harness built; gating in ADR-030)*
+### ADR-029 — Eval-gated local-model promotion: an in-repo golden-set harness *(accepted — built)*
 
 **Status:** Accepted (2026-07-07, roadmap 1.2 R5). This slice builds the harness
 (sub-slice #1); promotion-gating and the runtime cascade are noted follow-ons.
@@ -322,7 +322,7 @@ eval-status check, config promotion-gating in `validateLocalRouting`, and the
 runtime local→verifier→Claude cascade to follow-on slices #2/#3. (Spec:
 `docs/superpowers/specs/2026-07-07-eval-harness-design.md`; FR-140, FR-141.)
 
-### ADR-030 — Eval-gated promotion: a runtime admission gate in the chokepoint *(accepted — planned)*
+### ADR-030 — Eval-gated promotion: a runtime admission gate in the chokepoint *(accepted — built)*
 
 **Status:** Accepted (2026-07-07, roadmap 1.2 R5 sub-slice #2). Extends ADR-029.
 
@@ -360,7 +360,7 @@ it untouched). (Spec:
 `docs/superpowers/specs/2026-07-07-eval-gated-promotion-design.md`; FR-142,
 FR-143.)
 
-### ADR-031 — Per-call verification cascade for the promoted local tier *(accepted — planned)*
+### ADR-031 — Per-call verification cascade for the promoted local tier *(accepted — built)*
 
 **Status:** Accepted (2026-07-07, roadmap 1.2 R5 sub-slice #3). Extends ADR-015,
 ADR-029, ADR-030.
