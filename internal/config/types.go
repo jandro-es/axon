@@ -48,6 +48,8 @@ type Profile struct {
 	// Resurfacing tunes the R9 spaced-repetition review scheduler (FR-151…153).
 	// Optional: absent → the Go defaults via the accessors below.
 	Resurfacing ResurfacingConfig `yaml:"resurfacing"`
+	// Merge tunes the R7 near-duplicate merge-proposals sweep (FR-154…156).
+	Merge MergeConfig `yaml:"merge"`
 	// Interop wires optional external/community MCP backends (FR-54). Optional.
 	Interop InteropConfig `yaml:"interop"`
 	// Capture tunes the capture automation (ADR-016). Optional: an absent block
@@ -391,6 +393,32 @@ type ResurfacingConfig struct {
 	// detection. 0 → default 3. Set explicitly to control spend; the path is
 	// still gated on the resurfacer having budget_tokens > 0.
 	ContradictionMaxChecks int `yaml:"contradiction_max_checks,omitempty" validate:"omitempty,gte=0"`
+}
+
+// MergeConfig tunes the near-duplicate merge-proposals sweep (R7). Zero values
+// take the documented defaults. Detection is zero-model; accept never deletes.
+type MergeConfig struct {
+	// Threshold is the minimum mean-vector cosine for a pair to be proposed as a
+	// near-duplicate. 0 → default 0.92 (a far higher bar than resurfacing's 0.75).
+	Threshold float64 `yaml:"threshold,omitempty" validate:"omitempty,gt=0,lte=1"`
+	// MaxProposals caps merge proposals emitted per run. 0 → default 5.
+	MaxProposals int `yaml:"max_proposals,omitempty" validate:"omitempty,gte=0"`
+}
+
+// ThresholdOr returns the configured near-duplicate cosine floor, default 0.92.
+func (m MergeConfig) ThresholdOr() float64 {
+	if m.Threshold <= 0 {
+		return 0.92
+	}
+	return m.Threshold
+}
+
+// MaxProposalsOr returns the per-run proposal cap, default 5.
+func (m MergeConfig) MaxProposalsOr() int {
+	if m.MaxProposals <= 0 {
+		return 5
+	}
+	return m.MaxProposals
 }
 
 // IntervalsWeeksOr returns the configured ladder or the default [1,2,4,8,16].
