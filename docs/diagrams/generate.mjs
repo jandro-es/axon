@@ -330,7 +330,7 @@ function personalMemory() {
   freetext(e, { x: 338, y: 78, text: 'Identity layer · 02-Areas/Profile/', size: 13 })
   box(e, { x: 338, y: 108, w: 244, h: 46, fill: C.blue, size: 15, text: 'USER.md — who you are' })
   box(e, { x: 338, y: 160, w: 244, h: 46, fill: C.blue, size: 15, text: 'SOUL.md — assistant persona' })
-  const memory = box(e, { x: 338, y: 216, w: 244, h: 72, fill: C.yellow, size: 14, text: 'MEMORY.md\naxon:memory · durable entries' })
+  const memory = box(e, { x: 338, y: 212, w: 244, h: 80, fill: C.yellow, size: 13, text: 'MEMORY.md — axon:memory\nfacts · intervals · supersede\n(→ memory_facts derived index)' })
 
   const sstart = box(e, { x: 636, y: 104, w: 216, h: 64, fill: C.green, size: 14, text: 'SessionStart hook\nbounded · redacted · no model' })
   const session = box(e, { x: 636, y: 200, w: 216, h: 60, fill: C.green, size: 14, text: 'Claude Code session\n“knows you”' })
@@ -358,7 +358,7 @@ function multiClient() {
   const e = []
   const code = box(e, { x: 24, y: 84, w: 250, h: 92, fill: C.green, size: 13, text: 'Claude Code\ntools + hooks + skills +\nsubagents + headless automations\nfull-featured' })
   const desktop = box(e, { x: 24, y: 244, w: 250, h: 92, fill: C.blue, size: 13, text: 'Claude Desktop\nAXON tools only\nno hooks / skills / injection\ntools-only client' })
-  const server = box(e, { x: 392, y: 120, w: 232, h: 180, fill: C.yellow, size: 12, text: 'axon mcp (stdio)\nvault_search / read / write\nvault_patch / move / links\ndaily_append · knowledge_*\ntokens_status · metrics_query\nautomations_* · memory_remember\n \nevery tool wikilink-safe &\npath-sandboxed in the server' })
+  const server = box(e, { x: 392, y: 120, w: 232, h: 180, fill: C.yellow, size: 12, text: 'axon mcp (stdio)\nvault_search / read / write\nvault_patch / move / links / related\ndaily_append · knowledge_* · ask\ntokens_status · metrics_query\nautomations_* · memory_remember\n \nevery tool wikilink-safe &\npath-sandboxed in the server' })
   const vault = box(e, { x: 712, y: 160, w: 148, h: 100, fill: C.gray, size: 15, text: 'Vault\n(source of truth)' })
   box(e, { x: 392, y: 328, w: 232, h: 74, fill: C.green, size: 12, text: "Vault safety holds for both:\nenforced in the server,\nnot the client's hooks." })
 

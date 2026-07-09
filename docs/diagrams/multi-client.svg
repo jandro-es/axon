@@ -15,8 +15,8 @@
 <rect x="396" y="100" width="232" height="180" rx="10" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
 <text x="512" y="130.7" font-size="12" fill="#1e1e1e" text-anchor="middle">axon mcp (stdio)</text>
 <text x="512" y="146.6" font-size="12" fill="#1e1e1e" text-anchor="middle">vault_search / read / write</text>
-<text x="512" y="162.4" font-size="12" fill="#1e1e1e" text-anchor="middle">vault_patch / move / links</text>
-<text x="512" y="178.2" font-size="12" fill="#1e1e1e" text-anchor="middle">daily_append · knowledge_*</text>
+<text x="512" y="162.4" font-size="12" fill="#1e1e1e" text-anchor="middle">vault_patch / move / links / related</text>
+<text x="512" y="178.2" font-size="12" fill="#1e1e1e" text-anchor="middle">daily_append · knowledge_* · ask</text>
 <text x="512" y="194.1" font-size="12" fill="#1e1e1e" text-anchor="middle">tokens_status · metrics_query</text>
 <text x="512" y="209.9" font-size="12" fill="#1e1e1e" text-anchor="middle">automations_* · memory_remember</text>
 <text x="512" y="225.8" font-size="12" fill="#1e1e1e" text-anchor="middle"> </text>

@@ -6,45 +6,120 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-07-10
+
+**"Remember & reason, cheaply."** 1.0 built the self-maintaining vault; 1.1 made
+it answer; 1.2 gives it a real memory architecture (temporal facts with validity
+intervals and supersedence), the intelligence that exploits it
+(contradiction-aware answers, scheduled resurfacing, near-duplicate merges), an
+ambient related-notes surface off the embeddings already present, and an
+eval-gated local-model tier so Claude is reserved for what deserves it. Same
+constitution: local-first, every model call through the chokepoint, every write
+wikilink-safe, all-off still useful (S8), the vault rebuilds the DB and never the
+reverse (S9). Net-new slate: R1, R2, R5, R7, R8, R9 (FR-134…156, ADR-028…032).
+
 ### Added
 
-- **Standing research questions (FR-116…FR-117)** — a weekly
-  `research-questions` automation answers questions you keep in
-  `03-Resources/Research Questions.md` from your vault (grounded `ask` per
-  question) into an `axon:answers` block, with `[[wikilink]]` citations and a
-  confidence marker (`✅ Answered` / `📝 Tentative` / `🔍 Open`). Unanswered
-  questions persist and are re-attempted weekly. Never edits your prose
-  (cardinal rule 2); disabled by default and inert until the note has a real
-  question; `axon init` scaffolds a template with fenced examples.
-- **Pluggable ANN vector index (FR-113…FR-115, ADR-025)** — a `db.VectorIndex`
-  seam with an in-house IVF-flat approximate index behind `retrieval.index: ann`
-  (default `brute`, unchanged). Deterministic spherical k-means clusters vectors
-  into an in-file `vec_centroids` table + `vec_chunks.centroid` column; queries
-  probe the `nprobe` nearest lists plus a NULL overflow. Auto-falls back to exact
-  brute below `retrieval.ann.threshold` (default 10 000) and is bit-identical to
-  brute at `nprobe ≥ k`. Rebuilt by `axon reindex`; `axon doctor` advises when to
-  enable it. Single-file SQLite promise intact — no server, no new dependency.
-- **Browser capture endpoint (FR-121…FR-122, ADR-024)** — `POST /api/capture`
-  and a served same-origin `/capture` page drop a URL/selection into
-  `00-Inbox/` for the `capture` automation to ingest — guarded like review/ask
-  actions (loopback + Host guard + JSON content type + `X-Axon-Capture`
-  preflight header), gated by a new `dashboard.capture_enabled` kill-switch
-  (default on), and making no model call. Ships a bookmarklet + macOS Shortcuts
-  recipe (see GUIDE §6).
-- **`vault_ask` + dashboard Ask panel (FR-111…FR-112, ADR-023)** — the
-  grounded `ask` engine on two more surfaces: a `vault_ask` MCP tool (Claude
-  Code + Desktop) and a dashboard **Ask** panel backed by `POST /api/ask`.
-  The endpoint is the dashboard's first token-spending action, guarded
-  identically to review actions (loopback + Host guard + JSON content type +
-  `X-Axon-Ask` preflight header) and gated by a new `dashboard.ask_enabled`
-  kill-switch (default on). `vault_ask` is excluded from the agentic
-  automation allowlist by construction.
-- **`axon ask` (FR-108…FR-110, roadmap 1.1 A1)** — grounded-or-silent answers
-  from the vault: hybrid retrieval builds a bounded context, a deterministic
-  gate refuses unanswerable questions for free, one synthesis-tier call
-  answers with `[[wikilink]]` citations, and a code-enforced contract
-  guarantees every citation resolves to a retrieved note — hallucinated or
-  missing citations surface as refusals listing the sources.
+- **Temporal memory layer (FR-134…FR-137, ADR-028)** — memory evolves from an
+  append-only dated log into episodic entries + **semantic facts with validity
+  intervals**. `MEMORY.md`'s `axon:memory` block gains a backward-compatible
+  interval grammar (`valid_from`, tombstoned supersedence — nothing deleted); a
+  derived `memory_facts` SQLite table (migration 0005) is rebuilt byte-equivalently
+  by `axon reindex` (S9). Consolidation extends `memory-distill`; a life-change
+  ("moved London → Tokyo") flows through the C1 reconcile review-queue flow, closing
+  the old fact's interval on accept. SessionStart injection prefers currently-valid
+  facts.
+- **Local synthesis validation & routine-tier promotion + `axon eval` (FR-140…FR-145,
+  ADR-029/030/031)** — an eval harness (`axon eval`) with golden sets drawn from
+  AXON's own tasks, graded pass/fail by rubric against any `(provider, model)` pair;
+  an eval-gated admission gate so `models.routine: ollama:<model>` is supported only
+  once it passes thresholds on this machine (`doctor` reports status; an `eval-drift`
+  automation re-runs evals when a model's Ollama digest changes); and a per-call
+  verification cascade — a schema-valid local `routine` answer is scored by a cheap
+  local judge (`models.verify`) and escalates to Claude below `models.verify_min_score`,
+  all ledgered. Default off.
+- **Contradiction-aware ask (FR-146/FR-147)** — when retrieval surfaces sources that
+  disagree, the grounded answer flags it: both claims cited with their dates,
+  newest-valid preferred, no silent averaging. One clause on the synthesis prompt
+  emits a leading `CONFLICT` sentinel, stripped into an additive `Answer.Conflicted`
+  flag (grounding gate, `NOT_FOUND`, and citation contract unchanged). Surfaced on
+  `vault_ask` (`⚠ Sources conflict`) and the dashboard `/api/ask` response. One
+  chokepoint call, no extra tokens.
+- **Ambient related-notes surface (FR-148/FR-149/FR-150)** — the embeddings already
+  present exposed as a live "related to what I'm looking at" surface: `axon related
+  <note>`, a `vault_related` MCP tool (default set + agentic read allowlist —
+  zero-spend), and a dashboard **Related** tab backed by `GET /api/related` (gated by
+  `dashboard.related_enabled`). Pure vector math over the ANN seam — **no model
+  call**, <100 ms warm.
+- **Resurfacing with review scheduling (FR-151/FR-152/FR-153)** — the resurfacer
+  upgrades from "propose once, silence forever" to a light FSRS-flavoured review
+  queue: per-pair `{rung, due, last}` schedule (interval ladder
+  `resurfacing.intervals_weeks`, default `[1,2,4,8,16]`) persisted in
+  `automation_state`, fed by the pair's own queue+archive outcomes (dismiss +1 rung,
+  accept +2 — intervals lengthen on acceptance). An opt-in routine-tier contradiction
+  check (gated on `budget_tokens > 0`) reclassifies genuine clashes into a new
+  `contradicts` review kind.
+- **Near-duplicate merge proposals (FR-154/FR-155/FR-156, ADR-032)** — a weekly
+  zero-model `merge-proposals` sweep proposes near-duplicate note pairs (mean-vector
+  cosine ≥ `merge.threshold`, default 0.92) to the review queue. Accepting runs the
+  wikilink-safe `vault.Merge` (the destructive-op design pass): the more inbound-linked
+  note survives, keeps its prose and gains the loser's body in an additive
+  `axon:merged` block, all inbound links retarget to the survivor, and the loser is
+  archived intact to `.trash/merged/` — **never deleted** (zero broken links, both
+  originals recoverable). No MCP tool, no agent-driven merge; disabled by default.
+
+## [1.1.0] — 2026-07-06
+
+**"Now it answers."** Grounded-or-silent `ask` on three surfaces with wikilink
+citations, ANN retrieval, a local reranker, standing research questions, entity
+pages, project pulse, a capture endpoint, OCR, and contradiction-aware memory
+distillation (FR-108…FR-133, ADR-023…ADR-027).
+
+### Added
+
+- **`axon ask` (FR-108…FR-110)** — grounded-or-silent answers from the vault:
+  hybrid retrieval builds a bounded context, a deterministic gate refuses
+  unanswerable questions for free, one synthesis-tier call answers with
+  `[[wikilink]]` citations, and a code-enforced contract guarantees every citation
+  resolves to a retrieved note — hallucinated or missing citations surface as
+  refusals listing the sources.
+- **`vault_ask` + dashboard Ask panel (FR-111/FR-112, ADR-023)** — the grounded
+  `ask` engine on two more surfaces: a `vault_ask` MCP tool (Claude Code + Desktop)
+  and a dashboard **Ask** panel backed by `POST /api/ask` (the dashboard's first
+  token-spending action), guarded identically to review actions and gated by a
+  `dashboard.ask_enabled` kill-switch. `vault_ask` is excluded from the agentic
+  allowlist by construction.
+- **Pluggable ANN vector index (FR-113…FR-115, ADR-025)** — a `db.VectorIndex` seam
+  with an in-house IVF-flat approximate index behind `retrieval.index: ann` (default
+  `brute`). Deterministic spherical k-means into an in-file `vec_centroids` table;
+  auto-falls back to exact brute below `retrieval.ann.threshold` (default 10 000) and
+  is bit-identical to brute at `nprobe ≥ k`. Single-file SQLite promise intact — no
+  server, no new dependency.
+- **Standing research questions (FR-116/FR-117)** — a weekly `research-questions`
+  automation answers questions in `03-Resources/Research Questions.md` from your vault
+  (grounded `ask` per question) into an `axon:answers` block with citations and a
+  confidence marker. Never edits your prose; disabled by default.
+- **Contradiction-aware memory distillation (FR-118…FR-120)** — `memory-distill`
+  detects when a new memory entry conflicts with an existing fact and proposes a
+  `reconcile` review-queue item; accepting tombstones the old fact (never deletes)
+  and holds the new one until confirmed.
+- **Browser capture endpoint (FR-121/FR-122, ADR-024)** — `POST /api/capture` and a
+  served same-origin `/capture` page drop a URL/selection into `00-Inbox/` for the
+  `capture` automation, guarded like review/ask actions and gated by
+  `dashboard.capture_enabled`. Ships a bookmarklet + macOS Shortcuts recipe.
+- **OCR for scanned PDFs (FR-123…FR-125, ADR-026)** — fallback OCR when a PDF's text
+  layer is too thin: an on-device Apple Vision helper (macOS) or a tesseract pipeline,
+  wired into the ingestion extract path; `axon init`/`doctor` provision and report it.
+- **Local reranker (FR-126/FR-127, ADR-027)** — an optional Ollama pointwise reranker
+  behind `retrieval.rerank` that re-scores an overfetched candidate pool, best-effort
+  (falls back to the fused order on error). A retrieval primitive outside the
+  chokepoint (like embeddings).
+- **Entity pages (FR-128…FR-130)** — an `entity-pages` automation extracts named
+  people/projects from new notes into an auto-maintained `Entities/` index with
+  wikilink-safe mention lists. Disabled by default.
+- **Project pulse (FR-131…FR-133)** — a weekly `project-pulse` automation reads
+  `01-Projects/` + USER goals into an `axon:pulse` block (progress, stalls, next
+  actions) and nudges stale projects to the review queue. Disabled by default.
 
 ## [1.0.0] — 2026-07-04
 
