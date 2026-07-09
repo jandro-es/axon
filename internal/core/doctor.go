@@ -114,6 +114,8 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 			}
 			// 4f. R9 resurfacer schedule + contradiction path (advisory).
 			checks = append(checks, resurfaceCheck(p))
+			// 4g. R7 near-duplicate merge-proposals sweep (advisory).
+			checks = append(checks, mergeCheck(p))
 			embChecked = true
 		}
 	}
@@ -266,6 +268,19 @@ func resurfaceCheck(p config.Profile) Check {
 		state = fmt.Sprintf("contradiction path active (routine tier, ≤%d checks/run)", p.Resurfacing.ContradictionMaxChecksOr())
 	}
 	return Check{name, StatusOK, fmt.Sprintf("resurfacer ladder %v weeks; %s", weeks, state)}
+}
+
+// mergeCheck reports the R7 near-duplicate merge-proposals sweep. Advisory
+// (always StatusOK): the sweep is zero-model and disabled by default; accept is
+// wikilink-safe and never deletes.
+func mergeCheck(p config.Profile) Check {
+	const name = "merge"
+	auto, ok := p.Automations["merge-proposals"]
+	if !ok || !auto.Enabled {
+		return Check{name, StatusOK, "merge-proposals off (near-duplicate sweep; enable in automations to propose merges)"}
+	}
+	return Check{name, StatusOK, fmt.Sprintf("merge-proposals active (cosine ≥ %.2f, ≤%d proposals/run; accept archives to .trash, never deletes)",
+		p.Merge.ThresholdOr(), p.Merge.MaxProposalsOr())}
 }
 
 // vettingCheck renders the eval-promotion status for one gated local tier
