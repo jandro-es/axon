@@ -149,8 +149,8 @@ func TestAutomationsListAndRunTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(list.Automations) != 19 {
-		t.Errorf("expected 19 automations, got %d", len(list.Automations))
+	if len(list.Automations) != 20 {
+		t.Errorf("expected 20 automations, got %d", len(list.Automations))
 	}
 
 	// Run a no-model automation through the engine path.

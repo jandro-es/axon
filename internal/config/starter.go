@@ -92,11 +92,16 @@ profiles:
       session-distill:   { enabled: true,  schedule: "15 */2 * * *",    model: classify,  budget_tokens: 30_000, catch_up: skip }
       entity-pages:      { enabled: false, schedule: "0 9 * * 1",       model: classify,  budget_tokens: 60_000 }
       project-pulse:     { enabled: false, schedule: "0 10 * * 1",      model: routine,   budget_tokens: 40_000 }
+      merge-proposals:   { enabled: false, schedule: "0 11 * * 1",      model: none,      budget_tokens: 0 }
 
     memory:
       inject: true
       session_tokens: 1500
       recent_entries: 10
+
+    merge:
+      threshold: 0.92
+      max_proposals: 5
 `
 
 // Starter renders a fresh single-profile config for `axon setup`. provider is

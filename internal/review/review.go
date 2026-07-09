@@ -33,7 +33,7 @@ const (
 // Item is one review-queue entry.
 type Item struct {
 	ID      string   `json:"id"`
-	Kind    string   `json:"kind"` // link | pair | triage | resurface | contradicts | reconcile | info
+	Kind    string   `json:"kind"` // link | pair | triage | resurface | contradicts | merge | reconcile | info
 	Section string   `json:"section"`
 	Line    string   `json:"line"`
 	Checked bool     `json:"checked"`
@@ -52,6 +52,7 @@ var (
 	triageRe      = regexp.MustCompile(`^triage \[\[([^\]]+)\]\] → (\S+) \(tags: ([^)]*)\)`)
 	resurfaceRe   = regexp.MustCompile(`^resurface \[\[([^\]]+)\]\] — related to recent \[\[([^\]]+)\]\]`)
 	contradictsRe = regexp.MustCompile(`^contradicts \[\[([^\]]+)\]\] ⚡ \[\[([^\]]+)\]\]`)
+	mergeRe       = regexp.MustCompile(`^merge \[\[([^\]]+)\]\] \+ \[\[([^\]]+)\]\]`)
 	reconcileRe   = regexp.MustCompile(`^reconcile: "(.+)" supersedes "(.+)"$`)
 )
 
@@ -113,6 +114,9 @@ func Load(ctx context.Context, v *vault.FS) ([]Item, error) {
 		case contradictsRe.MatchString(body):
 			cm := contradictsRe.FindStringSubmatch(body)
 			it.Kind, it.Note, it.Target = "contradicts", cm[1], cm[2]
+		case mergeRe.MatchString(body):
+			mm := mergeRe.FindStringSubmatch(body)
+			it.Kind, it.Note, it.Target = "merge", mm[1], mm[2]
 		case reconcileRe.MatchString(body):
 			rm := reconcileRe.FindStringSubmatch(body)
 			it.Kind, it.Note, it.Target = "reconcile", rm[1], rm[2]
@@ -150,6 +154,12 @@ func Accept(ctx context.Context, v *vault.FS, id string) (Item, error) {
 			return Item{}, err
 		}
 		suffix = "✓ reconciled"
+	case "merge":
+		survivor, merr := v.Merge(ctx, it.Note+".md", it.Target+".md")
+		if merr != nil {
+			return Item{}, merr
+		}
+		suffix = "✓ merged into [[" + survivor + "]]"
 	default:
 		return Item{}, fmt.Errorf("item %s (%s) is not actionable — dismiss it instead", id, it.Kind)
 	}
