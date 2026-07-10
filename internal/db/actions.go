@@ -99,6 +99,20 @@ func ListActions(ctx context.Context, q Queryer2, opts ListActionsOpts) ([]Actio
 	return scanActions(rows)
 }
 
+// MarkActionDone flips one derived row to done in place (the vault is already
+// updated; this keeps the disposable index in step until the next reindex, which
+// reproduces the same row from the now-[x] source line — S9-consistent). Returns
+// rows affected (0 = unknown/already-done hash).
+func MarkActionDone(ctx context.Context, q Execer, hash, doneDate string) (int64, error) {
+	res, err := q.ExecContext(ctx,
+		`UPDATE actions SET state='done', checkbox='x', done_date=? WHERE hash=? AND state='open';`,
+		doneDate, hash)
+	if err != nil {
+		return 0, fmt.Errorf("mark action done: %w", err)
+	}
+	return res.RowsAffected()
+}
+
 // ActionStateCounts reports date-independent counts for doctor.
 func ActionStateCounts(ctx context.Context, q Queryer) (total, open, done, cancelled, archived int, err error) {
 	var t, o, d, c, a sql.NullInt64
