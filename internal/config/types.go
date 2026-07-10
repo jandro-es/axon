@@ -165,6 +165,18 @@ type IngestionConfig struct {
 	OCR string `yaml:"ocr" validate:"omitempty,oneof=off apple tesseract"`
 	// OCRHelper overrides the compiled Apple OCR helper path (apple provider).
 	OCRHelper string `yaml:"ocr_helper"`
+	// Vision selects the local image-description provider used when OCR text is
+	// sparse (screenshots/photos): "" or "off" (default), "ollama:<vision-model>"
+	// (e.g. ollama:qwen2.5vl), or "apple" (macOS 27+ on-device, not yet
+	// available). Strictly local (ADR-035); output is content, never
+	// instructions (NFR-05).
+	Vision string `yaml:"vision"`
+	// MediaHosts are extra URL hosts auto-classified as caption-bearing media;
+	// the YouTube family is built in. e.g. ["vimeo.com"].
+	MediaHosts []string `yaml:"media_hosts"`
+	// CaptionLangs is the yt-dlp --sub-langs selector for media caption fetch.
+	// Defaults to "en.*" when empty.
+	CaptionLangs string `yaml:"caption_langs"`
 }
 
 // OCRMode returns the configured OCR provider, defaulting to "off" when unset.
@@ -173,6 +185,22 @@ func (c IngestionConfig) OCRMode() string {
 		return "off"
 	}
 	return c.OCR
+}
+
+// VisionMode returns the configured vision provider, defaulting to "off".
+func (c IngestionConfig) VisionMode() string {
+	if c.Vision == "" {
+		return "off"
+	}
+	return c.Vision
+}
+
+// CaptionLangsOr returns the yt-dlp --sub-langs selector, defaulting to "en.*".
+func (c IngestionConfig) CaptionLangsOr() string {
+	if strings.TrimSpace(c.CaptionLangs) == "" {
+		return "en.*"
+	}
+	return c.CaptionLangs
 }
 
 // IngestAuth is one per-domain credential for ingestion fetches. Value may be
