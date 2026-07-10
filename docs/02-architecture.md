@@ -537,6 +537,55 @@ Completion (`CompleteAction`) and demotion (`TagAction`) are the two members of
 this class; both are additive and reversible by hand, neither deletes. (Spec:
 `docs/superpowers/specs/2026-07-10-t5-actions-review-design.md`; FR-167, FR-168.)
 
+### ADR-035 — Multimodal ingestion: local vision as a perception primitive, new input kinds, attachment archiving *(accepted — planned)*
+
+**Status:** Accepted (2026-07-10, roadmap 1.3 H1). The decision surface for
+extending ingestion beyond text/PDF to images and caption-bearing media.
+
+**Context:** The ingestion pipeline handles URLs, HTML, text, and PDFs (with an
+OCR fallback, ADR-026); everything from `redact` onward is content-agnostic. 1.3
+adds two input surfaces — images/screenshots and video/podcast captions — that
+need to land as ordinary Knowledge notes without a cloud dependency, without a
+new Claude spend surface, and without weakening the SSRF/agent-isolation and
+wikilink-safety guarantees.
+
+**Decision:** (1) **Image description/tagging is a local perception primitive**,
+not a chokepoint-routed model call — the same status OCR (ADR-026) and rerank
+(ADR-027) hold, an explicit amendment to ADR-015. A `Vision` provider seam
+(`Describe(ctx, img, mime)`) mirrors `embeddings.Provider`/`OCR`: `OllamaVision`
+now (Ollama `/api/generate` with base64 images), an `apple` slot returning a
+"requires macOS 27, not yet available" error so the on-device FM image tier drops
+in later with zero caller change (ADR-013 pattern). **There is no Claude vision
+path in v1** — cardinal rule 1 is untouched and no new Claude spend appears.
+(2) **Two new input kinds** — `KindImage` (extension-classified; CLI-only via the
+existing `AllowLocalFiles` guard, so agents cannot ingest local images) and
+`KindMedia` (youtube-family host set, extensible, or a `--media` force flag;
+still egress-policy-gated). (3) **Image text recovery is OCR-first,
+vision-if-sparse** — the `OCR` seam gains `RecognizeImage`; vision only runs when
+OCR falls below the min-content floor, exactly mirroring the ADR-026 PDF
+fallback. (4) **Media captions come from a detected `yt-dlp` binary**
+(the ADR-026 "shell to a detected system tool" precedent); caption-less or
+tool-absent ⇒ a flagged `00-Inbox` capture, zero model calls, no crash.
+(5) **Archive-never-delete**: the source image is *copied* (never moved) into
+`03-Resources/Knowledge/attachments/<hash>.<ext>` and embedded `![[…]]`, so the
+vault stays self-contained (S9) and the user's original is untouched.
+
+**Why:** perception stays local and free (constitution §3 — no cloud vision
+default; budget-exempt like OCR/rerank); the pipeline tail, idempotency,
+redaction, and SSRF guards are reused rather than reinvented; the provider seams
+mean the Apple FM tier and future STT are drop-ins, not rewrites; every writer
+remains wikilink-safe and every source recoverable.
+
+**Trade-offs:** `yt-dlp`'s downstream CDN fetches are not individually
+policy-gated (the accepted detected-binary trade-off, identical to
+`tesseract`/`pdftoppm`); podcasts without captions and caption-less videos are
+captured-and-flagged, not transcribed (local STT is out of 1.3 scope); vision
+description quality is bounded by the local model; the `OCR` interface grows a
+method (all doubles update). Off by default, both profiles (S8); no new DB table
+or migration, no new automation, no new MCP tool. (Spec:
+`docs/superpowers/specs/2026-07-10-h1-multimodal-ingestion-design.md`; FR-171,
+FR-172, FR-173.)
+
 ### ADR-027 — Local reranking as a retrieval primitive (outside the chokepoint) *(accepted — built)*
 
 **Status:** Accepted (2026-07-05, roadmap 1.1 B2).
