@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- **1.3 roadmap rescoped (planning only, no shipped code).** The 1.3 release was
+  narrowed from seven slices under a "reach" theme to **two** under
+  **"perceive & research"**: **multimodal ingestion** (images/screenshots via
+  OCR + local vision; YouTube/podcast via captions) and **deep-research
+  automation** (bounded, budgeted, cited web research; personal-profile only).
+  **Removed from 1.3** (not currently scheduled): channel delivery & capture-back,
+  the meeting & voice pipeline, calendar & email read-only context,
+  continuous-capture import, and Obsidian CLI / Bases integration. Provisional
+  IDs are now FR-171…176 / ADR-035…036; the release ships when both remaining
+  slices land. Docs updated: `docs/17-roadmap-1.3.md`, the 1.2–1.3 PRD / Purpose /
+  Development Plan notes, and the `CLAUDE.md` pack line. No runtime code changed.
+
 ## [1.2.5] — 2026-07-10
 
 **"Act on it."** 1.2 made the vault remember and reason; 1.2.5 makes it **act** —
