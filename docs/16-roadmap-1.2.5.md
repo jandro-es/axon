@@ -123,7 +123,17 @@ completed task moves to Done on the next run; re-run with no changes is a
 change-gate skip with no write; the note is useful with every other
 automation off (S8).
 
-### T3 — Dashboard Actions tab (M) · provisional FR-162/163/164, ADR-034
+### T3 — Dashboard Actions tab (M) · FR-162/163/164, ADR-034 ✅ **BUILT 2026-07-10**
+**Shipped:** `GET /api/actions` (list + GTD counts + 30-day completion trend,
+derived from the T1 index), `POST /api/actions/complete` → **`vault.CompleteAction`**
+(ADR-034: the one hash-addressed byte-precise checkbox toggle `- [ ]`→`- [x]` +
+`✅ date`; stale hash → 409 via `vault.ErrActionNotFound`; surgical `db.MarkActionDone`
+keeps the list fresh; dashboard-only, never agentic), `dashboard.actions_enabled`
+kill-switch + `/health` flag + `action.done` SSE, and an **Actions** SPA tab
+(tiles + completion trend + filterable list with per-row done buttons). Both build
+decisions Jandro-picked-recommended (thin endpoint — the automation re-renders
+`Actions.md` on schedule; tiles+trend+list). Live-smoked end-to-end. **With T3
+shipped, the T1+T2+T3 release criterion for 1.2.5 is MET.**
 **Build:** the at-a-glance state and the deal-with-it loop. `GET /api/actions`
 (FR-162) serving the filtered list + a counts summary (open, due today,
 overdue, waiting, someday, completed-this-week, oldest-open age); an

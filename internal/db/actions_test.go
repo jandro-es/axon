@@ -5,6 +5,31 @@ import (
 	"testing"
 )
 
+func TestMarkActionDone(t *testing.T) {
+	ctx := context.Background()
+	d := newMigratedDB(t)
+	if err := ReplaceActions(ctx, d, []Action{
+		{Hash: "h1", SourcePath: "a.md", LineNo: 1, Text: "x", Raw: "- [ ] x",
+			State: "open", Checkbox: " ", Updated: "u"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	n, err := MarkActionDone(ctx, d, "h1", "2026-07-10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("rows affected = %d, want 1", n)
+	}
+	got, _ := ListActions(ctx, d, ListActionsOpts{IncludeAll: true})
+	if got[0].State != "done" || got[0].DoneDate != "2026-07-10" {
+		t.Errorf("row not marked done: %+v", got[0])
+	}
+	if n2, _ := MarkActionDone(ctx, d, "nope", "2026-07-10"); n2 != 0 {
+		t.Errorf("unknown hash affected %d rows, want 0", n2)
+	}
+}
+
 func TestReplaceAndListActions(t *testing.T) {
 	ctx := context.Background()
 	d := newMigratedDB(t)

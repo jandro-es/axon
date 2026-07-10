@@ -482,6 +482,51 @@ note share a hash (completion targets the first still-open match). No embeddings
 the table (a "similar tasks" surface is explicitly out of scope). (Spec:
 `docs/superpowers/specs/2026-07-10-t1-action-index-design.md`; FR-157, FR-158, FR-159.)
 
+### ADR-034 — Task completion as a byte-precise, hash-addressed line edit *(accepted — built)*
+
+**Status:** Accepted (2026-07-10, roadmap 1.2.5 T3). The one write in the "act on
+it" theme.
+
+**Context:** The consolidated action list needs a "mark done" that flips a
+human-authored checkbox line `- [ ]`→`- [x]`. Cardinal rule 2 says AXON only edits
+inside `axon:*` managed blocks, never arbitrary human prose — but a checkbox is
+exactly the human prose the user wants toggled. This is the closest AXON comes to
+editing a human line directly.
+
+**Decision:** A single new vault primitive `vault.CompleteAction(ctx, path,
+lineHash, date)` — not a managed-block write. It (1) reads the note and runs T1's
+`actions.Extract` over the frontmatter-stripped body, so it matches the **exact**
+line the index hashed (same fenced-code / `axon:actions`-block skip rules,
+body-relative line number); (2) completes only the single **open** line whose T1
+identity hash equals `lineHash` (`actions.Complete` flips the marker to `x` and
+appends `✅ <date>`, preserving indentation, bullet char, and the rest of the line
+byte-for-byte); (3) writes atomically via `writeRaw` (temp+rename, NFR-06); (4)
+returns the exported sentinel **`vault.ErrActionNotFound`** — nothing written —
+when no open line matches, which the dashboard maps to **409**. The derived index
+row is then surgically marked done (`db.MarkActionDone`, reproducing what the next
+reindex derives from the now-`[x]` line — S9-consistent). It is **user-initiated
+through the loopback dashboard only** (`POST /api/actions/complete`, guarded by
+loopback+Host + `X-Axon-Actions` header + `application/json` + the
+`dashboard.actions_enabled` kill-switch); **pinned out of every agent/MCP path**
+(T4's `action_complete` tool is excluded from the agentic allowlists).
+
+**Why:** completion is the narrowest possible prose edit — one marker char + a
+dated suffix on one hash-addressed line — and it is exactly what the user would do
+by hand in Obsidian. Making it hash-addressed and open-only means a changed line
+409s (never a blind overwrite of stale content); making it dashboard-only and
+agent-excluded means a prompt-injected agent can never tick or untick a task. No
+delete; the edit is fully reversible by hand.
+
+**Trade-offs:** it introduces the first `errors.Is`/`409` mapping to the dashboard
+(previously all mutation errors were one status). The surgical `MarkActionDone`
+leaves the derived row's hash stale until the next reindex (harmless — a done row's
+hash is never re-completed). Duplicate identical open lines share a hash; the first
+still-open one is completed (T1's documented rule). Un-complete / text edits are
+out of scope (completion is the only mutation). Introduces a one-way `vault` →
+`actions` package edge (`actions` is a pure stdlib leaf; no cycle). (Spec:
+`docs/superpowers/specs/2026-07-10-t3-dashboard-actions-design.md`; FR-162, FR-163,
+FR-164.)
+
 ### ADR-027 — Local reranking as a retrieval primitive (outside the chokepoint) *(accepted — built)*
 
 **Status:** Accepted (2026-07-05, roadmap 1.1 B2).

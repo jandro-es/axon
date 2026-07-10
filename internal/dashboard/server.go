@@ -52,6 +52,9 @@ type Config struct {
 	// RelatedEnabled + Searcher power GET /api/related (R8/FR-150). A nil
 	// Searcher or RelatedEnabled=false disables it (404). Zero model calls.
 	RelatedEnabled bool
+	// ActionsEnabled powers GET /api/actions + POST /api/actions/complete + the
+	// Actions tab (1.2.5 T3). Default-ON via config; false disables (404).
+	ActionsEnabled bool
 }
 
 // Server is the dashboard HTTP server.
@@ -92,6 +95,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/capture", s.handleCapture)
 	mux.HandleFunc("GET /capture", s.handleCapturePage)
 	mux.HandleFunc("GET /api/related", s.handleRelated)
+	mux.HandleFunc("GET /api/actions", s.handleActions)
+	mux.HandleFunc("POST /api/actions/complete", s.handleActionComplete)
 	mux.HandleFunc("GET /api/export", s.handleExport)
 	mux.Handle("/", s.staticHandler())
 	return s.guardHost(mux)

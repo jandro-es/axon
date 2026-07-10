@@ -284,6 +284,12 @@ body {
 .review-actions { margin-left: auto; display: flex; gap: 6px; }
 .review-actions button { cursor: pointer; }
 .review-actions .ghost { opacity: .6; }
+
+.action-group { margin-top: 12px; }
+.action-bucket { font-size: 12px; font-weight: 600; opacity: .8; margin-bottom: 4px; }
+.action-group .related-list li { display: flex; align-items: center; gap: 10px; }
+.action-group .related-list li button { cursor: pointer; margin-left: auto; }
+.action-group .related-path em { opacity: .55; font-style: normal; font-size: 11px; }
 .review-err { flex-basis: 100%; color: #fb6f6f; font-size: 12px; }
 .li.dim { opacity: .45; }
 .list.resolved { margin-top: 14px; border-top: 1px solid rgba(255,255,255,.06); padding-top: 8px; }

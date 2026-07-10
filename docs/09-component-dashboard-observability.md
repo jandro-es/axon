@@ -10,7 +10,7 @@
 
 ## 2. Operational dashboard
 
-- **Stack:** a **Vite + React + Recharts** single-page app under `web/` — the only JavaScript in the project. Built to `web/dist` and embedded into the Go binary via `embed.FS`, then served by `internal/dashboard` at `dashboard.host:port` (default `127.0.0.1:7777`). The Go side exposes a small REST + SSE API; the SPA is a pure client of it. Localhost-bound; holds no secrets (FR-63). The server never calls Claude and never free-form writes; its **only mutations are review-queue resolutions** (ADR-020) — `GET /api/review` + `POST /api/review/action` (accept/dismiss applied through the vault's wikilink-safe ops, guarded by a CORS-preflight-forcing JSON+header requirement) — surfaced as the **Review tab**. Every chart's dataset exports as CSV/JSON via `GET /api/export` (FR-64). `web/` needs a Node toolchain at build time only; the distributed binary needs nothing.
+- **Stack:** a **Vite + React + Recharts** single-page app under `web/` — the only JavaScript in the project. Built to `web/dist` and embedded into the Go binary via `embed.FS`, then served by `internal/dashboard` at `dashboard.host:port` (default `127.0.0.1:7777`). The Go side exposes a small REST + SSE API; the SPA is a pure client of it. Localhost-bound; holds no secrets (FR-63). The server never calls Claude and never free-form writes; its mutations are review-queue resolutions (ADR-020) — `GET /api/review` + `POST /api/review/action` — surfaced as the **Review tab**, **and task completion** (ADR-034/T3) — `POST /api/actions/complete` `{path, hash}` → `vault.CompleteAction` (the one hash-addressed checkbox toggle; stale hash → 409), surfaced as the **Actions tab**. Both are applied through the vault's wikilink-safe/byte-precise ops and guarded by a CORS-preflight-forcing JSON+header requirement (+ the `actions_enabled` kill-switch). Every chart's dataset exports as CSV/JSON via `GET /api/export` (FR-64). `web/` needs a Node toolchain at build time only; the distributed binary needs nothing.
 - **Transport:** REST for snapshots + queries; **SSE** (`/events`) for the live stream off the in-process event bus. (WebSocket acceptable if bidirectional needs arise; SSE is sufficient and simpler.)
 - **Profile-aware:** the dashboard shows the profile this installation is bound to. Personal and work are separate installations, so there is normally one daemon and one dashboard per machine (default port 7777 for both).
 
@@ -24,6 +24,7 @@
 | **Vault growth** | notes, links, words over time; inbox backlog; review-queue size | `notes`/`links` snapshots |
 | **Knowledge graph** | interactive graph: nodes=notes, edges=wikilinks (+ optional similarity edges, toggle); filter by folder/tag; click → note metadata | `links` + `vec_chunks` neighbours |
 | **Activity feed** | live structured event log; filter by kind/level | `events` (SSE) |
+| **Actions** (T3) | stat tiles (open/overdue/today/done-7d), 30-day completion trend, and the filterable open list grouped by GTD bucket with per-row **done** buttons | `actions` table via `GET /api/actions` |
 
 - **Knowledge graph rendering:** D3-force or a lightweight graph lib; cap rendered nodes with filtering for big vaults; similarity edges computed from top-N vector neighbours above a threshold (cached).
 - **Data export (C):** any chart's series downloadable as CSV/JSON (FR-64).
@@ -40,7 +41,8 @@ type AxonEvent = {
   kind: 'automation.run'|'automation.skip'|'automation.fail'
       | 'ingest.done'|'ingest.skip'|'ingest.enrich'
       | 'ingest.embed.fail'|'ingest.embed.skip'|'ingest.review_queue.fail'
-      | 'token.ledger'|'token.deny'|'token.defer'|'token.downgrade'|'token.error';
+      | 'token.ledger'|'token.deny'|'token.defer'|'token.downgrade'|'token.error'
+      | 'review.accept'|'review.dismiss'|'action.done';
   message: string;
   data?: Record<string, unknown>;   // never contains secrets
 };
