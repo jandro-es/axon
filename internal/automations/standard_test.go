@@ -381,10 +381,30 @@ func TestInboxTriageEmptyReplyFails(t *testing.T) {
 }
 
 // TestHeartbeatSynthesis covers the docs/06 optional one-liner: toggle via
+// TestHeartbeatTaskCounter: the heartbeat line reflects open/overdue actions
+// from the derived index (FR-161).
+func TestHeartbeatTaskCounter(t *testing.T) {
+	ctx := context.Background()
+	rc, _ := newRC(t, map[string]string{})
+	if err := db.ReplaceActions(ctx, rc.DB, []db.Action{
+		{Hash: "h1", SourcePath: "a.md", Text: "overdue", State: "open", Checkbox: " ", Due: "2000-01-01", Updated: "u"},
+		{Hash: "h2", SourcePath: "a.md", Text: "future", State: "open", Checkbox: " ", Due: "2999-01-01", Updated: "u"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Heartbeat{}.Run(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res.Summary, "tasks: 2 open (1 overdue)") {
+		t.Errorf("heartbeat line missing task counter: %q", res.Summary)
+	}
+}
+
 // automations.heartbeat.model, deterministic noteworthy gate, absolute
 // degradation (defer/error → plain line, run stays ok).
 func TestHeartbeatSynthesis(t *testing.T) {
-	plain := "inbox: 1 · budget day 0% week 0%"
+	plain := "inbox: 1 · tasks: 0 open · budget day 0% week 0%"
 
 	t.Run("toggle off: zero calls, plain line", func(t *testing.T) {
 		rc, fake := newRC(t, map[string]string{"00-Inbox/x.md": "item\n"})

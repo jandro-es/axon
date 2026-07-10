@@ -213,6 +213,23 @@ type ActionsConsolidate struct{}
 func (ActionsConsolidate) Name() string    { return "actions-consolidate" }
 func (ActionsConsolidate) Essential() bool { return false }
 
+// openTaskCounts reports open + overdue action counts from the derived index
+// (FR-161). Best-effort: the essential heartbeat never fails on a DB hiccup.
+func openTaskCounts(ctx context.Context, rc RunCtx) (open, overdue int) {
+	rows, err := db.ListActions(ctx, rc.DB, db.ListActionsOpts{State: "open"})
+	if err != nil {
+		return 0, 0
+	}
+	today := rc.now()
+	for _, r := range rows {
+		open++
+		if actions.Bucket(actionFromRow(r), today) == "overdue" {
+			overdue++
+		}
+	}
+	return open, overdue
+}
+
 // buildActionsBody reads the index and renders the block body (no footer).
 func buildActionsBody(ctx context.Context, rc RunCtx) (string, int, error) {
 	rows, err := db.ListActions(ctx, rc.DB, db.ListActionsOpts{IncludeAll: true})
