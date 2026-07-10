@@ -16,13 +16,14 @@ tags: [axon, plan, roadmap]
                                         │            │
 1.2:  R5 local-tier   R1 temporal ──────┼────────────┤
       (eval harness)   memory           │            │
-            │            │  └ R2 contradiction-ask   │
-            │            │  └ R9 resurfacing/review  │
-            │            └───────────┐               │
-1.3:  H2 meetings ◄── entities       │   H1 channels ◄── pulse, H5 ICS
-      H3 multimodal ◄── R5 seams     │   H4 research ◄── A3 questions
-      H6 import (independent)        │   H7 CLI/Bases (independent, stretch)
+            │            │  └ R2 contradiction-ask
+            │            │  └ R9 resurfacing/review
+            │            └──────────────┐
+1.3:  H1 multimodal ◄── R5 vision seam, ADR-026 OCR
+      H2 research   ◄── A3 questions, R5 local savings
 ```
+
+*(1.3 rescoped 2026-07-10 to these two slices; the former channel/voice/calendar/import/Bases slices were removed — see [[Axon 1.2–1.3 — PRD]] and `17-roadmap-1.3.md`.)*
 
 Two long poles: **R1** (memory representation touches MEMORY.md format, SessionStart injection, C1 reconcile flow, reindex) and **R5** (eval harness + router cascade). They are independent of each other — build them in parallel lanes if 1.1 finishing leaves appetite, otherwise R1 first (it unlocks more of the tree).
 
@@ -34,7 +35,7 @@ Two long poles: **R1** (memory representation touches MEMORY.md format, SessionS
 | 2 | R1 temporal memory | M | The headline; wants entities to exist for fact subjects | Reconcile closes intervals; `reindex` rebuilds fact index; injection prefers valid facts |
 | 3 | R5 local-tier promotion + `axon eval` | M | Frees budget for everything after; independent lane, can start alongside 1–2 | ≥50% routine calls local with passing evals; transparent degradation |
 | 4 | R2 contradiction-aware ask | S | Cheap once R1's intervals exist | Conflicting dated sources flagged + both cited |
-| 5 | R4 project pulse (C3) | S | Rides entities; feeds 1.3 briefing | Stale project → one nudge, proposal memory |
+| 5 | R4 project pulse (C3) | S | Rides entities; weekly pulse + stale-project nudges | Stale project → one nudge, proposal memory |
 | 6 | R8 related-notes surface | S | Zero-model, high visible value; exercises ANN seam | <100 ms warm, no model call |
 | 7 | R9 resurfacing/review scheduling | S | Rides R1 signals + resurfacer primitives | Declined item respects interval; intervals adapt |
 | 8 | R6 reranker (B2) | S | Quality knob, slot anywhere; kept late as pure polish | Ordering-only effect; zero Claude tokens |
@@ -46,37 +47,32 @@ Two long poles: **R1** (memory representation touches MEMORY.md format, SessionS
 
 | # | Slice | Size | Why here | Gate (abridged) |
 |---|-------|------|----------|-----------------|
-| 1 | H1 channels (Telegram out + capture-in) | M | The retention feature; only needs heartbeat/pulse data that exists | Briefing on schedule, template-only content; inbound lands in inbox; zero egress when off |
-| 2 | H5 calendar ICS (read-only) | S/M | Small, makes H1's briefing genuinely useful ("first meeting 09:30") | Events in briefing, no model call, no account writes |
-| 3 | H2 meeting/voice pipeline | M | Most-loved feature in the field; entities ready from 1.2 | Local-only transcript → linked summary; ambiguous entities go to review queue |
-| 4 | H3 multimodal ingestion | M | Table stakes; Ollama-vision first, Apple FM upgrade later behind the seam | Screenshot + YouTube URL → retrievable notes, hash-idempotent |
-| 5 | H4 deep research | M | Highest new token spend — wants R5's savings banked first | One flagged question → budgeted report + source notes; denied domains never fetched |
-| 6 | H6 continuous-capture import | S | Independent, opportunistic wedge | Sample export → linked notes, idempotent |
-| 7 | H7 Obsidian CLI/Bases | S | Stretch; adopt when the CLI stabilises | Bases properties populated from index |
+| 1 | H1 multimodal ingestion | M | Table stakes; Ollama-vision first, Apple FM upgrade later behind the seam | Screenshot + captioned YouTube URL → retrievable notes, hash-idempotent; vision absent ⇒ OCR-only, no crash |
+| 2 | H2 deep research | M | Highest new token spend — wants R5's savings banked first | One flagged question → budgeted report + source notes; denied domains never fetched |
 
-**Ship 1.3 when:** H1 + H2 done plus one of {H3, H4, H5}.
+The two are largely independent — build in either order. **Ship 1.3 when:** H1 + H2 both done, each passing its gate.
 
 ## New seams & ADR workload (design-cycle budget)
 
-Expected new ADRs (provisional): R1 memory representation & fact index; R5 eval-gated model promotion (extends ADR-015); R7 merge accept semantics (already flagged in 1.1); H1 channel provider + egress surface; H2 audio provider seam (pattern-copy of ADR-013/026); H4 bounded research egress. H3/H5/H6 likely ride existing ADRs. That is ~6 design cycles across two releases — consistent with 1.1's cadence.
+Expected new ADRs (provisional): R1 memory representation & fact index; R5 eval-gated model promotion (extends ADR-015); R7 merge accept semantics (already flagged in 1.1); 1.3 H2 bounded research egress (ADR-036). 1.3 H1 multimodal likely rides existing ADRs (ADR-013 compiled helper + ADR-026 OCR); it mints an ADR only if the vision-call shape is a genuinely new decision surface (ADR-035 provisional). That is ~4 design cycles across the two releases — consistent with 1.1's cadence.
 
 ## Testing strategy deltas
 
 - **R5 makes evals first-class:** golden sets live in-repo, run in CI against fakes and locally against real Ollama (`--profile test`); promotion state is config + doctor-visible, never implicit.
-- **Policy tests grow teeth for 1.3:** every H-slice adds deny-path tests (feature off / domain not allow-listed / work profile) asserting *zero* egress and zero writes — the S8 discipline applied to reach.
-- **Audio/vision fixtures:** small committed fixtures (short WAV, sample screenshot, captions file) keep H2/H3 testable without network or real recordings.
+- **Policy tests grow teeth for 1.3:** the research slice (H2) adds deny-path tests (feature off / domain not allow-listed / work profile) asserting *zero* egress and zero writes — the S8 discipline applied to research egress.
+- **Vision fixtures:** small committed fixtures (a sample screenshot, a captions file) keep H1 multimodal testable without network or real recordings.
 - Live smoke per slice on the scratch vault, as today.
 
 ## Token & budget posture
 
-1.2 is net-negative on Claude spend by design (R5 moves routine work local; R1 consolidation replaces repeated context with compact facts). 1.3 introduces three new spenders (H2 summaries, H3 vision descriptions when routed to Claude, H4 research) — each gets a per-automation budget line and dashboard split from day one, and H4 defaults to the personal profile only. Sequencing R5 before H4 is deliberate: bank the savings before spending them.
+1.2 is net-negative on Claude spend by design (R5 moves routine work local; R1 consolidation replaces repeated context with compact facts). 1.3 introduces two new spenders (H1 vision descriptions when routed to Claude, H2 research) — each gets a per-automation budget line and dashboard split from day one, and H2 research defaults to the personal profile only. Sequencing R5 before H2 research is deliberate: bank the savings before spending them.
 
 ## Out of scope (both releases)
 
-Hosted/multi-user anything; native app; WhatsApp channel; agent-driven `vault_move`; recording (H6 imports, never captures); Gmail OAuth (unless the H5 open question resolves otherwise); bi-temporal Graphiti-style memory modelling (intervals + supersedence only).
+Hosted/multi-user anything; native app; agent-driven `vault_move`; recording of any kind; cloud STT or cloud vision as a default path; bi-temporal Graphiti-style memory modelling (intervals + supersedence only). Also removed from 1.3 on 2026-07-10 (not currently scheduled): channel delivery & capture-back, the meeting & voice pipeline, calendar & email read-only context, continuous-capture import, and Obsidian CLI / Bases integration.
 
 ## Next actions
 
 - [ ] Finish 1.1 (B2/C2/C3/B3 or ship at criterion and roll them)
-- [ ] Owner review of [[Axon 1.2–1.3 — PRD]] §Assumptions (channel choice, STT default, H5 scope, R5 target)
+- [ ] Owner review of [[Axon 1.2–1.3 — PRD]] §Assumptions (H1 vision seam/ADR, image-description trigger; H2 research fetch strategy, budget defaults)
 - [ ] Graduate 1.2 into `docs/15-roadmap-1.2.md` via the standing design cycle when adopted

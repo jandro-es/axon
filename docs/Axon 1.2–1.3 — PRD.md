@@ -30,7 +30,7 @@ Classify-tier extraction of people/projects into auto-maintained entity notes wi
 **Gate:** as specified in `14-roadmap-1.1.md` (wikilink-safe accrual, prose untouched, content-hash gated).
 
 ### R4 — Project pulse (S, 1.1 C3 carry-over)
-Weekly pulse block per active project + stale-project nudges via review queue. Now also feeds 1.3's briefing.
+Weekly pulse block per active project + stale-project nudges via review queue.
 **Gate:** as specified in the 1.1 plan.
 
 ### R5 — Local synthesis validation & routine-tier promotion (M) · needs ADR
