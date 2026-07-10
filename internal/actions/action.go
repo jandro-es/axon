@@ -163,12 +163,11 @@ func Complete(line, date string) (string, bool) {
 	case "x", "X", "-": // already done/cancelled
 		return "", false
 	}
-	marker := "[" + m[1] + "]"
-	idx := strings.Index(line, marker)
-	if idx < 0 {
+	before, after, found := strings.Cut(line, "["+m[1]+"]")
+	if !found {
 		return "", false
 	}
-	out := line[:idx] + "[x]" + line[idx+len(marker):]
+	out := before + "[x]" + after
 	if !strings.Contains(out, "✅") {
 		out = strings.TrimRight(out, " ") + " ✅ " + date
 	}
