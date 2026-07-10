@@ -55,6 +55,7 @@ var (
 	mergeRe       = regexp.MustCompile(`^merge \[\[([^\]]+)\]\] \+ \[\[([^\]]+)\]\]`)
 	reconcileRe   = regexp.MustCompile(`^reconcile: "(.+)" supersedes "(.+)"$`)
 	stalledRe     = regexp.MustCompile(`^stalled action "(.+)" in \[\[([^\]]+)\]\] \(\d+d\)`)
+	actionRe      = regexp.MustCompile(`^action "(.+)" from \[\[([^\]]+)\]\]`)
 )
 
 // Load parses the queue file. A missing file is an empty queue.
@@ -124,6 +125,9 @@ func Load(ctx context.Context, v *vault.FS) ([]Item, error) {
 		case stalledRe.MatchString(body):
 			sm := stalledRe.FindStringSubmatch(body)
 			it.Kind, it.Target, it.Note = "stalled", sm[1], sm[2] // Target=text, Note=note path
+		case actionRe.MatchString(body):
+			am := actionRe.FindStringSubmatch(body)
+			it.Kind, it.Target, it.Note = "action", am[1], am[2] // Target=text, Note=note path
 		}
 		// The ID hashes the normalized body (checkbox + resolution suffix
 		// stripped) so an item keeps its identity across resolution — a
@@ -169,6 +173,11 @@ func Accept(ctx context.Context, v *vault.FS, id string) (Item, error) {
 			return Item{}, err
 		}
 		suffix = "✓ demoted to #someday"
+	case "action":
+		if err := v.AppendToBlock(ctx, it.Note+".md", "tasks", "- [ ] "+it.Target); err != nil {
+			return Item{}, err
+		}
+		suffix = "✓ added to [[" + it.Note + "]]"
 	default:
 		return Item{}, fmt.Errorf("item %s (%s) is not actionable — dismiss it instead", id, it.Kind)
 	}
