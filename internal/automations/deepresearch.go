@@ -211,7 +211,7 @@ func researchQuestion(ctx context.Context, rc RunCtx, q deepQuestion) (string, i
 	max := rc.Config.Research.MaxFetchesOr()
 
 	var sources []string // ingested source note paths, in order
-	fresh := false        // any source new/changed this run
+	fresh := false       // any source new/changed this run
 	for _, u := range q.URLs {
 		if len(sources) >= max {
 			break
