@@ -63,15 +63,19 @@ func (v *FS) TagAction(ctx context.Context, path, actionText, tag string) error 
 	}
 	fm, body := splitFrontmatter(string(data))
 	lines := strings.Split(body, "\n")
+	// T1 keeps #tags in Text, so an already-tagged line reads "<text> #<tag>".
+	tagged := actionText + " #" + tag
 	for _, a := range actions.Extract(path, body, false) {
-		if a.State != actions.StateOpen || a.Text != actionText {
+		if a.State != actions.StateOpen {
 			continue
 		}
-		if strings.Contains(lines[a.LineNo], "#"+tag) {
-			return nil // already tagged — idempotent
+		switch a.Text {
+		case actionText:
+			lines[a.LineNo] = strings.TrimRight(lines[a.LineNo], " ") + " #" + tag
+			return v.writeRaw(path, reassemble(fm, strings.Join(lines, "\n")))
+		case tagged:
+			return nil // already tagged — idempotent no-op
 		}
-		lines[a.LineNo] = strings.TrimRight(lines[a.LineNo], " ") + " #" + tag
-		return v.writeRaw(path, reassemble(fm, strings.Join(lines, "\n")))
 	}
 	return ErrActionNotFound
 }
