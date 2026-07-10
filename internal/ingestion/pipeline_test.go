@@ -115,6 +115,58 @@ func TestIngestLocalFileProducesRetrievableNote(t *testing.T) {
 	}
 }
 
+func TestIngestImageWritesNoteWithEmbed(t *testing.T) {
+	p, _, _ := newTestPipeline(t, openPolicy())
+	p.Vision = &fakeVision{text: strings.Repeat("a screenshot of a dashboard ", 8)}
+	p.OCR = &fakeOCR{text: ""} // sparse → vision used
+	ctx := context.Background()
+
+	dir := t.TempDir()
+	imgPath := filepath.Join(dir, "shot.png")
+	if err := os.WriteFile(imgPath, []byte("PNGDATA-unique-1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := p.Ingest(ctx, imgPath, IngestOptions{AllowLocalFiles: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != "ok" && res.Status != "redacted" {
+		t.Fatalf("status = %q", res.Status)
+	}
+	note, err := p.Vault.Read(ctx, res.NotePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(note.Body, "![[attachments/") {
+		t.Fatalf("note missing image embed:\n%s", note.Body)
+	}
+	if !p.Vault.Exists(AttachmentsDir + "/" + config.ContentHash("PNGDATA-unique-1") + ".png") {
+		t.Fatal("attachment file not archived")
+	}
+
+	// Re-ingest same bytes → skipped (idempotent by image-byte hash).
+	res2, err := p.Ingest(ctx, imgPath, IngestOptions{AllowLocalFiles: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res2.Status != "skipped" {
+		t.Fatalf("re-ingest status = %q, want skipped", res2.Status)
+	}
+}
+
+func TestIngestImageAgentPathRefused(t *testing.T) {
+	p, _, _ := newTestPipeline(t, openPolicy())
+	dir := t.TempDir()
+	imgPath := filepath.Join(dir, "shot.png")
+	if err := os.WriteFile(imgPath, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Ingest(context.Background(), imgPath, IngestOptions{AllowLocalFiles: false}); err == nil {
+		t.Fatal("agent-driven image ingestion must be refused")
+	}
+}
+
 func TestIngestSecondSourceGetsGroundedSuggestion(t *testing.T) {
 	p, _, _ := newTestPipeline(t, openPolicy())
 	dir := t.TempDir()

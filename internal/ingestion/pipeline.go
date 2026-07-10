@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -17,6 +18,10 @@ import (
 
 // KnowledgeDir is where ingested source notes are written (docs/04).
 const KnowledgeDir = "03-Resources/Knowledge"
+
+// AttachmentsDir holds source images copied into the vault (archive-never-delete,
+// S9), keyed by content hash so re-ingest is a no-op.
+const AttachmentsDir = KnowledgeDir + "/attachments"
 
 // reviewQueuePath is the human-approval queue for link suggestions (docs/05 §8).
 const reviewQueuePath = ".axon/review-queue.md"
@@ -37,6 +42,10 @@ type Pipeline struct {
 	// OCR, when non-nil, recovers text from scanned PDFs whose text layer is
 	// empty (fallback only). nil means OCR is off (ADR-026).
 	OCR OCR
+	// Vision, when non-nil, describes images whose OCR text is sparse. nil means
+	// vision is off. Local perception primitive (ADR-035): budget-exempt, not
+	// chokepoint-routed.
+	Vision Vision
 }
 
 // IngestOptions tune a single run.
@@ -85,7 +94,7 @@ func (p *Pipeline) Ingest(ctx context.Context, arg string, opts IngestOptions) (
 		if err := CheckIngestPolicy(p.Policy, in.Host); err != nil {
 			return res, err
 		}
-	case KindFile, KindPDF:
+	case KindFile, KindPDF, KindImage:
 		if !opts.AllowLocalFiles {
 			return res, fmt.Errorf("local-file ingestion of %q is not permitted on this path (agent-driven ingestion is URL-only)", arg)
 		}
@@ -102,7 +111,7 @@ func (p *Pipeline) Ingest(ctx context.Context, arg string, opts IngestOptions) (
 	if err != nil {
 		return res, err
 	}
-	if strings.TrimSpace(ex.Markdown) == "" {
+	if strings.TrimSpace(ex.Markdown) == "" && in.Kind != KindImage {
 		return res, fmt.Errorf("ingest %q: empty extraction (nothing readable)", arg)
 	}
 
@@ -124,8 +133,13 @@ func (p *Pipeline) Ingest(ctx context.Context, arg string, opts IngestOptions) (
 	redacted = redacted || rm
 	res.Redacted = redacted
 
-	// Stage 6 — hash + idempotency.
+	// Stage 6 — hash + idempotency. For images the image bytes ARE the content
+	// (so two textless images never collide on an empty-text hash, and the
+	// attachment filename is stable across re-ingests).
 	hash := config.ContentHash(cleaned)
+	if in.Kind == KindImage {
+		hash = config.ContentHash(string(doc.Body))
+	}
 	existing, err := db.GetSourceByURL(ctx, p.DB, in.URL)
 	if err != nil {
 		return res, err
@@ -170,7 +184,7 @@ func (p *Pipeline) Ingest(ctx context.Context, arg string, opts IngestOptions) (
 	}
 
 	// Stage 8 — write the note (managed blocks; never clobbers human prose).
-	if err := p.writeNote(ctx, notePath, enr, cleaned, ex, in, hash); err != nil {
+	if err := p.writeNote(ctx, notePath, enr, cleaned, ex, in, hash, doc.Body); err != nil {
 		return res, err
 	}
 
@@ -199,8 +213,8 @@ func (p *Pipeline) read(ctx context.Context, in Input) (*Document, error) {
 	switch in.Kind {
 	case KindURL:
 		return p.Fetcher.Fetch(ctx, in.URL)
-	case KindFile, KindPDF:
-		// Both are local files; PDFs are parsed in the extract stage.
+	case KindFile, KindPDF, KindImage:
+		// All are local files; PDFs and images are parsed in the extract stage.
 		return ReadFile(in.Path)
 	default:
 		return nil, fmt.Errorf("unsupported input kind %q", in.Kind)
@@ -217,6 +231,16 @@ func (p *Pipeline) extract(ctx context.Context, in Input, doc *Document) (Extrac
 			return ex, err
 		}
 		return ocrFallback(ctx, ex, doc.Body, p.OCR)
+	case KindImage:
+		ex, err := extractImage(ctx, doc.Body, mimeForImage(in.Path), p.OCR, p.Vision)
+		if err != nil {
+			return ex, err
+		}
+		if ex.Title == "" {
+			base := filepath.Base(in.Path)
+			ex.Title = strings.TrimSuffix(base, filepath.Ext(base))
+		}
+		return ex, nil
 	default:
 		return ExtractFile(doc.Body, in.Path), nil
 	}
@@ -273,12 +297,18 @@ func (p *Pipeline) notePathFor(ctx context.Context, existing *db.SourceRow, titl
 
 // writeNote creates the source note, or updates only its managed blocks on
 // re-ingest, preserving frontmatter and any human prose (cardinal rule 2).
-func (p *Pipeline) writeNote(ctx context.Context, path string, enr Enrichment, cleaned string, ex Extracted, in Input, hash string) error {
+func (p *Pipeline) writeNote(ctx context.Context, path string, enr Enrichment, cleaned string, ex Extracted, in Input, hash string, img []byte) error {
 	if p.Vault.Exists(path) {
 		if err := p.Vault.Patch(ctx, path, "summary", enr.Summary); err != nil {
 			return err
 		}
 		return p.Vault.Patch(ctx, path, "source", cleaned)
+	}
+	// Archive the source image (copy, never move) so the vault is self-contained.
+	if in.Kind == KindImage && len(img) > 0 {
+		if _, err := p.Vault.Create(attachmentPath(hash, in.Path), string(img)); err != nil {
+			return err
+		}
 	}
 	content := buildSourceNote(enr, cleaned, ex, in, hash)
 	if _, err := p.Vault.Create(path, content); err != nil {
@@ -441,6 +471,9 @@ func buildSourceNote(enr Enrichment, cleaned string, ex Extracted, in Input, has
 	b.WriteString("<!-- axon:summary:end -->\n\n")
 	b.WriteString("## Notes\n\n")
 	b.WriteString("<!-- axon:source:start -->\n")
+	if in.Kind == KindImage {
+		b.WriteString("![[attachments/" + hash + filepathExt(in.Path) + "]]\n\n")
+	}
 	b.WriteString(cleaned)
 	if !strings.HasSuffix(cleaned, "\n") {
 		b.WriteString("\n")
@@ -455,6 +488,12 @@ func sourceURL(in Input) string {
 		return in.URL
 	}
 	return in.Raw
+}
+
+// attachmentPath is the vault-relative path an ingested image is archived to,
+// keyed by content hash so identical bytes land on one file.
+func attachmentPath(hash, srcPath string) string {
+	return AttachmentsDir + "/" + hash + filepathExt(srcPath)
 }
 
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
