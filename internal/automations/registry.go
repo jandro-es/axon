@@ -27,6 +27,7 @@ func Registry(profile config.Profile) map[string]Automation {
 		Subscriptions{}.Name():      Subscriptions{},
 		SessionDistill{}.Name():     SessionDistill{},
 		ResearchQuestions{}.Name():  ResearchQuestions{},
+		DeepResearch{}.Name():       DeepResearch{},
 		EntityPages{}.Name():        EntityPages{},
 		ProjectPulse{}.Name():       ProjectPulse{},
 		EvalDrift{}.Name():          EvalDrift{},

@@ -537,9 +537,9 @@ Completion (`CompleteAction`) and demotion (`TagAction`) are the two members of
 this class; both are additive and reversible by hand, neither deletes. (Spec:
 `docs/superpowers/specs/2026-07-10-t5-actions-review-design.md`; FR-167, FR-168.)
 
-### ADR-035 — Multimodal ingestion: local vision as a perception primitive, new input kinds, attachment archiving *(accepted — planned)*
+### ADR-035 — Multimodal ingestion: local vision as a perception primitive, new input kinds, attachment archiving *(accepted — built)*
 
-**Status:** Accepted (2026-07-10, roadmap 1.3 H1). The decision surface for
+**Status:** Accepted (2026-07-10, roadmap 1.3 H1; **shipped 2026-07-10**). The decision surface for
 extending ingestion beyond text/PDF to images and caption-bearing media.
 
 **Context:** The ingestion pipeline handles URLs, HTML, text, and PDFs (with an
@@ -585,6 +585,59 @@ method (all doubles update). Off by default, both profiles (S8); no new DB table
 or migration, no new automation, no new MCP tool. (Spec:
 `docs/superpowers/specs/2026-07-10-h1-multimodal-ingestion-design.md`; FR-171,
 FR-172, FR-173.)
+
+### ADR-036 — Deep research: bounded, budgeted, closed-book web research over curated sources *(accepted — planned)*
+
+**Status:** Accepted (2026-07-10, roadmap 1.3 H2). The decision surface for the
+`deep-research` automation — AXON's first outbound *research* egress.
+
+**Context:** The shipped A3 `research-questions` automation answers standing
+questions **from the vault only** (grounded `ask`). 1.3 H2 lets a question opt
+into pulling in **new web sources**. The constitution is absolute that egress
+passes AXON's own policy engine and pre-send redaction (rule 2), and that no
+Claude call bypasses the chokepoint (rule 1) — so the design must not let
+Claude's own web tools fetch, and must bound spend on what is the release's
+highest new token surface.
+
+**Decision:** (1) **Curated seed URLs, not autonomous discovery.** A question in
+the human region of `03-Resources/Research Questions.md` tagged `#deep` carries
+its sources as nested list-item URLs; a **new `deep-research` automation** fetches
+*those* — no search-API/crawler in v1 (a search-provider seam is a later graduation).
+(2) **Reuse the existing ingest egress machinery** — each seed URL goes through
+`Pipeline.Ingest` (the same `CheckIngestPolicy` allow-list, pre-send redaction,
+dedup-by-hash, chunk+embed) and becomes an ordinary `03-Resources/Knowledge/`
+note. **No new policy key**; research obeys the profile's existing
+`ingest_domains_allow`/`egress_allowlist`. (3) **Closed-book synthesis** — one
+`synthesis`-tier call **through the chokepoint** over the freshly-ingested source
+texts + related vault notes (hybrid-search grounding); the model has **no web
+tools**, so all egress stays inside AXON's policy engine. Sources are framed as
+data, not instructions (NFR-05). (4) **Bounded per run** — `max_fetches` (8) and
+`budget_tokens` (120k) both enforced; stop when either trips. (5) **One report
+note** at `03-Resources/Research/<slug>.md` in an `axon:report` managed block
+(wikilink-safe Create/Patch, human area preserved) with `[[wikilink]]` citations
+plus a deterministic Sources list so links always resolve, linked back to the
+question; a small `axon:deep` pointer block in the questions note indexes each
+deep question → `[[report]]`. (6) **Personal-profile-only, off by default**
+(constitution §1/§4): `research.enabled=false` ⇒ inert (zero ingest, zero model);
+work profile ⇒ off; a seed URL on a non-allow-listed host ⇒ never fetched, the
+report is built from the allowed sources (or skipped). Deny paths are
+first-class tested cases.
+
+**Why:** curated sources keep v1 bounded, fully constitution-clean, and reuse
+100% of the H-phase ingestion machinery rather than adding a crawler/search
+surface; closed-book synthesis keeps every byte of egress under AXON's policy
+engine and every model token under the chokepoint; per-run ceilings cap the
+release's largest new spend; the seed-URL shape graduates to a search-provider
+seam later with no caller change.
+
+**Trade-offs:** no autonomous source discovery in v1 (the user supplies URLs —
+"synthesise these sources", NotebookLM-style, not "go find sources"); a report is
+only as good as its seed set; re-synthesis fires on question/URL-set change or a
+missing report, not on silent source-content drift between runs (manual re-run
+covers it). Off by default, personal-only (S8); no new DB table or migration, no
+new MCP tool. (Spec:
+`docs/superpowers/specs/2026-07-10-h2-deep-research-design.md`; FR-174, FR-175,
+FR-176.)
 
 ### ADR-027 — Local reranking as a retrieval primitive (outside the chokepoint) *(accepted — built)*
 

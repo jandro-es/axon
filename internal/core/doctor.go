@@ -107,6 +107,7 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 			// 4c'. Local vision provider (ADR-035) + media caption tooling (advisory).
 			checks = append(checks, visionCheck(p))
 			checks = append(checks, mediaCheck(p))
+			checks = append(checks, researchCheck(p))
 			// 4d. Local reranker prerequisite, only when retrieval.rerank is set.
 			if p.Retrieval.RerankMode() != "off" {
 				checks = append(checks, rerankCheck(p))
@@ -316,6 +317,18 @@ func resurfaceCheck(p config.Profile) Check {
 		state = fmt.Sprintf("contradiction path active (routine tier, ≤%d checks/run)", p.Resurfacing.ContradictionMaxChecksOr())
 	}
 	return Check{name, StatusOK, fmt.Sprintf("resurfacer ladder %v weeks; %s", weeks, state)}
+}
+
+// researchCheck reports the deep-research automation posture (1.3 H2). Advisory
+// and tolerant — deep research is off by default and personal-first; fetches
+// obey the existing ingest allow-list. Never fails doctor.
+func researchCheck(p config.Profile) Check {
+	const name = "research"
+	if !p.Research.Enabled {
+		return Check{name, StatusOK, "deep research off (set research.enabled on the personal profile to opt in)"}
+	}
+	return Check{name, StatusOK, fmt.Sprintf("deep research on — %d fetch(es) / %d token(s) per run; fetches obey the ingest allow-list",
+		p.Research.MaxFetchesOr(), p.Research.BudgetTokensOr())}
 }
 
 // actionExtractCheck reports the T6 implicit action extractor. Advisory (always

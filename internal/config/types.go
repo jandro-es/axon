@@ -60,6 +60,9 @@ type Profile struct {
 	// Subscriptions declares the RSS/Atom feeds AXON polls (ADR-019).
 	// Optional: an absent block means no feeds and the automation skips.
 	Subscriptions SubscriptionsConfig `yaml:"subscriptions"`
+	// Research tunes the 1.3 H2 deep-research automation (FR-174…176). Optional:
+	// absent → disabled with the Go defaults via the accessors below.
+	Research ResearchConfig `yaml:"research"`
 }
 
 // SubscriptionsConfig declares the RSS/Atom feeds AXON polls (ADR-019).
@@ -430,6 +433,34 @@ type ResurfacingConfig struct {
 	// detection. 0 → default 3. Set explicitly to control spend; the path is
 	// still gated on the resurfacer having budget_tokens > 0.
 	ContradictionMaxChecks int `yaml:"contradiction_max_checks,omitempty" validate:"omitempty,gte=0"`
+}
+
+// ResearchConfig tunes the deep-research automation (1.3 H2). Off by default,
+// personal-first; every fetch obeys the profile's existing ingest allow-list
+// (no new policy key).
+type ResearchConfig struct {
+	// Enabled turns deep research on. Default false on every profile.
+	Enabled bool `yaml:"enabled"`
+	// MaxFetches caps seed-URL fetches per deep question. 0 → default 8.
+	MaxFetches int `yaml:"max_fetches" validate:"omitempty,gte=0"`
+	// BudgetTokens caps the synthesis input (chokepoint-enforced). 0 → 120000.
+	BudgetTokens int `yaml:"budget_tokens" validate:"omitempty,gte=0"`
+}
+
+// MaxFetchesOr returns the per-question fetch cap, defaulting to 8.
+func (c ResearchConfig) MaxFetchesOr() int {
+	if c.MaxFetches <= 0 {
+		return 8
+	}
+	return c.MaxFetches
+}
+
+// BudgetTokensOr returns the synthesis input budget, defaulting to 120000.
+func (c ResearchConfig) BudgetTokensOr() int {
+	if c.BudgetTokens <= 0 {
+		return 120_000
+	}
+	return c.BudgetTokens
 }
 
 // MergeConfig tunes the near-duplicate merge-proposals sweep (R7). Zero values

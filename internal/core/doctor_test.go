@@ -213,3 +213,34 @@ func TestDoctorBinaryChecks(t *testing.T) {
 		t.Error("missing optional binary should not be a hard failure")
 	}
 }
+
+func TestDoctorResearchOff(t *testing.T) {
+	withStubs(t, map[string]string{}, nil)
+	r := Doctor(&config.Config{
+		ActiveProfile: "personal",
+		Profiles: map[string]config.Profile{
+			"personal": {Claude: config.ClaudeConfig{AuthMode: "subscription"}},
+		},
+	}, "personal")
+	c, ok := findCheck(r, "research")
+	if !ok || c.Status != StatusOK || !strings.Contains(c.Detail, "off") {
+		t.Fatalf("research off check = %+v ok=%v", c, ok)
+	}
+}
+
+func TestDoctorResearchEnabled(t *testing.T) {
+	withStubs(t, map[string]string{}, nil)
+	r := Doctor(&config.Config{
+		ActiveProfile: "personal",
+		Profiles: map[string]config.Profile{
+			"personal": {
+				Claude:   config.ClaudeConfig{AuthMode: "subscription"},
+				Research: config.ResearchConfig{Enabled: true},
+			},
+		},
+	}, "personal")
+	c, _ := findCheck(r, "research")
+	if c.Status != StatusOK || !strings.Contains(c.Detail, "8") {
+		t.Fatalf("research enabled check = %+v (want caps in detail)", c)
+	}
+}
