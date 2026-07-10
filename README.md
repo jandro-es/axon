@@ -32,7 +32,7 @@ vault stays plain Markdown; everything else is derived and disposable.
   dashboard panel) surfaces the notes most similar to one you're looking at —
   pure vector math, zero model calls.
 
-**The vault maintains itself.** Twenty scheduled automations — inbox triage,
+**The vault maintains itself.** Twenty-one scheduled automations — inbox triage,
 daily log, note compaction, link suggestions, a morning **briefing**, a weekly
 **resurfacer** that reconnects dormant notes to what you're working on now, a
 weekly knowledge digest, memory distillation, **entity pages**, a weekly
@@ -190,7 +190,7 @@ memory injection entirely. `axon profiles` shows the isolation surface.
 | [Requirements](docs/03-requirements.md) | The numbered contract: FR-01…156, NFR-01…14. |
 | [Data model & config](docs/04-data-model-and-config.md) | Vault layout, DB schema, frontmatter, full config reference. |
 | [Knowledge ingestion](docs/05-component-knowledge-ingestion.md) | URL/PDF/capture/feeds → Markdown → chunk → embed → index. |
-| [Automation engine](docs/06-component-automation-engine.md) | Scheduler, the twenty standard automations, agentic runs. |
+| [Automation engine](docs/06-component-automation-engine.md) | Scheduler, the twenty-one standard automations, agentic runs. |
 | [Context & token manager](docs/07-component-context-token-manager.md) | Counting, budgets, local routing, compaction, frugality. |
 | [Agent bridge & MCP](docs/08-component-agent-bridge-mcp.md) | MCP tools, hooks, agentic allowlists, wikilink safety. |
 | [Dashboard & observability](docs/09-component-dashboard-observability.md) | Live charts, the Review tab, the knowledge graph. |

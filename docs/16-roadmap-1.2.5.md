@@ -91,7 +91,16 @@ in-progress states are recognised (recommendation: tolerate, map to open).
 Obsidian changes status on next index pass; **zero model calls**; parse of a
 pathological note (huge, emoji-dense, nested lists) never errors the indexer.
 
-### T2 — Consolidation automation (S) · provisional FR-160/161
+### T2 — Consolidation automation (S) · FR-160/161 ✅ **BUILT 2026-07-10**
+**Shipped:** a zero-model `actions-consolidate` automation (daily, **enabled by
+default**), cloned from `project-pulse`, renders the T1 index into the
+`axon:actions` block of `01-Projects/Actions.md` in GTD engage order as plain
+`[[source]]` references (never checkboxes), change-gated on the rendered
+projection hash (an unchanged day writes nothing). FR-161: the essential
+heartbeat gained a deterministic `tasks: N open (M overdue)` counter from the
+index; `daily-log`'s prompt stays as-is (both decisions Jandro-picked). No new
+ADR. Live-smoked: correct sections/buckets, references-not-checkboxes, human
+preamble intact, second run change-gate-skips, heartbeat counter live.
 **Build:** the "one trusted list" — a zero-model `actions-consolidate`
 automation (FR-160; daily + on-demand via `axon run`, **enabled by default**
 like the other zero-model automations) that renders the whole index into the
