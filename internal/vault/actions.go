@@ -79,3 +79,23 @@ func (v *FS) TagAction(ctx context.Context, path, actionText, tag string) error 
 	}
 	return ErrActionNotFound
 }
+
+// AppendToBlock appends one line to the note's axon:<block> managed block,
+// creating the block (and the note) if absent, preserving existing block content
+// and human prose. Used by the review-queue accept for extracted actions
+// (axon:tasks). Patch is wikilink-safe; the block is AXON-managed.
+func (v *FS) AppendToBlock(ctx context.Context, path, block, line string) error {
+	existing := ""
+	if v.Exists(path) {
+		if n, err := v.Read(ctx, path); err == nil {
+			existing = extractManagedBlock(n.Body, block)
+		}
+	} else if _, err := v.Create(path, ""); err != nil {
+		return err
+	}
+	content := line
+	if strings.TrimSpace(existing) != "" {
+		content = strings.TrimRight(existing, "\n") + "\n" + line
+	}
+	return v.Patch(ctx, path, block, content)
+}
