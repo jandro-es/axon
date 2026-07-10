@@ -2,6 +2,7 @@ package ingestion
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -125,6 +126,34 @@ func ExtractFile(raw []byte, path string) Extracted {
 		title = strings.TrimSuffix(base, filepath.Ext(base))
 	}
 	return Extracted{Title: title, Markdown: text}
+}
+
+// extractImage recovers text from a raster image: OCR first, then a local
+// vision description only when OCR came back sparse (mirrors ocrFallback for
+// PDFs). Vision REPLACES sparse OCR text. A vision error is returned only when
+// OCR also produced nothing; if OCR gave usable text, a vision error is
+// swallowed and the OCR text stands. Both providers absent (or both empty)
+// yields empty Markdown with no error — the caller still writes the note with
+// the archived image embed (the acceptance gate: no crash).
+func extractImage(ctx context.Context, img []byte, mime string, ocr OCR, vision Vision) (Extracted, error) {
+	var text string
+	if ocr != nil {
+		if t, err := ocr.RecognizeImage(ctx, img, mime); err == nil {
+			text = normalizeMarkdown(t)
+		}
+	}
+	if len(text) < minExtractedChars && vision != nil {
+		vt, verr := vision.Describe(ctx, img, mime)
+		if verr != nil {
+			if text == "" {
+				return Extracted{}, fmt.Errorf("vision (%s): %w", vision.Name(), verr)
+			}
+			// OCR text stands; swallow the vision error.
+		} else if vt = normalizeMarkdown(vt); vt != "" {
+			text = vt
+		}
+	}
+	return Extracted{Title: firstHeading(text), Markdown: text}, nil
 }
 
 // normalizeMarkdown collapses excessive blank lines and trims trailing space.
