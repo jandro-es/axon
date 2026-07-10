@@ -61,6 +61,38 @@ func (a *AppleOCR) Recognize(ctx context.Context, pdf []byte) (string, error) {
 	return strings.Join(out.Pages, "\n\n"), nil
 }
 
+// RecognizeImage writes the image to a temp file and runs the helper in image
+// mode (VNRecognizeTextRequest directly on the CGImage, skipping PDFKit).
+func (a *AppleOCR) RecognizeImage(ctx context.Context, img []byte, mime string) (string, error) {
+	if a.goos != "darwin" {
+		return "", fmt.Errorf("apple OCR requires macOS (running on %s) — set ingestion.ocr: tesseract or off", a.goos)
+	}
+	f, err := os.CreateTemp("", "axon-ocr-img-*"+extFromMime(mime))
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = os.Remove(f.Name()) }()
+	if _, err := f.Write(img); err != nil {
+		f.Close()
+		return "", err
+	}
+	f.Close()
+
+	ctx, cancel := context.WithTimeout(ctx, a.timeout)
+	defer cancel()
+	stdout, stderr, err := a.run(ctx, a.helper, []string{"--image", f.Name()})
+	if err != nil {
+		return "", fmt.Errorf("apple OCR helper %s: %w: %s", a.helper, err, ocrSubprocessTail(stdout, stderr))
+	}
+	var out struct {
+		Pages []string `json:"pages"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(stdout), &out); err != nil {
+		return "", fmt.Errorf("apple OCR: decode helper response: %w", err)
+	}
+	return strings.Join(out.Pages, "\n\n"), nil
+}
+
 // ocrSubprocessTail assembles capped helper output for a failure message.
 func ocrSubprocessTail(stdout, stderr []byte) string {
 	const capPerStream = 1024

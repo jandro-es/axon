@@ -15,6 +15,9 @@ type OCR interface {
 	// Recognize returns the recovered text (page order preserved) for a PDF's
 	// raw bytes, or an error.
 	Recognize(ctx context.Context, pdf []byte) (string, error)
+	// RecognizeImage returns the recovered text for a single raster image's raw
+	// bytes. mime is the source content type (e.g. "image/png").
+	RecognizeImage(ctx context.Context, img []byte, mime string) (string, error)
 	// Name identifies the provider for diagnostics/errors.
 	Name() string
 }
@@ -56,5 +59,50 @@ func OCRFor(cfg config.IngestionConfig, goos string) (OCR, error) {
 		return NewTesseractOCR(), nil
 	default:
 		return nil, fmt.Errorf("ingestion.ocr: unknown provider %q", cfg.OCRMode())
+	}
+}
+
+// mimeForImage maps a local image path's extension to a MIME type.
+func mimeForImage(path string) string {
+	switch filepathExt(path) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".heic":
+		return "image/heic"
+	case ".heif":
+		return "image/heif"
+	case ".tif", ".tiff":
+		return "image/tiff"
+	case ".bmp":
+		return "image/bmp"
+	default:
+		return "application/octet-stream"
+	}
+}
+
+// extFromMime maps an image MIME type back to a file extension (for temp files
+// handed to OCR binaries). Unknown types default to .png.
+func extFromMime(mime string) string {
+	switch mime {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	case "image/heic", "image/heif":
+		return ".heic"
+	case "image/tiff":
+		return ".tiff"
+	case "image/bmp":
+		return ".bmp"
+	default:
+		return ".png"
 	}
 }
