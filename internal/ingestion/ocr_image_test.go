@@ -9,8 +9,11 @@ import (
 func TestTesseractRecognizeImage(t *testing.T) {
 	var gotPath string
 	tt := &TesseractOCR{
-		lookup:   func(string) (string, error) { return "/usr/bin/tesseract", nil },
-		ocrImage: func(ctx context.Context, imgPath string) (string, error) { gotPath = imgPath; return "hello world", nil },
+		lookup: func(string) (string, error) { return "/usr/bin/tesseract", nil },
+		ocrImage: func(ctx context.Context, imgPath string) (string, error) {
+			gotPath = imgPath
+			return "hello world", nil
+		},
 	}
 	got, err := tt.RecognizeImage(context.Background(), []byte{0x89, 0x50, 0x4e, 0x47}, "image/png")
 	if err != nil {
