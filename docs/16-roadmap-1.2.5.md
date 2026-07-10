@@ -154,7 +154,16 @@ the source line in the vault and moves the item to Done everywhere; stale
 hash → 409 and an untouched note; kill-switch off → 404 + hidden tab; header
 missing → 403.
 
-### T4 — MCP tools + session surface (S) · provisional FR-165/166
+### T4 — MCP tools + session surface (S) · FR-165/166, no ADR ✅ **BUILT 2026-07-10**
+**Shipped:** `actions_list` MCP tool (read, zero-spend, agentic-read allowlist) +
+`action_complete` MCP tool (write via `vault.CompleteAction`, default set but
+excluded from BOTH agentic maps — interactive-only, ADR-034); and an ungated
+SessionStart open-actions pointer (`- Actions: N open (M due today, K overdue) →
+[[01-Projects/Actions.md]]`) from the index, no model call. Both decisions
+Jandro-picked-recommended (ship both tools; ungated operational pointer).
+Live-smoked: pointer renders, MCP tools registered (count 16→18).
+
+### T4 — MCP tools + session surface (S) · provisional FR-165/166 *(original plan)*
 **Build:** actions where Claude and the session start are. FR-165:
 `actions_list` MCP tool (default set + **agentic read allowlist** — zero-spend,
 the `vault_related` precedent) so any automation/session can ask "what's
