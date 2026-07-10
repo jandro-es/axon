@@ -20,7 +20,7 @@ import (
 )
 
 func newIngestCmd(gf *globalFlags) *cobra.Command {
-	var dryRun, noApplyLinks, asJSON, enrich bool
+	var dryRun, noApplyLinks, asJSON, enrich, forceMedia bool
 	var headers []string
 	cmd := &cobra.Command{
 		Use:   "ingest <url|path>",
@@ -56,15 +56,19 @@ func newIngestCmd(gf *globalFlags) *cobra.Command {
 			}
 
 			ocr, _ := ingestion.OCRFor(deps.profile.Ingestion, runtime.GOOS)
+			vision, _ := ingestion.VisionFor(deps.profile.Ingestion, runtime.GOOS) // off/misconfig → nil; doctor surfaces it
 			pipeline := &ingestion.Pipeline{
-				Vault:    deps.vault,
-				DB:       deps.db,
-				Embedder: deps.embedder,
-				Enricher: enricher,
-				Fetcher:  ingestion.NewHTTPFetcher(deps.profile.Policy, authRules...),
-				Policy:   deps.profile.Policy,
-				Profile:  deps.name,
-				OCR:      ocr,
+				Vault:        deps.vault,
+				DB:           deps.db,
+				Embedder:     deps.embedder,
+				Enricher:     enricher,
+				Fetcher:      ingestion.NewHTTPFetcher(deps.profile.Policy, authRules...),
+				Policy:       deps.profile.Policy,
+				Profile:      deps.name,
+				OCR:          ocr,
+				Vision:       vision,
+				MediaHosts:   deps.profile.Ingestion.MediaHosts,
+				CaptionLangs: deps.profile.Ingestion.CaptionLangs,
 			}
 			_ = noApplyLinks
 			opts := ingestion.IngestOptions{
@@ -73,6 +77,7 @@ func newIngestCmd(gf *globalFlags) *cobra.Command {
 				// The CLI is user-initiated, so local-file ingestion is allowed
 				// here (it is not on the agent-driven MCP path).
 				AllowLocalFiles: true,
+				ForceMedia:      forceMedia,
 			}
 
 			out := cmd.OutOrStdout()
@@ -116,6 +121,7 @@ func newIngestCmd(gf *globalFlags) *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "do everything except write/embed; print the intended note")
 	cmd.Flags().BoolVar(&noApplyLinks, "no-apply-links", false, "do not apply suggested links (default: queued for review)")
 	cmd.Flags().BoolVar(&enrich, "enrich", false, "enrich metadata with Claude (via the token manager) instead of deterministically")
+	cmd.Flags().BoolVar(&forceMedia, "media", false, "treat the URL as caption-bearing media (fetch transcript via yt-dlp) even if the host is not a known media host")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "emit the result as JSON")
 	cmd.Flags().StringArrayVar(&headers, "header", nil,
 		"one-off auth header 'Name: value' scoped to the URL's own domain (repeatable); persistent credentials belong in ingestion.auth")

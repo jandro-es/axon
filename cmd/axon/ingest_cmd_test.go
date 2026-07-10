@@ -7,6 +7,13 @@ import (
 	"testing"
 )
 
+func TestIngestCmdHasMediaFlag(t *testing.T) {
+	cmd := newIngestCmd(&globalFlags{})
+	if cmd.Flags().Lookup("media") == nil {
+		t.Fatal("ingest command missing --media flag")
+	}
+}
+
 func TestIngestAndSearchCLI(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := writeTempConfig(t, dir)
