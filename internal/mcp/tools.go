@@ -12,9 +12,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/jandro-es/axon/internal/actions"
 	"github.com/jandro-es/axon/internal/ask"
 	"github.com/jandro-es/axon/internal/automations"
 	"github.com/jandro-es/axon/internal/config"
@@ -524,4 +526,116 @@ func (t *Tools) Related(ctx context.Context, in RelatedIn) (RelatedOut, error) {
 		return RelatedOut{}, err
 	}
 	return RelatedOut{Related: rel}, nil
+}
+
+// ActionsListIn filters the action index. All fields optional; default = open.
+type ActionsListIn struct {
+	Status  string `json:"status,omitempty"  jsonschema:"filter: a bucket (overdue|today|scheduled|next|waiting|someday) or 'open' (default); done/cancelled excluded"`
+	Project string `json:"project,omitempty" jsonschema:"filter by project (wikilink target or source-path substring)"`
+	Limit   int    `json:"limit,omitempty"   jsonschema:"max rows (default 50)"`
+}
+
+// ActionView is one action, compact, with the hash to pass to action_complete.
+type ActionView struct {
+	Text     string `json:"text"`
+	Source   string `json:"source"`
+	Section  string `json:"section,omitempty"`
+	Bucket   string `json:"bucket"`
+	Due      string `json:"due,omitempty"`
+	Priority string `json:"priority,omitempty"`
+	Hash     string `json:"hash"`
+}
+
+type ActionsListOut struct {
+	Actions []ActionView   `json:"actions"`
+	Counts  map[string]int `json:"counts"`
+}
+
+var actionsBucketOrder = map[string]int{
+	"overdue": 0, "today": 1, "scheduled": 2, "next": 3, "waiting": 4, "someday": 5,
+}
+
+// ActionsList returns actions from the derived index (read-only, zero tokens).
+func (t *Tools) ActionsList(ctx context.Context, in ActionsListIn) (ActionsListOut, error) {
+	rows, err := db.ListActions(ctx, t.deps.DB, db.ListActionsOpts{IncludeAll: true})
+	if err != nil {
+		return ActionsListOut{}, err
+	}
+	today := time.Now()
+	weekAgo := today.AddDate(0, 0, -7).Format("2006-01-02")
+	counts := map[string]int{"open": 0, "overdue": 0, "today": 0, "waiting": 0, "someday": 0, "done7": 0}
+	var views []ActionView
+	for _, r := range rows {
+		if r.Archived {
+			continue
+		}
+		b := actions.BucketFields(r.State, r.Due, r.Scheduled, r.Start, r.Tags, today)
+		switch b {
+		case "done":
+			if r.DoneDate >= weekAgo {
+				counts["done7"]++
+			}
+			continue
+		case "cancelled":
+			continue
+		}
+		counts["open"]++
+		if _, ok := counts[b]; ok {
+			counts[b]++
+		}
+		if in.Status != "" && in.Status != "open" && b != in.Status {
+			continue
+		}
+		if in.Project != "" && r.Project != in.Project && !strings.Contains(r.SourcePath, in.Project) {
+			continue
+		}
+		views = append(views, ActionView{
+			Text: r.Text, Source: r.SourcePath, Section: r.Section, Bucket: b,
+			Due: r.Due, Priority: r.Priority, Hash: r.Hash,
+		})
+	}
+	sort.SliceStable(views, func(i, j int) bool {
+		if bi, bj := actionsBucketOrder[views[i].Bucket], actionsBucketOrder[views[j].Bucket]; bi != bj {
+			return bi < bj
+		}
+		return views[i].Due < views[j].Due
+	})
+	limit := in.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if len(views) > limit {
+		views = views[:limit]
+	}
+	return ActionsListOut{Actions: views, Counts: counts}, nil
+}
+
+// ActionCompleteIn / ActionComplete — the interactive completion tool (ADR-034).
+type ActionCompleteIn struct {
+	Path string `json:"path" jsonschema:"vault-relative note containing the checkbox line"`
+	Hash string `json:"hash" jsonschema:"the action's identity hash (from actions_list)"`
+}
+type ActionCompleteOut struct {
+	Applied bool   `json:"applied"`
+	Message string `json:"message"`
+}
+
+// ActionComplete marks one open checkbox line done (ADR-034: byte-precise,
+// hash-addressed, [ ]→[x] + ✅ date). Interactive-only — excluded from the
+// agentic allowlists. DryRun-aware. Zero tokens.
+func (t *Tools) ActionComplete(ctx context.Context, in ActionCompleteIn) (ActionCompleteOut, error) {
+	if in.Path == "" || in.Hash == "" {
+		return ActionCompleteOut{}, fmt.Errorf("path and hash are required")
+	}
+	date := time.Now().Format("2006-01-02")
+	if t.deps.DryRun {
+		return ActionCompleteOut{Applied: false, Message: "would complete action " + in.Hash + " in " + in.Path}, nil
+	}
+	if err := t.deps.Vault.CompleteAction(ctx, in.Path, in.Hash, date); err != nil {
+		return ActionCompleteOut{}, err
+	}
+	if t.deps.DB != nil {
+		_, _ = db.MarkActionDone(ctx, t.deps.DB, in.Hash, date)
+	}
+	return ActionCompleteOut{Applied: true, Message: "completed action in " + in.Path + " (✅ " + date + ")"}, nil
 }

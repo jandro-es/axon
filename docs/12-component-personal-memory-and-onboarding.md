@@ -102,7 +102,15 @@ with flags/`--from <file>` allows unattended setup.
 
 ## 3. Session injection (the agent "knows me")
 
-The existing `SessionStart` hook (Component 08) is extended: in addition to the
+The existing `SessionStart` hook (Component 08) also emits an **open-actions
+pointer** (T4/FR-166) — one deterministic line `- Actions: N open (M due today,
+K overdue) → [[01-Projects/Actions.md]]` from the derived `actions` table when
+open actions exist — alongside the budget/inbox/review/briefing status lines. It
+is operational status (no model call, best-effort) and, like those siblings, is
+**not** gated by `memory.inject`, so it surfaces even on the stricter work
+profile.
+
+The `SessionStart` hook is extended: in addition to the
 budget + inbox status, it injects a **compact, token-bounded** rendering of the
 identity layer with **no model call** (FR-72):
 

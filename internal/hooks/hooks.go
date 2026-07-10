@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jandro-es/axon/internal/actions"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/identity"
@@ -119,6 +120,11 @@ func sessionStart(ctx context.Context, deps Deps) (Result, error) {
 		// Briefing pointer (FR-89): one deterministic line when today's
 		// briefing exists; any error means no line, never a broken hook.
 		if line := briefingPointer(deps.Vault); line != "" {
+			b.WriteString(line)
+		}
+		// Open-actions pointer (FR-166): one deterministic line from the derived
+		// index; operational status (ungated by memory.inject), no model call.
+		if line := openActionsPointer(ctx, deps.DB); line != "" {
 			b.WriteString(line)
 		}
 	}
@@ -344,6 +350,35 @@ func reviewQueueCount(v *vault.FS) int {
 		return 0
 	}
 	return strings.Count(string(data), "- [ ]")
+}
+
+// openActionsPointer returns a one-line pointer to the consolidated action list
+// when open actions exist, else "" (best-effort — any error yields no line, never
+// a broken hook). Operational status, like the briefing pointer; no model call.
+func openActionsPointer(ctx context.Context, d *sql.DB) string {
+	if d == nil {
+		return ""
+	}
+	rows, err := db.ListActions(ctx, d, db.ListActionsOpts{State: "open"})
+	if err != nil || len(rows) == 0 {
+		return ""
+	}
+	today := time.Now()
+	open, todayN, overdue := 0, 0, 0
+	for _, r := range rows {
+		open++
+		switch actions.BucketFields(r.State, r.Due, r.Scheduled, r.Start, r.Tags, today) {
+		case "today":
+			todayN++
+		case "overdue":
+			overdue++
+		}
+	}
+	extra := ""
+	if todayN > 0 || overdue > 0 {
+		extra = fmt.Sprintf(" (%d due today, %d overdue)", todayN, overdue)
+	}
+	return fmt.Sprintf("- Actions: %d open%s → [[01-Projects/Actions.md]]\n", open, extra)
 }
 
 // briefingPointer returns the one-line pointer to today's axon:briefing

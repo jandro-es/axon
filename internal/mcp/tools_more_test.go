@@ -2,12 +2,98 @@ package mcp
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/jandro-es/axon/internal/actions"
 	"github.com/jandro-es/axon/internal/core"
 	"github.com/jandro-es/axon/internal/db"
+	"github.com/jandro-es/axon/internal/vault"
 )
+
+func TestActionsListTool(t *testing.T) {
+	ctx := context.Background()
+	tools, _, _ := newTestTools(t, map[string]string{})
+	d := tools.deps.DB
+	if err := db.ReplaceActions(ctx, d, []db.Action{
+		{Hash: "h-over", SourcePath: "01-Projects/w.md", Text: "fix bug", State: "open", Checkbox: " ", Due: "2000-01-01", Priority: "high", Updated: "u"},
+		{Hash: "h-some", SourcePath: "Ideas.md", Text: "learn rust", State: "open", Checkbox: " ", Tags: []string{"someday"}, Updated: "u"},
+		{Hash: "h-done", SourcePath: "01-Projects/w.md", Text: "shipped", State: "done", Checkbox: "x", DoneDate: "2000-01-02", Updated: "u"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	out, err := tools.ActionsList(ctx, ActionsListIn{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Actions) != 2 {
+		t.Fatalf("default list = %d, want 2 (open only): %+v", len(out.Actions), out.Actions)
+	}
+	if out.Counts["open"] != 2 || out.Counts["overdue"] != 1 {
+		t.Errorf("counts = %+v", out.Counts)
+	}
+	for _, a := range out.Actions {
+		if a.Hash == "" || a.Bucket == "" {
+			t.Errorf("row missing hash/bucket: %+v", a)
+		}
+	}
+	od, _ := tools.ActionsList(ctx, ActionsListIn{Status: "overdue"})
+	if len(od.Actions) != 1 || od.Actions[0].Text != "fix bug" {
+		t.Errorf("status=overdue = %+v", od.Actions)
+	}
+}
+
+func TestActionCompleteTool(t *testing.T) {
+	ctx := context.Background()
+	tools, _, _ := newTestTools(t, map[string]string{"p.md": "- [ ] finish spec\n"})
+	d := tools.deps.DB
+	var hash string
+	for _, a := range actions.Extract("p.md", "- [ ] finish spec\n", false) {
+		hash = a.Hash()
+	}
+	if err := db.ReplaceActions(ctx, d, []db.Action{
+		{Hash: hash, SourcePath: "p.md", LineNo: 0, Text: "finish spec", Raw: "- [ ] finish spec", State: "open", Checkbox: " ", Updated: "u"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tools.ActionComplete(ctx, ActionCompleteIn{Path: "p.md", Hash: "bogus"}); !errors.Is(err, vault.ErrActionNotFound) {
+		t.Fatalf("stale hash: want ErrActionNotFound, got %v", err)
+	}
+	out, err := tools.ActionComplete(ctx, ActionCompleteIn{Path: "p.md", Hash: hash})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !out.Applied {
+		t.Error("Applied should be true")
+	}
+	n, _ := tools.deps.Vault.Read(ctx, "p.md")
+	if !strings.Contains(n.Body, "- [x] finish spec ✅ ") {
+		t.Errorf("source line not flipped:\n%s", n.Body)
+	}
+	got, _ := db.ListActions(ctx, d, db.ListActionsOpts{IncludeAll: true})
+	if got[0].State != "done" {
+		t.Errorf("DB row not marked done: %+v", got[0])
+	}
+}
+
+func TestActionCompleteDryRun(t *testing.T) {
+	ctx := context.Background()
+	tools, _, _ := newTestTools(t, map[string]string{"p.md": "- [ ] x\n"})
+	tools.deps.DryRun = true
+	out, err := tools.ActionComplete(ctx, ActionCompleteIn{Path: "p.md", Hash: "anything"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Applied {
+		t.Error("dry-run must not apply")
+	}
+	n, _ := tools.deps.Vault.Read(ctx, "p.md")
+	if !strings.Contains(n.Body, "- [ ] x") {
+		t.Error("dry-run must not flip the line")
+	}
+}
 
 func TestRelatedTool(t *testing.T) {
 	ctx := context.Background()

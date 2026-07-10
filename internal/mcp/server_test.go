@@ -39,6 +39,7 @@ func TestServerProtocolListsAndCallsTools(t *testing.T) {
 	}
 	sort.Strings(got)
 	want := []string{
+		"action_complete", "actions_list",
 		"automations_list", "automations_run", "daily_append", "knowledge_ingest",
 		"knowledge_search", "memory_remember", "metrics_query", "tokens_status",
 		"vault_ask", "vault_links", "vault_move", "vault_patch", "vault_read", "vault_related", "vault_search", "vault_write",
