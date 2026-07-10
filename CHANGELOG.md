@@ -6,6 +6,74 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.2.5] — 2026-07-10
+
+**"Act on it."** 1.2 made the vault remember and reason; 1.2.5 makes it **act** —
+every action ("task") scattered across the knowledge base is collected into one
+trusted, always-current view, its state (open / due / overdue / waiting / someday
+/ done) visible at a glance on the dashboard and inside the vault, with a
+one-click way to deal with each. Simple to use, GTD-robust underneath: frictionless
+capture, one trusted system, next-actions separated from someday/waiting, and a
+weekly-review loop that keeps the lists honest. Same constitution: local-first,
+every model call through the chokepoint (only T6 spends tokens, and it's off by
+default), every write wikilink-safe, everything toggleable, all-off still useful
+(S8), the vault rebuilds the DB and never the reverse (S9). Net-new slate: T1–T6
+(FR-157…170, ADR-033/034, migration 0007).
+
+### Added
+
+- **Action index — grammar, derived table, CLI (FR-157…FR-159, ADR-033)** — a
+  checkbox line anywhere in the vault, in the **Obsidian Tasks emoji grammar**
+  (📅 due, ⏳ scheduled, 🛫 start, ✅ done, priority, `@context`, `#someday`/`#waiting`),
+  is the single source of truth. A new pure `internal/actions` package is the one
+  structured task parser; a **derived, disposable `actions` SQLite table**
+  (migration 0007) is rebuilt inside the reindex transaction from Markdown
+  byte-equivalently (S9); `axon actions` lists/filters/counts (`--status`,
+  `--project`, `--context`, `--json`). The GTD **status bucket is computed at read
+  time** (overdue/today/scheduled/next/waiting/someday), so nothing ages at
+  midnight. Zero model calls.
+- **Consolidation automation (FR-160/161)** — a zero-model `actions-consolidate`
+  automation (daily, **enabled by default**) renders the whole index into the
+  `axon:actions` managed block of `01-Projects/Actions.md` in GTD engage order
+  (Overdue · Today · This week · Next by project → context · Waiting · Someday ·
+  Done-this-week) as plain `[[source]]` references — never duplicate checkboxes.
+  Change-gated on the rendered projection (an unchanged day writes nothing). The
+  essential `heartbeat` gains a deterministic `tasks: N open (M overdue)` counter
+  from the index.
+- **Dashboard Actions tab + completion (FR-162…FR-164, ADR-034)** — `GET /api/actions`
+  (list + GTD counts + a 30-day completion trend) and an **Actions** SPA tab
+  (stat tiles, trend chart, filterable list with per-row **done** buttons). The
+  one write in the theme: `POST /api/actions/complete` → **`vault.CompleteAction`**,
+  a byte-precise, hash-addressed checkbox toggle (`[ ]`→`[x]` + `✅ date`) — a
+  stale hash refuses with 409, nothing written. Guarded like the other browser
+  mutations (loopback + Host + `X-Axon-Actions` header + `dashboard.actions_enabled`
+  kill-switch); an `action.done` SSE event.
+- **MCP action tools + SessionStart pointer (FR-165/166)** — `actions_list` (read,
+  zero-spend, in the agentic read allowlist) and `action_complete` (interactive
+  completion, **structurally excluded from every agentic subprocess** — the same
+  containment as `vault_ask`, so ADR-034's "never headless-agent-driven" holds).
+  SessionStart injects one deterministic pointer line — `Actions: N open (M due
+  today, K overdue) → [[Actions.md]]` — from the index, no model call.
+- **Stale-action sweep & Someday demotion (FR-167/168)** — a zero-model
+  `actions-review` automation (weekly, off by default) proposes open, undated
+  actions in notes untouched for > `actions.stale_after_days` (default 30) to the
+  review queue; **accepting demotes the task to Someday/Maybe** — `vault.TagAction`
+  appends `#someday` to the source line (additive, never completes, never deletes).
+- **Implicit action extraction (FR-169/170)** — the only 1.2.5 token spender: an
+  opt-in routine-tier `action-extract` automation (off by default, chokepoint,
+  local-routable per ADR-015, change-gated, budget-bounded, NFR-05) extracts
+  implicit commitments ("I should email John…") from recent notes to the review
+  queue; **accepting appends a real checkbox** to the source note's `axon:tasks`
+  managed block, which the parser indexes as a genuine, completable action.
+
+### Notes
+
+- **ADR-033** (checkbox lines as the source of truth + the derived, disposable
+  index) and **ADR-034** (task completion — and, by extension, `#someday`
+  demotion — as a byte-precise, user-initiated, never-agentic additive
+  checkbox-line edit) are the two new architecture decisions. Migration 0007 adds
+  the `actions` table. Twenty-three standard automations.
+
 ## [1.2.0] — 2026-07-10
 
 **"Remember & reason, cheaply."** 1.0 built the self-maintaining vault; 1.1 made
