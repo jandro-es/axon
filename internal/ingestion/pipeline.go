@@ -74,7 +74,7 @@ type IngestResult struct {
 // Ingest runs the full pipeline for one input. Errors are returned and also
 // reflected as Status="failed"; a denied domain fails before any fetch.
 func (p *Pipeline) Ingest(ctx context.Context, arg string, opts IngestOptions) (IngestResult, error) {
-	in := ClassifyInput(arg)
+	in := ClassifyInput(arg, nil, false)
 	res := IngestResult{Input: arg, Status: "failed"}
 
 	// Stage 1 — policy. URLs are gated by the egress allowlist; local files are
