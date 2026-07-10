@@ -25,9 +25,9 @@ This document is the 1.3 *plan*, in the style of the earlier roadmap docs
 (`14`, `15`, `16`) and graduated from the vault thinking-notes (`docs/Axon
 1.2–1.3 — PRD/Purpose/Development Plan/Research Notes`). Every slice still runs
 its own design cycle (brainstorm → spec → **ADR** → FR rows → TDD → live smoke)
-before any code. FR/ADR numbers here are **provisional** — current maxima:
-**FR-170, ADR-034, migration 0007** — and are assigned for real in each slice's
-cycle. Provisional range for the release: **FR-171…176, ADR-035…036**. A slice
+before any code. FR/ADR numbers here were **provisional** — pre-1.3 maxima were
+**FR-170, ADR-034, migration 0007**. **H1 shipped and consumed FR-171…173 +
+ADR-035** (no migration); **H2 is next, taking FR-174… + ADR-036**. A slice
 isn't "done" until its acceptance gate passes.
 
 > **Scope note (2026-07-10).** 1.3 originally scoped seven slices under a
@@ -72,7 +72,25 @@ tests, never by asking the model nicely.
 
 ## Phase H — Perceive & research *(build in this order)*
 
-### H1 — Multimodal ingestion (M) · provisional FR-171/172/173, ADR-035 *(may fold into ADR-013/026)*
+### H1 — Multimodal ingestion (M) · **SHIPPED 2026-07-10** — FR-171/172/173, ADR-035
+> **Status (2026-07-10).** Shipped to `main`. Images ingest via OCR-first
+> (Apple/tesseract, incl. a new Swift `--image` helper mode) then a **local
+> Vision seam** (`ollama:<model>` now, Apple image tier behind the same seam)
+> when OCR is sparse; the source image is archived to
+> `03-Resources/Knowledge/attachments/<hash>.<ext>` and embedded `![[…]]`
+> (archive-never-delete). Media URLs (YouTube family + `--media` + `media_hosts`)
+> become transcript notes via a detected `yt-dlp`; caption-less/absent URLs land
+> as a flagged `00-Inbox` capture with **zero model calls**. Vision is a
+> **local perception primitive** (ADR-035, an ADR-015 amendment): budget-exempt,
+> **not** chokepoint-routed — no Claude vision path in v1, so cardinal rule 1 is
+> untouched. Images are **CLI-only** (the `AllowLocalFiles`/SSRF guard); every
+> writer wikilink-safe. Config: `ingestion.vision`/`media_hosts`/`caption_langs`;
+> advisory `vision`+`media` doctor checks. **No new automation, MCP tool, or
+> migration.** Spec: `docs/superpowers/specs/2026-07-10-h1-multimodal-ingestion-design.md`;
+> plan: `docs/superpowers/plans/2026-07-10-h1-multimodal-ingestion.md`. Gate met
+> (live-smoked on macOS with real Ollama-vision + `yt-dlp`; the real-network
+> caption *download* is externally blocked here and covered by unit tests).
+
 **Build:** extend the ingestion pipeline beyond text/PDF. **Images &
 screenshots:** OCR (ADR-026, already shipped) **+** a vision-model
 description/tagging pass — `ollama:<vision-model>` (Qwen-VL class) now, the
@@ -124,8 +142,8 @@ work profile with research off ⇒ no egress.
 
 | Order | Slice | Size | Why here |
 |-------|-------|------|----------|
-| 1 | H1 multimodal ingestion | M | Table stakes; Ollama-vision first, Apple FM upgrade behind the seam. ADR-035 (provisional, may fold into ADR-013/026). |
-| 2 | H2 deep research | M | Highest new token spend — wants R5's local savings banked first. ADR-036, personal-only. |
+| 1 | H1 multimodal ingestion | M | **SHIPPED 2026-07-10.** Table stakes; Ollama-vision first, Apple image tier behind the same seam. FR-171/172/173, ADR-035. |
+| 2 | H2 deep research | M | **NEXT.** Highest new token spend — wants R5's local savings banked first. ADR-036, personal-only. |
 
 The two are largely independent — build in either order. H1 is the broader
 table-stakes slice (more surfaces reuse the vision/OCR seam); H2 is the higher
@@ -133,8 +151,9 @@ new-spend slice that benefits from the eval-gated local tier (1.2 R5) being
 proven first.
 
 **Release criterion 1.3:** ships when **both H1 (multimodal ingestion) and H2
-(deep research)** land, each passing its acceptance gate. Either may ship first;
-neither depends on the removed slices.
+(deep research)** land, each passing its acceptance gate. **H1 shipped
+2026-07-10; H2 is the last remaining slice.** Neither depends on the removed
+slices.
 
 ## Config & observability *(accumulated across slices, all defaults shown)*
 
