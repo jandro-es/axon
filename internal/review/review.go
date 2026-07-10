@@ -54,6 +54,7 @@ var (
 	contradictsRe = regexp.MustCompile(`^contradicts \[\[([^\]]+)\]\] ⚡ \[\[([^\]]+)\]\]`)
 	mergeRe       = regexp.MustCompile(`^merge \[\[([^\]]+)\]\] \+ \[\[([^\]]+)\]\]`)
 	reconcileRe   = regexp.MustCompile(`^reconcile: "(.+)" supersedes "(.+)"$`)
+	stalledRe     = regexp.MustCompile(`^stalled action "(.+)" in \[\[([^\]]+)\]\] \(\d+d\)`)
 )
 
 // Load parses the queue file. A missing file is an empty queue.
@@ -120,6 +121,9 @@ func Load(ctx context.Context, v *vault.FS) ([]Item, error) {
 		case reconcileRe.MatchString(body):
 			rm := reconcileRe.FindStringSubmatch(body)
 			it.Kind, it.Note, it.Target = "reconcile", rm[1], rm[2]
+		case stalledRe.MatchString(body):
+			sm := stalledRe.FindStringSubmatch(body)
+			it.Kind, it.Target, it.Note = "stalled", sm[1], sm[2] // Target=text, Note=note path
 		}
 		// The ID hashes the normalized body (checkbox + resolution suffix
 		// stripped) so an item keeps its identity across resolution — a
@@ -160,6 +164,11 @@ func Accept(ctx context.Context, v *vault.FS, id string) (Item, error) {
 			return Item{}, merr
 		}
 		suffix = "✓ merged into [[" + survivor + "]]"
+	case "stalled":
+		if err := v.TagAction(ctx, it.Note+".md", it.Target, "someday"); err != nil {
+			return Item{}, err
+		}
+		suffix = "✓ demoted to #someday"
 	default:
 		return Item{}, fmt.Errorf("item %s (%s) is not actionable — dismiss it instead", id, it.Kind)
 	}
