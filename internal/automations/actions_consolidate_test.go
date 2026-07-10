@@ -89,14 +89,14 @@ func TestRenderActionsSections(t *testing.T) {
 	rows := []db.Action{
 		{SourcePath: "01-Projects/work.md", Section: "Sprint", Text: "fix login", State: "open", Checkbox: " ", Due: "2000-01-01", Priority: "high", Project: "Auth"},
 		{SourcePath: "Daily/2026-07-10.md", Text: "standup notes", State: "open", Checkbox: " ", Due: "2026-07-10"},
-		{SourcePath: "01-Projects/work.md", Text: "write RFC", State: "open", Checkbox: " ", Due: "2026-07-14"}, // within 7d → This week
-		{SourcePath: "01-Projects/work.md", Text: "refactor later", State: "open", Checkbox: " "},                // no date → Next actions
+		{SourcePath: "01-Projects/work.md", Text: "write RFC", State: "open", Checkbox: " ", Due: "2026-07-14"},                                  // within 7d → This week
+		{SourcePath: "01-Projects/work.md", Text: "refactor later", State: "open", Checkbox: " "},                                                // no date → Next actions
 		{SourcePath: "01-Projects/work.md", Text: "hear from legal", State: "open", Checkbox: " ", Tags: []string{"waiting"}, Due: "2026-07-01"}, // waiting outranks overdue
 		{SourcePath: "Ideas.md", Text: "learn rust", State: "open", Checkbox: " ", Tags: []string{"someday"}},
-		{SourcePath: "01-Projects/work.md", Text: "ship v2", State: "done", Checkbox: "x", DoneDate: "2026-07-09"},       // done this week
+		{SourcePath: "01-Projects/work.md", Text: "ship v2", State: "done", Checkbox: "x", DoneDate: "2026-07-09"},      // done this week
 		{SourcePath: "01-Projects/work.md", Text: "ancient done", State: "done", Checkbox: "x", DoneDate: "2026-01-01"}, // outside 7d window
-		{SourcePath: "01-Projects/work.md", Text: "scrapped", State: "cancelled", Checkbox: "-"},                       // omitted
-		{SourcePath: "04-Archive/old.md", Text: "archived", State: "open", Checkbox: " ", Archived: true},              // omitted
+		{SourcePath: "01-Projects/work.md", Text: "scrapped", State: "cancelled", Checkbox: "-"},                        // omitted
+		{SourcePath: "04-Archive/old.md", Text: "archived", State: "open", Checkbox: " ", Archived: true},               // omitted
 	}
 	body, total := renderActionsSections(rows, today)
 
