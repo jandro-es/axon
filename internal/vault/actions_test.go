@@ -44,6 +44,44 @@ func TestCompleteActionFlipsLine(t *testing.T) {
 	}
 }
 
+func TestTagActionAppendsTag(t *testing.T) {
+	ctx := context.Background()
+	note := "---\ntitle: T\n---\n## Todo\n- [ ] email John\n- [ ] other\n"
+	v := newTempVault(t, map[string]string{"p.md": note})
+
+	if err := v.TagAction(ctx, "p.md", "email John", "someday"); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(filepath.Join(v.Root(), "p.md"))
+	got := string(raw)
+	if !strings.Contains(got, "- [ ] email John #someday") {
+		t.Errorf("tag not appended:\n%s", got)
+	}
+	if !strings.Contains(got, "- [ ] other\n") || strings.Contains(got, "- [ ] other #someday") {
+		t.Error("other line must be untouched")
+	}
+	if err := v.TagAction(ctx, "p.md", "email John", "someday"); err != nil {
+		t.Fatal(err)
+	}
+	raw2, _ := os.ReadFile(filepath.Join(v.Root(), "p.md"))
+	if strings.Count(string(raw2), "#someday") != 1 {
+		t.Errorf("tag double-applied:\n%s", raw2)
+	}
+}
+
+func TestTagActionUnknownText(t *testing.T) {
+	ctx := context.Background()
+	v := newTempVault(t, map[string]string{"p.md": "- [ ] x\n"})
+	err := v.TagAction(ctx, "p.md", "no such task", "someday")
+	if !errors.Is(err, ErrActionNotFound) {
+		t.Fatalf("want ErrActionNotFound, got %v", err)
+	}
+	raw, _ := os.ReadFile(filepath.Join(v.Root(), "p.md"))
+	if string(raw) != "- [ ] x\n" {
+		t.Errorf("file must be unchanged: %q", raw)
+	}
+}
+
 func TestCompleteActionStaleHash(t *testing.T) {
 	ctx := context.Background()
 	v := newTempVault(t, map[string]string{"p.md": "- [ ] x\n"})

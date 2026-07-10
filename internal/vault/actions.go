@@ -46,3 +46,32 @@ func (v *FS) CompleteAction(ctx context.Context, path, lineHash, date string) er
 	}
 	return ErrActionNotFound
 }
+
+// TagAction appends " #<tag>" to the FIRST open checkbox line in the note whose
+// T1 text matches actionText, if the tag isn't already present. Byte-precise +
+// atomic; additive (never removes/reorders). Returns ErrActionNotFound (nothing
+// written) if no open line matches. Like CompleteAction (ADR-034) it edits a
+// human-authored checkbox line, user-initiated via the review queue only.
+func (v *FS) TagAction(ctx context.Context, path, actionText, tag string) error {
+	abs, err := v.safeAbs(path)
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(abs)
+	if err != nil {
+		return err
+	}
+	fm, body := splitFrontmatter(string(data))
+	lines := strings.Split(body, "\n")
+	for _, a := range actions.Extract(path, body, false) {
+		if a.State != actions.StateOpen || a.Text != actionText {
+			continue
+		}
+		if strings.Contains(lines[a.LineNo], "#"+tag) {
+			return nil // already tagged — idempotent
+		}
+		lines[a.LineNo] = strings.TrimRight(lines[a.LineNo], " ") + " #" + tag
+		return v.writeRaw(path, reassemble(fm, strings.Join(lines, "\n")))
+	}
+	return ErrActionNotFound
+}
