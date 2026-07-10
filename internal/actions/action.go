@@ -117,12 +117,18 @@ func (a Action) Hash() string {
 	return hex.EncodeToString(sum[:])
 }
 
-// Bucket resolves the single GTD bucket by precedence:
+// Bucket resolves the single GTD bucket by precedence (delegates to BucketFields).
+func Bucket(a Action, today time.Time) string {
+	return BucketFields(string(a.State), a.Due, a.Scheduled, a.Start, a.Tags, today)
+}
+
+// BucketFields is Bucket over raw fields, so callers holding a db row (or any
+// field set) need not construct an Action. Precedence:
 // done > cancelled > someday > waiting > overdue > today > scheduled > next.
 // Date fields are compared lexically against today (YYYY-MM-DD). Read-time only —
 // never persisted, so it can't go stale at midnight.
-func Bucket(a Action, today time.Time) string {
-	switch a.State {
+func BucketFields(state, due, scheduled, start string, tags []string, today time.Time) string {
+	switch State(state) {
 	case StateDone:
 		return "done"
 	case StateCancelled:
@@ -130,19 +136,43 @@ func Bucket(a Action, today time.Time) string {
 	}
 	t := today.Format("2006-01-02")
 	switch {
-	case hasTag(a.Tags, "someday"):
+	case hasTag(tags, "someday"):
 		return "someday"
-	case hasTag(a.Tags, "waiting"):
+	case hasTag(tags, "waiting"):
 		return "waiting"
-	case a.Due != "" && a.Due < t:
+	case due != "" && due < t:
 		return "overdue"
-	case a.Due == t:
+	case due == t:
 		return "today"
-	case a.Start > t || a.Scheduled > t:
+	case start > t || scheduled > t:
 		return "scheduled"
 	default:
 		return "next"
 	}
+}
+
+// Complete flips an OPEN checkbox line's marker to 'x' and appends " ✅ <date>"
+// (unless a ✅ is already present), preserving indentation, bullet char, and the
+// rest of the line byte-for-byte. ok=false if the line is not an open action.
+func Complete(line, date string) (string, bool) {
+	m := checkboxRe.FindStringSubmatch(line)
+	if m == nil {
+		return "", false
+	}
+	switch m[1] {
+	case "x", "X", "-": // already done/cancelled
+		return "", false
+	}
+	marker := "[" + m[1] + "]"
+	idx := strings.Index(line, marker)
+	if idx < 0 {
+		return "", false
+	}
+	out := line[:idx] + "[x]" + line[idx+len(marker):]
+	if !strings.Contains(out, "✅") {
+		out = strings.TrimRight(out, " ") + " ✅ " + date
+	}
+	return out, true
 }
 
 func hasTag(tags []string, want string) bool {
