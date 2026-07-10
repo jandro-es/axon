@@ -50,6 +50,8 @@ type Profile struct {
 	Resurfacing ResurfacingConfig `yaml:"resurfacing"`
 	// Merge tunes the R7 near-duplicate merge-proposals sweep (FR-154…156).
 	Merge MergeConfig `yaml:"merge"`
+	// Actions tunes the 1.2.5 actions subsystem (T5). Optional.
+	Actions ActionsConfig `yaml:"actions"`
 	// Interop wires optional external/community MCP backends (FR-54). Optional.
 	Interop InteropConfig `yaml:"interop"`
 	// Capture tunes the capture automation (ADR-016). Optional: an absent block
@@ -404,6 +406,21 @@ type ResurfacingConfig struct {
 
 // MergeConfig tunes the near-duplicate merge-proposals sweep (R7). Zero values
 // take the documented defaults. Detection is zero-model; accept never deletes.
+// ActionsConfig tunes the 1.2.5 actions subsystem (T5). Optional.
+type ActionsConfig struct {
+	// StaleAfterDays: an open, undated action whose source note hasn't been
+	// updated in this many days is swept to the review queue. 0 → default 30.
+	StaleAfterDays int `yaml:"stale_after_days,omitempty" validate:"omitempty,min=1"`
+}
+
+// StaleAfterDaysOr returns the staleness threshold in days, default 30.
+func (a ActionsConfig) StaleAfterDaysOr() int {
+	if a.StaleAfterDays > 0 {
+		return a.StaleAfterDays
+	}
+	return 30
+}
+
 type MergeConfig struct {
 	// Threshold is the minimum mean-vector cosine for a pair to be proposed as a
 	// near-duplicate. 0 → default 0.92 (a far higher bar than resurfacing's 0.75).
