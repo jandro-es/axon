@@ -122,6 +122,11 @@ profiles:
     #       value: "env:CONFLUENCE_AUTH"      # secret ref; e.g. "Bearer <PAT>" (DC) or "Basic <base64 email:api-token>" (Cloud)
     #  Confluence page URLs are fetched via the REST API automatically once authenticated.
 
+    research:                                   # 1.3 H2 deep-research automation; personal-first, off by default
+      enabled: false                            # opt in per profile; a denied host is never fetched
+      max_fetches: 8                            # per #deep question, hard cap on seed-URL fetches
+      budget_tokens: 120_000                    # synthesis input budget (chokepoint-enforced)
+
     policy:
       data_residency: local-only
       egress_allowlist: ["localhost", "*"]    # "*" = permissive (fine for personal); Claude Code handles its own egress
@@ -147,6 +152,7 @@ profiles:
       # 03-Resources/Research Questions.md (grounded ask per question, into an
       # axon:answers block). Off by default; enable it after writing a question.
       research-questions: { enabled: false, schedule: "30 8 * * 1",      model: synthesis, budget_tokens: 150_000 }
+      deep-research:     { enabled: false, schedule: "0 6 * * 1",       model: synthesis, budget_tokens: 120_000 }
       link-suggester:    { enabled: true,  schedule: "0 1 * * *",       model: classify,  budget_tokens: 60_000 }
       memory-distill:    { enabled: true,  schedule: "0 5 * * *",       model: synthesis, budget_tokens: 120_000 }
       budget-guard:      { enabled: true,  schedule: "*/15 * * * *",    model: none,      budget_tokens: 0 }

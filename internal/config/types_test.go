@@ -19,3 +19,18 @@ func TestCaptionLangsOrDefault(t *testing.T) {
 		t.Fatalf("CaptionLangsOr() = %q, want es.*", got)
 	}
 }
+
+func TestResearchConfigDefaults(t *testing.T) {
+	if got := (ResearchConfig{}).MaxFetchesOr(); got != 8 {
+		t.Fatalf("MaxFetchesOr() = %d, want 8", got)
+	}
+	if got := (ResearchConfig{}).BudgetTokensOr(); got != 120_000 {
+		t.Fatalf("BudgetTokensOr() = %d, want 120000", got)
+	}
+	if got := (ResearchConfig{MaxFetches: 3, BudgetTokens: 5}).MaxFetchesOr(); got != 3 {
+		t.Fatalf("MaxFetchesOr override = %d, want 3", got)
+	}
+	if got := (ResearchConfig{MaxFetches: 3, BudgetTokens: 5}).BudgetTokensOr(); got != 5 {
+		t.Fatalf("BudgetTokensOr override = %d, want 5", got)
+	}
+}
