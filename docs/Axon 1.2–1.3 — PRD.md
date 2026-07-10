@@ -26,7 +26,7 @@ When retrieval surfaces sources that disagree, the answer says so: both claims c
 **Gate:** a vault seeded with two dated, conflicting notes yields an answer that flags the conflict and cites both; non-conflicting corpora are unaffected.
 
 ### R3 — Entity pages (M, 1.1 C2 carry-over) · ADR as planned
-Classify-tier extraction of people/projects into auto-maintained entity notes with `axon:mentions` blocks. Unchanged from the 1.1 plan; lands in 1.2 because R1, C3 and 1.3's meeting pipeline all want entities to link to.
+Classify-tier extraction of people/projects into auto-maintained entity notes with `axon:mentions` blocks. Unchanged from the 1.1 plan; lands in 1.2 because R1 and C3 both want entities to link to.
 **Gate:** as specified in `14-roadmap-1.1.md` (wikilink-safe accrual, prose untouched, content-hash gated).
 
 ### R4 — Project pulse (S, 1.1 C3 carry-over)
@@ -57,50 +57,30 @@ Upgrade the resurfacer from "similar old note" to a light **FSRS-flavoured revie
 
 **Release criterion 1.2:** R1 + R5 shipped, plus at least two of the carry-overs (R3, R4, R6, R7). Leftovers roll to 1.3 without renumbering.
 
-## Release 1.3 — "Reach" (outward senses & delivery)
+## Release 1.3 — "Perceive & research" (richer inputs, cited knowledge)
 
-**Theme:** capture and delivery wherever the owner is; audio and images become first-class; research comes home cited. Every outward surface is opt-in, policy-guarded, and off by default on the work profile.
+**Theme:** widen what AXON can take in — images and screenshots become understood, searchable notes; long-form video/podcast URLs become linked, cited knowledge; and questions flagged for depth trigger bounded, cited web research. Richer inputs in, cited knowledge out. Every new input surface is opt-in, policy-guarded, and off by default on the work profile.
 
-### H1 — Channel delivery & capture-back (M) · needs ADR (egress + surface)
-A **channel provider seam** (first: Telegram bot via direct HTTPS API; the seam admits ntfy/email later — WhatsApp explicitly deferred, heavier ToS/infra):
-- **Outbound:** the morning briefing (heartbeat data + calendar when H5 lands + review-queue count + budget status + project pulse) rendered channel-sized; digest/pulse notifications. Composition is no-model or classify-tier.
-- **Inbound:** messages to the bot land in `00-Inbox/` through the existing capture funnel (D1 pattern). **v1 of this surface is capture-only** — no approve/dismiss over the channel until it has proven itself (review actions stay loopback-guarded).
-- **Policy:** `api.telegram.org` must be explicitly allow-listed; redaction applies pre-send; identity-layer content never leaves except what the briefing template explicitly includes; per-profile — work default **off**.
-- **Gate:** a briefing arrives on schedule with no model call and nothing outside the template; a text/URL sent to the bot is in the inbox and triaged on the next tick; with the feature off or the domain not allow-listed, zero egress (verified by the policy tests).
+> **Scope note (2026-07-10).** 1.3 originally scoped seven slices under a "reach" theme (outward channels, voice, calendar). Five were **removed** — channel delivery & capture-back, the meeting & voice pipeline, calendar & email read-only context, continuous-capture import, and Obsidian CLI / Bases integration — to focus the release on perceiving richer inputs and researching them. The two survivors below are renumbered H1/H2. The removed outward-channel and voice work is **not currently scheduled**; it may be reconsidered in a later roadmap on its own merits. See `17-roadmap-1.3.md` for the build plan.
 
-### H2 — Meeting & voice pipeline (M) · needs ADR (audio provider seam)
-An audio file dropped in a watched folder (or captured via Shortcuts) becomes: **local transcription** (provider seam: `whisper.cpp` or Apple Speech via the ADR-013 compiled-helper pattern — no cloud STT) → speaker-aware summary + decisions + action items (synthesis tier) → written to the daily note / a meeting note with `[[person]]`/`[[project]]` links resolved against R3's entity pages → tasks into the existing roll-forward flow.
-**Gate:** a test recording yields a transcript note + linked summary with zero egress; entities link only when they resolve unambiguously (else plain text + review-queue suggestion); audio files are never deleted, only archived.
-
-### H3 — Multimodal ingestion (M)
+### H1 — Multimodal ingestion (M)
 Extend the ingestion pipeline beyond text/PDF:
 - **Images & screenshots:** OCR (ADR-026, exists) + a vision-model description/tagging pass — `ollama:<vision-model>` (Qwen-VL class) now; the Apple FM image-input tier when macOS 27 ships (fall 2026) behind the same provider seam. Screenshots become searchable, tagged source notes.
-- **YouTube/podcast:** URL → transcript (captions when available; else H2's local STT) → the standard enrich/summarise/link/embed pipeline. Closes the gap with Recall/NotebookLM.
-- **Gate:** a screenshot ingests into a retrievable note whose description was produced locally; a YouTube URL yields a cited source note; both idempotent by content hash.
+- **YouTube/podcast:** URL → transcript (native captions when available) → the standard enrich/summarise/link/embed pipeline; a caption-less URL is captured and flagged (local STT is out of 1.3 scope). Closes the gap with Recall/NotebookLM.
+- **Gate:** a screenshot ingests into a retrievable note whose description was produced locally; a YouTube URL with captions yields a cited source note; both idempotent by content hash; vision provider absent ⇒ OCR-only note, no crash.
 
-### H4 — Deep research automation (M) · needs ADR (bounded web egress)
+### H2 — Deep research automation (M) · needs ADR (bounded web egress)
 Standing research questions (1.1 A3) graduate: a question flagged `deep` triggers a **bounded, budgeted web research run** — N fetches through the existing Fetcher/egress/redaction machinery, sources ingested as regular Knowledge notes, one synthesis-tier report note with wikilink citations linked to the triggering question/project. Budget-capped per run; personal profile only by default.
 **Gate:** one flagged question produces one report + its source notes, all within the declared token/fetch budget; un-flagged questions behave exactly as in 1.1; a denied domain is never fetched.
 
-### H5 — Calendar & email read-only context (S/M)
-The 1.1 deferral, scoped tightly: **read-only ICS** (local calendar export/subscription URL) parsed without model calls to enrich the briefing and daily note ("today: 3 meetings, first at 09:30"); optionally read-only IMAP headers for a "N unread from people you know (R3 entities)" line. No sending, no OAuth-heavy Gmail API in v1 of this slice.
-**Gate:** briefing shows today's events with zero model calls and zero writes to any account; feature-off leaves no trace.
-
-### H6 — Continuous-capture import (S)
-An import adapter for Screenpipe/Limitless-style exports (the stranded-user wedge): a documented drop-folder format → daily-note appendix or Knowledge notes via the standard pipeline. Deliberately an *importer*, not a recorder — AXON does not become surveillance software.
-**Gate:** a sample export lands as linked, searchable notes; re-import is idempotent.
-
-### H7 — Obsidian CLI / Bases integration (S, stretch)
-Track the new official Obsidian CLI and Bases: auto-populate Bases-compatible properties from AXON's index (entity/type/status), and document the CLI as an automation surface once it stabilises. Watch-and-adopt, not build-ahead.
-
-**Release criterion 1.3:** H1 + H2 shipped, plus at least one of H3/H4/H5.
+**Release criterion 1.3:** H1 + H2 both shipped, each passing its acceptance gate. Either may ship first; neither depends on the removed slices.
 
 ## Cross-release requirements
 
-- Every new model call through the chokepoint; local calls budget-exempt but ledgered (ADR-015). New spend surfaces (H2 summaries, H3 vision, H4 research) get per-automation budgets and appear in the dashboard token chart split.
+- Every new model call through the chokepoint; local calls budget-exempt but ledgered (ADR-015). New spend surfaces (1.3 H1 vision, 1.3 H2 research) get per-automation budgets and appear in the dashboard token chart split.
 - Every writer wikilink-safe (managed blocks or additive); no deletes anywhere (archive only).
 - Every feature independently toggleable; all-off still runs and is useful (S8); `doctor` reports each new subsystem.
-- New egress (Telegram, research fetches) passes the policy engine: allowlist, redaction, per-profile deny-by-default on work.
+- New egress (1.3 H2 research fetches) passes the policy engine: allowlist, redaction, per-profile deny-by-default on work.
 - Each slice: brainstorm → spec → ADR → FR rows → TDD plan → live smoke (the standing cycle). PRD-level numbers here are provisional by design.
 
 ## Risks
@@ -109,16 +89,15 @@ Track the new official Obsidian CLI and Bases: auto-populate Bases-compatible pr
 |---|---|---|
 | Temporal memory over-engineered for a single user | 1.2 | R1's representation stays plain markdown + one SQLite table; Graphiti-style bi-temporal modelling explicitly out of scope — intervals + supersedence only |
 | Local-model quality regresses silently across model updates | 1.2 | Evals re-run on model change (R5); promotion is per task family, revocable by `doctor` |
-| Channel surface leaks personal data | 1.3 | Template-only briefings, redaction pre-send, allowlist egress, capture-only inbound, work-profile off |
-| Apple FM image input slips past fall 2026 | 1.3 | H3 ships on Ollama vision first; Apple FM is an upgrade behind the same seam |
-| STT quality on real meeting audio | 1.3 | Provider seam allows whisper.cpp model-size selection; summary marked tentative below a confidence floor |
+| Apple FM image input slips past fall 2026 | 1.3 | H1 ships on Ollama vision first; Apple FM is an upgrade behind the same seam |
+| Research run leaks data or over-spends | 1.3 | Redaction pre-send, allowlist egress, per-run fetch/token budget, personal-profile-only default, work-profile off |
 | Scope: two releases planned while 1.1 unfinished | both | Nothing starts before 1.1's release criterion; carry-overs keep their existing specs; this PRD feeds the standing design cycle rather than bypassing it |
 
 ## Assumptions & open questions (owner review)
 
-1. **Channel choice:** Telegram first (cleanest bot API, no business verification). Acceptable, or prefer ntfy/email-only to avoid any third-party messenger?
-2. **Approve-from-channel** deliberately excluded from H1 v1 — agree, or is remote review-queue action a must-have?
-3. **STT provider default:** whisper.cpp (portable, model-size choice) vs Apple Speech helper (zero-install, macOS-only). Plan assumes whisper.cpp default with Apple as the macOS fast path.
-4. **H5 scope:** is read-only ICS enough, or is Gmail/Google Calendar OAuth worth its complexity in 1.3? Plan assumes ICS-only.
-5. **R5 ambition:** is ≥50% of routine-tier calls local the right first target, or push for routine+digest synthesis too?
-6. **Sequencing:** R1 (memory) before R5 (local tier) is the plan's order — flip if budget pressure bites before memory pain does.
+*(1.2's open questions are resolved — 1.2 shipped 2026-07-10. The questions below are the live 1.3 ones after the 2026-07-10 rescope.)*
+
+1. **Vision seam (H1):** does the vision-model pass warrant its own ADR, or does it ride ADR-013 (compiled helper) + ADR-026 (OCR provider)? Decide once the Ollama-vision call shape is prototyped.
+2. **Image description trigger (H1):** always-on description for every image, or OCR-first-then-vision-only-if-text-is-sparse (the ADR-026 fallback shape)?
+3. **Research fetch strategy (H2):** start with direct allow-listed fetches on the existing egress engine, or introduce a search-API provider seam now? Plan assumes direct allow-listed fetches first; a search provider is a later seam.
+4. **Research budget defaults (H2):** what per-run fetch count and token ceiling ship as defaults, and is personal-profile-only the right default gate?
