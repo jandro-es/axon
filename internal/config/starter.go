@@ -64,6 +64,9 @@ profiles:
 
     ingestion:
       ocr: off                                # off | apple (macOS on-device Vision) | tesseract (pdftoppm+tesseract) — OCR fallback for scanned PDFs
+      vision: off                             # off | ollama:<vision-model> (e.g. ollama:qwen2.5vl) | apple (macOS 27+) — local image description when OCR is sparse
+      media_hosts: []                         # extra hosts auto-classified as caption-bearing media (YouTube family is built in)
+      caption_langs: "en.*"                   # yt-dlp --sub-langs selector for media caption fetch
 
     policy:
       data_residency: local-only

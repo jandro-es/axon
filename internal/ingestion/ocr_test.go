@@ -18,6 +18,10 @@ func (f *fakeOCR) Recognize(ctx context.Context, pdf []byte) (string, error) {
 	f.called++
 	return f.text, f.err
 }
+func (f *fakeOCR) RecognizeImage(ctx context.Context, img []byte, mime string) (string, error) {
+	f.called++
+	return f.text, f.err
+}
 
 func TestOCRFallbackRecoversEmptyBody(t *testing.T) {
 	f := &fakeOCR{text: strings.Repeat("recovered text ", 20)}

@@ -115,6 +115,125 @@ func TestIngestLocalFileProducesRetrievableNote(t *testing.T) {
 	}
 }
 
+type fakeCaptioner struct {
+	transcript string
+	title      string
+	err        error
+}
+
+func (f *fakeCaptioner) Fetch(ctx context.Context, url string) (string, string, error) {
+	return f.transcript, f.title, f.err
+}
+
+type countingEnricher struct{ calls int }
+
+func (c *countingEnricher) Enrich(ctx context.Context, in EnrichInput) (Enrichment, error) {
+	c.calls++
+	return Enrichment{Title: in.Title, Kind: "heuristic"}, nil
+}
+
+func TestIngestMediaWritesTranscriptNote(t *testing.T) {
+	p, _, _ := newTestPipeline(t, openPolicy())
+	p.Captioner = &fakeCaptioner{transcript: strings.Repeat("spoken sentence here. ", 12), title: "Great Talk"}
+	ctx := context.Background()
+
+	res, err := p.Ingest(ctx, "https://youtu.be/abc", IngestOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != "ok" && res.Status != "redacted" {
+		t.Fatalf("status = %q", res.Status)
+	}
+	note, err := p.Vault.Read(ctx, res.NotePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(note.Body, "spoken sentence here") {
+		t.Fatalf("transcript missing from note:\n%s", note.Body)
+	}
+}
+
+func TestIngestMediaNoCaptionsIsCaptured(t *testing.T) {
+	p, _, _ := newTestPipeline(t, openPolicy())
+	enr := &countingEnricher{}
+	p.Enricher = enr
+	p.Captioner = &fakeCaptioner{err: ErrNoCaptions}
+	ctx := context.Background()
+
+	res, err := p.Ingest(ctx, "https://youtu.be/abc", IngestOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != "captured" {
+		t.Fatalf("status = %q, want captured", res.Status)
+	}
+	if !strings.HasPrefix(res.NotePath, "00-Inbox/") {
+		t.Fatalf("captured note should land in 00-Inbox, got %q", res.NotePath)
+	}
+	if enr.calls != 0 {
+		t.Fatalf("captured path must make zero model/enrich calls, calls=%d", enr.calls)
+	}
+	note, err := p.Vault.Read(ctx, res.NotePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(note.Body, "#needs-captions") {
+		t.Fatalf("captured note missing flag:\n%s", note.Body)
+	}
+}
+
+func TestIngestImageWritesNoteWithEmbed(t *testing.T) {
+	p, _, _ := newTestPipeline(t, openPolicy())
+	p.Vision = &fakeVision{text: strings.Repeat("a screenshot of a dashboard ", 8)}
+	p.OCR = &fakeOCR{text: ""} // sparse → vision used
+	ctx := context.Background()
+
+	dir := t.TempDir()
+	imgPath := filepath.Join(dir, "shot.png")
+	if err := os.WriteFile(imgPath, []byte("PNGDATA-unique-1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := p.Ingest(ctx, imgPath, IngestOptions{AllowLocalFiles: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != "ok" && res.Status != "redacted" {
+		t.Fatalf("status = %q", res.Status)
+	}
+	note, err := p.Vault.Read(ctx, res.NotePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(note.Body, "![[attachments/") {
+		t.Fatalf("note missing image embed:\n%s", note.Body)
+	}
+	if !p.Vault.Exists(AttachmentsDir + "/" + config.ContentHash("PNGDATA-unique-1") + ".png") {
+		t.Fatal("attachment file not archived")
+	}
+
+	// Re-ingest same bytes → skipped (idempotent by image-byte hash).
+	res2, err := p.Ingest(ctx, imgPath, IngestOptions{AllowLocalFiles: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res2.Status != "skipped" {
+		t.Fatalf("re-ingest status = %q, want skipped", res2.Status)
+	}
+}
+
+func TestIngestImageAgentPathRefused(t *testing.T) {
+	p, _, _ := newTestPipeline(t, openPolicy())
+	dir := t.TempDir()
+	imgPath := filepath.Join(dir, "shot.png")
+	if err := os.WriteFile(imgPath, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Ingest(context.Background(), imgPath, IngestOptions{AllowLocalFiles: false}); err == nil {
+		t.Fatal("agent-driven image ingestion must be refused")
+	}
+}
+
 func TestIngestSecondSourceGetsGroundedSuggestion(t *testing.T) {
 	p, _, _ := newTestPipeline(t, openPolicy())
 	dir := t.TempDir()

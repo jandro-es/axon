@@ -113,6 +113,9 @@ profiles:
     ingestion:
       ocr: off                                # off | apple (macOS on-device Vision) | tesseract (needs pdftoppm+tesseract) — OCR fallback for scanned PDFs
       # ocr_helper: "~/.axon/bin/axon-apple-ocr"  # apple: override the compiled OCR helper path
+      vision: off                             # off | ollama:<vision-model> (e.g. ollama:qwen2.5vl) | apple (macOS 27+) — local image description when OCR text is sparse
+      media_hosts: []                         # extra hosts auto-classified as caption-bearing media (YouTube family built in)
+      caption_langs: "en.*"                   # yt-dlp --sub-langs selector for media caption fetch (yt-dlp detected; absent ⇒ media captured & flagged)
       # auth:                                 # per-domain credentials for SSO'd sources (Confluence, wikis)
     #     - domain: acme.atlassian.net        # applies to this domain (+ subdomains) ONLY — never follows redirects elsewhere
     #       header: Authorization             # default; any header name works (e.g. X-Api-Key)

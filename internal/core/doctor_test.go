@@ -51,6 +51,41 @@ func findCheck(r DoctorReport, name string) (Check, bool) {
 	return Check{}, false
 }
 
+func cfgWithIngestion(ing config.IngestionConfig) *config.Config {
+	return &config.Config{
+		ActiveProfile: "personal",
+		Profiles: map[string]config.Profile{
+			"personal": {Claude: config.ClaudeConfig{AuthMode: "subscription"}, Ingestion: ing},
+		},
+	}
+}
+
+func TestDoctorVisionOff(t *testing.T) {
+	withStubs(t, map[string]string{}, nil)
+	r := Doctor(cfgWithIngestion(config.IngestionConfig{}), "personal")
+	c, ok := findCheck(r, "vision")
+	if !ok || c.Status != StatusOK || !strings.Contains(c.Detail, "off") {
+		t.Fatalf("vision off check = %+v ok=%v", c, ok)
+	}
+}
+
+func TestDoctorVisionAppleWarns(t *testing.T) {
+	withStubs(t, map[string]string{}, nil)
+	r := Doctor(cfgWithIngestion(config.IngestionConfig{Vision: "apple"}), "personal")
+	c, ok := findCheck(r, "vision")
+	if !ok || c.Status != StatusWarn || !strings.Contains(c.Detail, "macOS 27") {
+		t.Fatalf("vision apple check = %+v ok=%v", c, ok)
+	}
+}
+
+func TestDoctorMediaCheckPresent(t *testing.T) {
+	withStubs(t, map[string]string{}, nil)
+	r := Doctor(cfgWithIngestion(config.IngestionConfig{}), "personal")
+	if _, ok := findCheck(r, "media"); !ok {
+		t.Fatal("media check missing")
+	}
+}
+
 func TestDoctorStrayAPIKeyWarnsUnderSubscription(t *testing.T) {
 	for _, mode := range []string{"subscription", "enterprise"} {
 		t.Run(mode, func(t *testing.T) {

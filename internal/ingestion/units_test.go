@@ -95,24 +95,6 @@ func TestNeutralizeDelimiters(t *testing.T) {
 	}
 }
 
-func TestClassifyInput(t *testing.T) {
-	tests := []struct {
-		arg  string
-		kind InputKind
-	}{
-		{"https://example.com/x", KindURL},
-		{"http://example.com", KindURL},
-		{"/tmp/notes.md", KindFile},
-		{"./paper.pdf", KindPDF},
-		{"file:///abs/doc.txt", KindFile},
-	}
-	for _, tt := range tests {
-		if got := ClassifyInput(tt.arg); got.Kind != tt.kind {
-			t.Errorf("ClassifyInput(%q).Kind = %q, want %q", tt.arg, got.Kind, tt.kind)
-		}
-	}
-}
-
 func TestChunkText(t *testing.T) {
 	// Build text well over one chunk so we get multiple overlapping chunks.
 	var sb strings.Builder

@@ -104,6 +104,9 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 			if p.Ingestion.OCRMode() != "off" {
 				checks = append(checks, ocrCheck(p))
 			}
+			// 4c'. Local vision provider (ADR-035) + media caption tooling (advisory).
+			checks = append(checks, visionCheck(p))
+			checks = append(checks, mediaCheck(p))
 			// 4d. Local reranker prerequisite, only when retrieval.rerank is set.
 			if p.Retrieval.RerankMode() != "off" {
 				checks = append(checks, rerankCheck(p))
@@ -200,6 +203,48 @@ func ocrCheck(p config.Profile) Check {
 	default:
 		return Check{name, StatusOK, "OCR off"}
 	}
+}
+
+// visionCheck verifies the configured local vision provider (ADR-035). Advisory
+// and tolerant — a missing prerequisite warns (images fall back to OCR-only),
+// never fails doctor. Mirrors rerankCheck.
+func visionCheck(p config.Profile) Check {
+	const name = "vision"
+	mode := p.Ingestion.VisionMode()
+	switch {
+	case mode == "off":
+		return Check{name, StatusOK, "vision off"}
+	case mode == "apple":
+		return Check{name, StatusWarn, `vision provider "apple" requires macOS 27 on-device image input (not yet available) — use ollama:<model> or off`}
+	case strings.HasPrefix(mode, "ollama:"):
+		model := strings.TrimPrefix(mode, "ollama:")
+		host := p.Embeddings.Host
+		if host == "" {
+			host = embeddings.DefaultOllamaHost
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if !ollamaReachable(ctx, host) {
+			return Check{name, StatusWarn, fmt.Sprintf("vision Ollama not reachable at %s — start `ollama serve` (images fall back to OCR-only)", host)}
+		}
+		if !ollamaModelPresent(ctx, host, model) {
+			return Check{name, StatusWarn, fmt.Sprintf("vision model %q not pulled — run `ollama pull %s`", model, model)}
+		}
+		return Check{name, StatusOK, "vision ready: " + mode}
+	default:
+		return Check{name, StatusWarn, fmt.Sprintf("ingestion.vision %q not recognised — use off, ollama:<model>, or apple", mode)}
+	}
+}
+
+// mediaCheck reports whether yt-dlp is available for media caption ingestion.
+// Advisory — absent yt-dlp means media URLs are captured and flagged, not
+// ingested; it never fails doctor.
+func mediaCheck(_ config.Profile) Check {
+	const name = "media"
+	if _, err := lookPath("yt-dlp"); err != nil {
+		return Check{name, StatusWarn, "yt-dlp not found on PATH — media URLs will be captured and flagged (install yt-dlp for transcript ingestion)"}
+	}
+	return Check{name, StatusOK, "media caption ingestion ready (yt-dlp present)"}
 }
 
 // rerankCheck verifies the configured local reranker's prerequisite: a

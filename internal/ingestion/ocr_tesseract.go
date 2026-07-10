@@ -64,6 +64,28 @@ func (t *TesseractOCR) Recognize(ctx context.Context, pdf []byte) (string, error
 	return strings.Join(pages, "\n\n"), nil
 }
 
+// RecognizeImage writes the image to a temp file (keeping its extension) and
+// OCRs it directly — no rasterisation, since it is already a raster image.
+func (t *TesseractOCR) RecognizeImage(ctx context.Context, img []byte, mime string) (string, error) {
+	if _, err := t.lookup("tesseract"); err != nil {
+		return "", fmt.Errorf("tesseract OCR needs %q on PATH (install tesseract): %w", "tesseract", err)
+	}
+	dir, err := os.MkdirTemp(t.tmpRoot, "axon-ocr-img-*")
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	imgPath := filepath.Join(dir, "img"+extFromMime(mime))
+	if err := os.WriteFile(imgPath, img, 0o600); err != nil {
+		return "", err
+	}
+	txt, err := t.ocrImage(ctx, imgPath)
+	if err != nil {
+		return "", fmt.Errorf("tesseract OCR: recognise image: %w", err)
+	}
+	return strings.TrimSpace(txt), nil
+}
+
 // rasterizePDF renders each page to a PNG at ~200 dpi and returns the image
 // paths in page order.
 func rasterizePDF(ctx context.Context, pdfPath, outDir string) ([]string, error) {

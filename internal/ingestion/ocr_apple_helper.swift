@@ -7,6 +7,7 @@ import Foundation
 import PDFKit
 import Vision
 import CoreGraphics
+import ImageIO
 
 struct Response: Encodable { let pages: [String] }
 
@@ -19,6 +20,16 @@ let args = CommandLine.arguments
 if args.contains("--check") {
     _ = VNRecognizeTextRequest()
     print("vision ok")
+    exit(0)
+}
+if args.count >= 3 && args[1] == "--image" {
+    let path = args[2]
+    guard let src = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil),
+          let cg = CGImageSourceCreateImageAtIndex(src, 0, nil) else {
+        fail("cannot open image at \(path)", code: 3)
+    }
+    let data = try JSONEncoder().encode(Response(pages: [recognize(cg)]))
+    FileHandle.standardOutput.write(data)
     exit(0)
 }
 guard args.count >= 2 else { fail("usage: axon-apple-ocr <pdf-path>", code: 2) }

@@ -171,11 +171,13 @@ func (d *profileDeps) buildSearcher() *search.Searcher {
 func (d *profileDeps) buildServices(bus *events.Bus) services {
 	searcher := d.buildSearcher()
 	mgr := tokens.NewWithRouter(d.db, d.agentRouter(), searcher, bus, managerConfig(d.name, d.profile, d.cfg))
-	ocr, _ := ingestion.OCRFor(d.profile.Ingestion, runtime.GOOS) // off/misconfig → nil; doctor surfaces it
+	ocr, _ := ingestion.OCRFor(d.profile.Ingestion, runtime.GOOS)       // off/misconfig → nil; doctor surfaces it
+	vision, _ := ingestion.VisionFor(d.profile.Ingestion, runtime.GOOS) // off/misconfig → nil; doctor surfaces it
 	pipeline := &ingestion.Pipeline{
 		Vault: d.vault, DB: d.db, Embedder: d.embedder,
 		Enricher: ingestion.Heuristic{}, Fetcher: ingestion.NewHTTPFetcher(d.profile.Policy, d.profile.Ingestion.Auth...),
 		Policy: d.profile.Policy, Profile: d.name, Bus: bus, OCR: ocr,
+		Vision: vision, MediaHosts: d.profile.Ingestion.MediaHosts, CaptionLangs: d.profile.Ingestion.CaptionLangs,
 	}
 	engine := automations.NewEngine(automations.EngineDeps{
 		Profile: d.name, Config: d.profile, DB: d.db, Vault: d.vault,

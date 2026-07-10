@@ -17,6 +17,10 @@ type Document struct {
 	ContentType string
 	Body        []byte
 	FetchedAt   time.Time
+	// Title is the source's title when the reader knows it out of band (media
+	// captions via yt-dlp --print title). Empty for HTML/PDF/file readers, which
+	// derive the title during extraction.
+	Title string
 	// ETag / LastModified are the response's cache validators (RFC 9110
 	// §13), captured so recurring fetchers (feed polling) can make the
 	// next request conditional. One-shot callers ignore them.
