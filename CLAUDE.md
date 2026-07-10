@@ -20,6 +20,7 @@ Detail is in `@docs/`. Do not duplicate it here; reference it.
 - `@docs/11-build-roadmap.md` — phased plan with acceptance gates. **Build in this order.**
 - `@docs/14-roadmap-1.1.md` — the 1.1 plan (shipped 2026-07-06; FR-108…133, ADR-023…027).
 - `@docs/15-roadmap-1.2.md` — the 1.2 roadmap ("remember & reason": R1 temporal memory, R2/R5/R7/R8/R9; **shipped 2026-07-10; FR-134…156, ADR-028…032**).
+- `@docs/16-roadmap-1.2.5.md` — the 1.2.5 plan ("act on it": GTD actions — T1 action index, T2 consolidation, T3 dashboard Actions tab, T4 MCP/session surfaces, T5 stale sweep, T6 opt-in extraction; provisional FR-157…170, ADR-033/034).
 
 ## Two cardinal rules (never violate)
 
