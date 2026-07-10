@@ -60,7 +60,14 @@ token frugality is a feature).
 
 ## Phase T — Actions *(build in this order)*
 
-### T1 — Action index: grammar, derived table, CLI (M) · provisional FR-157/158/159, ADR-033
+### T1 — Action index: grammar, derived table, CLI (M) · FR-157/158/159, ADR-033 ✅ **BUILT 2026-07-10**
+**Shipped:** the pure leaf `internal/actions` (`Parse`/`Extract`/`Hash`/`Bucket`)
+is the single task parser; a derived disposable `actions` table (migration
+`0007`) is rebuilt in the reindex transaction (byte-equivalent, S9); `axon
+actions` lists/filters/counts with `--json`; advisory `doctor` `actions` check.
+All three build decisions were taken as recommended (index all-but-system-dirs
+with `04-Archive/` flagged; tolerant 3-state parsing; one-bucket-by-precedence +
+raw fields). Read-only, zero model calls. Final IDs FR-157/158/159, ADR-033.
 **Build:** the foundation everything else reads. A tolerant parser for the
 task grammar (FR-157): checkbox state, due/scheduled/start/completed dates,
 priority, `#someday`/`#waiting`/`@context`/tags, the nearest enclosing
