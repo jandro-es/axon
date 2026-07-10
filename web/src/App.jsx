@@ -39,6 +39,7 @@ const SSE_KINDS = [
   'ingest.embed.fail', 'ingest.embed.skip', 'ingest.review_queue.fail',
   'token.ledger', 'token.deny', 'token.defer', 'token.downgrade', 'token.error',
   'review.accept', 'review.dismiss',
+  'action.done',
 ]
 
 function useSSE() {
@@ -674,6 +675,91 @@ function getRelated(path) {
   })
 }
 
+function getActions(nonce) {
+  return fetch('/api/actions?n=' + nonce, { headers: { 'X-Axon-Actions': '1' } })
+    .then(async (r) => { if (!r.ok) throw new Error(await r.text()); return r.json() })
+}
+function postComplete(path, hash) {
+  return fetch('/api/actions/complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Axon-Actions': '1' },
+    body: JSON.stringify({ path, hash }),
+  }).then(async (r) => { if (!r.ok) throw new Error(await r.text()); return r.json() })
+}
+
+const BUCKET_ORDER = ['overdue', 'today', 'scheduled', 'next', 'waiting', 'someday']
+const BUCKET_LABEL = { overdue: '🔴 Overdue', today: '📅 Today', scheduled: '⏳ Scheduled', next: '▶ Next', waiting: '🕓 Waiting', someday: '💭 Someday' }
+
+function ActionsTab() {
+  const [nonce, setNonce] = useState(0)
+  const [data, setData] = useState(null)
+  const [err, setErr] = useState(null)
+  const [busy, setBusy] = useState(null)
+
+  useEffect(() => {
+    let live = true
+    getActions(nonce)
+      .then((d) => { if (live) { setData(d); setErr(null) } })
+      .catch((e) => { if (live) setErr(String(e.message || e)) })
+    return () => { live = false }
+  }, [nonce])
+
+  const complete = (path, hash) => {
+    setBusy(hash)
+    postComplete(path, hash)
+      .catch((e) => setErr(String(e.message || e)))
+      .finally(() => { setBusy(null); setNonce((n) => n + 1) })
+  }
+
+  if (err) return <Card title="Actions" span="span-12"><Empty>{err}</Empty></Card>
+  if (!data) return <Card title="Actions" span="span-12"><Empty>Loading…</Empty></Card>
+
+  const c = data.counts || {}
+  const open = (data.actions || []).filter((a) => a.state === 'open' && !a.archived)
+  const byBucket = (b) => open.filter((a) => a.bucket === b)
+
+  return (
+    <>
+      <Card title="Actions" meta={`${num(c.open || 0)} open`} span="span-8">
+        <div className="tiles">
+          <Tile label="Open" value={num(c.open || 0)} accent />
+          <Tile label="Overdue" value={num(c.overdue || 0)} />
+          <Tile label="Today" value={num(c.today || 0)} />
+          <Tile label="Done (7d)" value={num(c.done7 || 0)} />
+        </div>
+      </Card>
+      <Card title="Completions" meta="last 30 days" span="span-4">
+        <ResponsiveContainer width="100%" height={140}>
+          <AreaChart data={data.trend || []} margin={{ top: 6, right: 6, bottom: 0, left: -12 }}>
+            <defs><linearGradient id="gDone" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={SEMA.ok} stopOpacity={0.5} /><stop offset="100%" stopColor={SEMA.ok} stopOpacity={0.02} /></linearGradient></defs>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="day" tickFormatter={shortDay} fontSize={10} tickLine={false} axisLine={false} minTickGap={28} />
+            <YAxis allowDecimals={false} fontSize={10} tickLine={false} axisLine={false} width={26} />
+            <Tooltip content={<CustomTooltip />} labelFormatter={shortDay} />
+            <Area type="monotone" dataKey="done" name="completed" stroke={SEMA.ok} strokeWidth={1.5} fill="url(#gDone)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </Card>
+      <Card title="Open actions" meta={`${open.length} shown`} span="span-12">
+        {open.length === 0 && <Empty>Nothing open — inbox zero on actions. 🎉</Empty>}
+        {BUCKET_ORDER.filter((b) => byBucket(b).length > 0).map((b) => (
+          <div key={b} className="action-group">
+            <div className="action-bucket">{BUCKET_LABEL[b]}</div>
+            <ul className="related-list">
+              {byBucket(b).map((a) => (
+                <li key={a.hash + a.source_path + a.line_no}>
+                  <span className="related-path">{a.text}{a.due ? ` · 📅 ${a.due}` : ''} <em>{a.source_path}</em></span>
+                  <button disabled={busy === a.hash} onClick={() => complete(a.source_path, a.hash)}>{busy === a.hash ? '…' : 'done'}</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </Card>
+    </>
+  )
+}
+
 function RelatedTab({ span }) {
   const [p, setP] = useState('')
   const [busy, setBusy] = useState(false)
@@ -792,7 +878,7 @@ function ReviewTab({ span }) {
 
 /* ── app shell ───────────────────────────────────────────────────────────── */
 const TABS = [
-  ['overview', 'Overview'], ['tokens', 'Tokens'], ['automations', 'Automations'], ['review', 'Review'],
+  ['overview', 'Overview'], ['tokens', 'Tokens'], ['automations', 'Automations'], ['review', 'Review'], ['actions', 'Actions'],
   ['ask', 'Ask'], ['related', 'Related'], ['knowledge', 'Knowledge'], ['graph', 'Graph'], ['activity', 'Activity'],
 ]
 
@@ -834,7 +920,7 @@ export default function App() {
       </header>
 
       <nav className="nav">
-        {TABS.filter(([id]) => (id !== 'ask' || health?.ask_enabled !== false) && (id !== 'related' || health?.related_enabled !== false)).map(([id, label]) => (
+        {TABS.filter(([id]) => (id !== 'ask' || health?.ask_enabled !== false) && (id !== 'related' || health?.related_enabled !== false) && (id !== 'actions' || health?.actions_enabled !== false)).map(([id, label]) => (
           <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>{label}{id === 'review' && reviewMeta?.pending ? ` · ${reviewMeta.pending}` : ''}</button>
         ))}
       </nav>
@@ -885,6 +971,7 @@ export default function App() {
           {tab === 'review' && <ReviewTab span="span-12" />}
           {tab === 'ask' && <AskTab span="span-12" />}
           {tab === 'related' && <RelatedTab span="span-12" />}
+          {tab === 'actions' && <ActionsTab span="span-12" />}
 
           {tab === 'graph' && <GraphCard graph={graph} simEdges={simEdges} onToggleSim={setSimEdges} span="span-12" />}
 
