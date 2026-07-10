@@ -18,6 +18,45 @@ import (
 	"github.com/jandro-es/axon/internal/vault"
 )
 
+func TestSessionStartActionsPointer(t *testing.T) {
+	ctx := context.Background()
+	deps, fake := testDeps(t)
+
+	if got := sessionContext(t, deps); strings.Contains(got, "→ [[01-Projects/Actions.md]]") {
+		t.Errorf("no-actions vault should have no pointer:\n%s", got)
+	}
+
+	if err := db.ReplaceActions(ctx, deps.DB, []db.Action{
+		{Hash: "h1", SourcePath: "01-Projects/w.md", Text: "overdue", State: "open", Checkbox: " ", Due: "2000-01-01", Updated: "u"},
+		{Hash: "h2", SourcePath: "01-Projects/w.md", Text: "today", State: "open", Checkbox: " ", Due: time.Now().Format("2006-01-02"), Updated: "u"},
+		{Hash: "h3", SourcePath: "01-Projects/w.md", Text: "loose", State: "open", Checkbox: " ", Updated: "u"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got := sessionContext(t, deps)
+	if !strings.Contains(got, "- Actions: 3 open (1 due today, 1 overdue) → [[01-Projects/Actions.md]]") {
+		t.Errorf("actions pointer wrong:\n%s", got)
+	}
+	if fake.CallCount() != 0 {
+		t.Errorf("pointer must make no model call, got %d", fake.CallCount())
+	}
+}
+
+func TestSessionStartActionsPointerUngatedByInject(t *testing.T) {
+	ctx := context.Background()
+	deps, _ := testDeps(t)
+	off := false
+	deps.Memory.Inject = &off
+	if err := db.ReplaceActions(ctx, deps.DB, []db.Action{
+		{Hash: "h1", SourcePath: "w.md", Text: "x", State: "open", Checkbox: " ", Updated: "u"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionContext(t, deps); !strings.Contains(got, "→ [[01-Projects/Actions.md]]") {
+		t.Errorf("actions pointer should show regardless of memory.inject:\n%s", got)
+	}
+}
+
 func testDeps(t *testing.T) (Deps, *agent.Fake) {
 	t.Helper()
 	d, err := db.Open(db.MemoryDSN)
