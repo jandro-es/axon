@@ -6,12 +6,21 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jandro-es/axon/internal/actions"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/identity"
 	"github.com/jandro-es/axon/internal/ingestion"
 	"github.com/jandro-es/axon/internal/vault"
 )
+
+// parsedNote holds a note's derived row, links and raw body during a reindex
+// pass — shared by the note-mirror rebuild and the derived action index.
+type parsedNote struct {
+	row   db.NoteRow
+	links []vault.Link
+	body  string
+}
 
 // ReindexResult summarises a reindex for the caller and the init summary.
 type ReindexResult struct {
@@ -45,12 +54,7 @@ func Reindex(ctx context.Context, v *vault.FS, sqlDB *sql.DB) (ReindexResult, er
 
 	// Read and parse every note up front (Phase 1 vaults are small), so we can
 	// resolve link targets against the full set of note ids in a second pass.
-	type parsed struct {
-		row   db.NoteRow
-		links []vault.Link
-		body  string
-	}
-	notes := make([]*parsed, 0, len(paths))
+	notes := make([]*parsedNote, 0, len(paths))
 	present := make(map[string]bool, len(paths))
 	for _, p := range paths {
 		n, err := v.Read(ctx, p)
@@ -58,7 +62,7 @@ func Reindex(ctx context.Context, v *vault.FS, sqlDB *sql.DB) (ReindexResult, er
 			return res, err
 		}
 		present[p] = true
-		notes = append(notes, &parsed{
+		notes = append(notes, &parsedNote{
 			row:   noteRow(p, n),
 			links: vault.ParseLinks(n.Body),
 			body:  n.Body,
@@ -144,6 +148,12 @@ func Reindex(ctx context.Context, v *vault.FS, sqlDB *sql.DB) (ReindexResult, er
 		}
 	}
 
+	// Rebuild the derived action index from the checkbox lines in every note
+	// (ADR-033). Read-only Markdown→DB, in the same tx (S9).
+	if err := rebuildActions(ctx, tx, notes, nowStamp()); err != nil {
+		return res, err
+	}
+
 	// Rebuild the derived memory fact index from the axon:memory block (ADR-028).
 	// Read-only Markdown→DB: this NEVER writes to the vault (S9).
 	if err := rebuildMemoryFacts(ctx, v, tx); err != nil {
@@ -187,6 +197,29 @@ func rechunkNote(ctx context.Context, tx db.DBTX, noteID int64, body string) (bo
 		}
 	}
 	return len(chunks) > 0, nil
+}
+
+// rebuildActions replaces the derived actions index from the checkbox lines in
+// every note (ADR-033). Runs inside the reindex tx: a failure rolls back with
+// the rest, leaving the prior index intact (S9). Read-only over Markdown — no
+// vault write, no model call. Rows land in note order (sorted paths) then line
+// order, so the table is deterministic.
+func rebuildActions(ctx context.Context, tx db.DBTX, notes []*parsedNote, now string) error {
+	var rows []db.Action
+	for _, n := range notes {
+		archived := strings.HasPrefix(n.row.Path, "04-Archive/")
+		for _, a := range actions.Extract(n.row.Path, n.body, archived) {
+			rows = append(rows, db.Action{
+				Hash: a.Hash(), SourcePath: a.SourcePath, LineNo: a.LineNo,
+				Section: a.Section, Text: a.Text, Raw: a.Raw,
+				State: string(a.State), Checkbox: a.Checkbox, Priority: a.Priority,
+				Due: a.Due, Scheduled: a.Scheduled, Start: a.Start, DoneDate: a.DoneDate,
+				Project: a.Project, Contexts: a.Contexts, Tags: a.Tags,
+				Archived: a.Archived, Updated: now,
+			})
+		}
+	}
+	return db.ReplaceActions(ctx, tx, rows)
 }
 
 // rebuildMemoryFacts projects every axon:memory block line into the derived
