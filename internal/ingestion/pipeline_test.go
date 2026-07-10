@@ -115,6 +115,73 @@ func TestIngestLocalFileProducesRetrievableNote(t *testing.T) {
 	}
 }
 
+type fakeCaptioner struct {
+	transcript string
+	title      string
+	err        error
+}
+
+func (f *fakeCaptioner) Fetch(ctx context.Context, url string) (string, string, error) {
+	return f.transcript, f.title, f.err
+}
+
+type countingEnricher struct{ calls int }
+
+func (c *countingEnricher) Enrich(ctx context.Context, in EnrichInput) (Enrichment, error) {
+	c.calls++
+	return Enrichment{Title: in.Title, Kind: "heuristic"}, nil
+}
+
+func TestIngestMediaWritesTranscriptNote(t *testing.T) {
+	p, _, _ := newTestPipeline(t, openPolicy())
+	p.Captioner = &fakeCaptioner{transcript: strings.Repeat("spoken sentence here. ", 12), title: "Great Talk"}
+	ctx := context.Background()
+
+	res, err := p.Ingest(ctx, "https://youtu.be/abc", IngestOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != "ok" && res.Status != "redacted" {
+		t.Fatalf("status = %q", res.Status)
+	}
+	note, err := p.Vault.Read(ctx, res.NotePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(note.Body, "spoken sentence here") {
+		t.Fatalf("transcript missing from note:\n%s", note.Body)
+	}
+}
+
+func TestIngestMediaNoCaptionsIsCaptured(t *testing.T) {
+	p, _, _ := newTestPipeline(t, openPolicy())
+	enr := &countingEnricher{}
+	p.Enricher = enr
+	p.Captioner = &fakeCaptioner{err: ErrNoCaptions}
+	ctx := context.Background()
+
+	res, err := p.Ingest(ctx, "https://youtu.be/abc", IngestOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != "captured" {
+		t.Fatalf("status = %q, want captured", res.Status)
+	}
+	if !strings.HasPrefix(res.NotePath, "00-Inbox/") {
+		t.Fatalf("captured note should land in 00-Inbox, got %q", res.NotePath)
+	}
+	if enr.calls != 0 {
+		t.Fatalf("captured path must make zero model/enrich calls, calls=%d", enr.calls)
+	}
+	note, err := p.Vault.Read(ctx, res.NotePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(note.Body, "#needs-captions") {
+		t.Fatalf("captured note missing flag:\n%s", note.Body)
+	}
+}
+
 func TestIngestImageWritesNoteWithEmbed(t *testing.T) {
 	p, _, _ := newTestPipeline(t, openPolicy())
 	p.Vision = &fakeVision{text: strings.Repeat("a screenshot of a dashboard ", 8)}

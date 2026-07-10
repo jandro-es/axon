@@ -3,6 +3,7 @@ package ingestion
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -46,6 +47,12 @@ type Pipeline struct {
 	// vision is off. Local perception primitive (ADR-035): budget-exempt, not
 	// chokepoint-routed.
 	Vision Vision
+	// Captioner fetches transcripts for KindMedia URLs. nil builds a default
+	// yt-dlp fetcher on demand. MediaHosts extends the built-in media host set;
+	// CaptionLangs is the yt-dlp --sub-langs selector.
+	Captioner    Captioner
+	MediaHosts   []string
+	CaptionLangs string
 }
 
 // IngestOptions tune a single run.
@@ -57,6 +64,9 @@ type IngestOptions struct {
 	// (the MCP knowledge_ingest tool), so a prompt-injected agent cannot read
 	// arbitrary host files (e.g. ~/.ssh/id_rsa) into the vault and the model.
 	AllowLocalFiles bool
+	// ForceMedia routes ANY http(s) URL through the caption path (the CLI
+	// `--media` flag), covering podcasts/Vimeo without host-sniffing.
+	ForceMedia bool
 }
 
 // IngestResult summarises a run for the CLI/MCP and the event stream.
@@ -83,14 +93,14 @@ type IngestResult struct {
 // Ingest runs the full pipeline for one input. Errors are returned and also
 // reflected as Status="failed"; a denied domain fails before any fetch.
 func (p *Pipeline) Ingest(ctx context.Context, arg string, opts IngestOptions) (IngestResult, error) {
-	in := ClassifyInput(arg, nil, false)
+	in := ClassifyInput(arg, p.MediaHosts, opts.ForceMedia)
 	res := IngestResult{Input: arg, Status: "failed"}
 
 	// Stage 1 — policy. URLs are gated by the egress allowlist; local files are
 	// refused unless the caller explicitly allowed them (CLI only, never the
 	// agent-driven MCP path) — an SSRF/local-file-read guard (NFR-05).
 	switch in.Kind {
-	case KindURL:
+	case KindURL, KindMedia:
 		if err := CheckIngestPolicy(p.Policy, in.Host); err != nil {
 			return res, err
 		}
@@ -103,6 +113,9 @@ func (p *Pipeline) Ingest(ctx context.Context, arg string, opts IngestOptions) (
 	// Stage 2 — fetch / read.
 	doc, err := p.read(ctx, in)
 	if err != nil {
+		if in.Kind == KindMedia && errors.Is(err, ErrNoCaptions) {
+			return p.writeCapturedNote(in)
+		}
 		return res, err
 	}
 
@@ -213,6 +226,16 @@ func (p *Pipeline) read(ctx context.Context, in Input) (*Document, error) {
 	switch in.Kind {
 	case KindURL:
 		return p.Fetcher.Fetch(ctx, in.URL)
+	case KindMedia:
+		c := p.Captioner
+		if c == nil {
+			c = newCaptionFetcher(p.CaptionLangs)
+		}
+		transcript, title, err := c.Fetch(ctx, in.URL)
+		if err != nil {
+			return nil, err // may be ErrNoCaptions
+		}
+		return &Document{URL: in.URL, Body: []byte(transcript), Title: title, FetchedAt: time.Now().UTC()}, nil
 	case KindFile, KindPDF, KindImage:
 		// All are local files; PDFs and images are parsed in the extract stage.
 		return ReadFile(in.Path)
@@ -241,6 +264,8 @@ func (p *Pipeline) extract(ctx context.Context, in Input, doc *Document) (Extrac
 			ex.Title = strings.TrimSuffix(base, filepath.Ext(base))
 		}
 		return ex, nil
+	case KindMedia:
+		return Extracted{Title: doc.Title, Markdown: normalizeMarkdown(string(doc.Body))}, nil
 	default:
 		return ExtractFile(doc.Body, in.Path), nil
 	}
@@ -479,6 +504,43 @@ func buildSourceNote(enr Enrichment, cleaned string, ex Extracted, in Input, has
 		b.WriteString("\n")
 	}
 	b.WriteString("<!-- axon:source:end -->\n")
+	return b.String()
+}
+
+// writeCapturedNote records a caption-less (or yt-dlp-absent) media URL as a
+// flagged 00-Inbox capture — zero model calls, never a failure. The flagged
+// note is the hook for a future STT pass.
+func (p *Pipeline) writeCapturedNote(in Input) (IngestResult, error) {
+	res := IngestResult{Input: in.Raw, Status: "captured", SkippedReason: "no captions available"}
+	stamp := time.Now().UTC().Format("20060102-150405")
+	notePath := "00-Inbox/media-" + stamp + ".md"
+	for i := 2; p.Vault.Exists(notePath); i++ {
+		notePath = fmt.Sprintf("00-Inbox/media-%s-%d.md", stamp, i)
+	}
+	if _, err := p.Vault.Create(notePath, buildCapturedNote(in)); err != nil {
+		return res, err
+	}
+	res.NotePath = notePath
+	p.emit(events.LevelInfo, "ingest.done",
+		fmt.Sprintf("captured %s -> %s (no captions)", in.Raw, notePath), res)
+	return res, nil
+}
+
+// buildCapturedNote renders the flagged capture note.
+func buildCapturedNote(in Input) string {
+	now := time.Now().UTC().Format("2006-01-02")
+	var b strings.Builder
+	b.WriteString("---\n")
+	b.WriteString("type: capture\n")
+	b.WriteString("status: captured\n")
+	fmt.Fprintf(&b, "created: %s\n", now)
+	fmt.Fprintf(&b, "source_url: %s\n", yamlString(in.URL))
+	b.WriteString("tags: [\"needs-captions\"]\n")
+	b.WriteString("ingested_by: axon\n")
+	b.WriteString("---\n")
+	b.WriteString("#needs-captions\n\n")
+	b.WriteString("⚠ No captions available — transcript pending\n\n")
+	fmt.Fprintf(&b, "%s\n", in.URL)
 	return b.String()
 }
 
