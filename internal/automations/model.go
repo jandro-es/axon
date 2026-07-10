@@ -25,6 +25,7 @@ var agenticWriteTools = map[string]bool{
 var agenticReadTools = map[string]bool{
 	"vault_search": true, "vault_read": true, "vault_links": true,
 	"knowledge_search": true, "tokens_status": true, "vault_related": true,
+	"actions_list": true,
 }
 
 // validateAgenticTools rejects any tool outside the read + managed-block-safe

@@ -141,6 +141,20 @@ func toolRegistry() []toolReg {
 					return nil, out, err
 				})
 		}},
+		{"actions_list", func(s *mcp.Server, t *Tools) {
+			mcp.AddTool(s, &mcp.Tool{Name: "actions_list", Description: "List actionable tasks (checkbox items) across the vault, grouped by GTD bucket (overdue/today/next/waiting/someday). Read-only and spends NO tokens. Each row includes a hash to pass to action_complete."},
+				func(ctx context.Context, _ *mcp.CallToolRequest, in ActionsListIn) (*mcp.CallToolResult, ActionsListOut, error) {
+					out, err := t.ActionsList(ctx, in)
+					return nil, out, err
+				})
+		}},
+		{"action_complete", func(s *mcp.Server, t *Tools) {
+			mcp.AddTool(s, &mcp.Tool{Name: "action_complete", Description: "Mark a task done: flips its checkbox [ ]→[x] and stamps the completion date in the source note (hash-addressed, byte-precise; the hash comes from actions_list). Interactive use only — spends NO tokens, edits one human-authored line, refuses on a stale hash."},
+				func(ctx context.Context, _ *mcp.CallToolRequest, in ActionCompleteIn) (*mcp.CallToolResult, ActionCompleteOut, error) {
+					out, err := t.ActionComplete(ctx, in)
+					return nil, out, err
+				})
+		}},
 	}
 }
 

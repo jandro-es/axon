@@ -7,8 +7,8 @@ import (
 
 func TestRegisteredToolNamesFilter(t *testing.T) {
 	all := registeredToolNames(nil)
-	if len(all) != 16 {
-		t.Fatalf("all tools = %d (%v), want 16", len(all), all)
+	if len(all) != 18 {
+		t.Fatalf("all tools = %d (%v), want 18", len(all), all)
 	}
 	got := registeredToolNames([]string{"vault_read", "tokens_status", "nonexistent"})
 	want := []string{"tokens_status", "vault_read"} // sorted; unknown names dropped
