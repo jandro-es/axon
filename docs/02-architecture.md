@@ -439,6 +439,49 @@ derived vectors only (S9). (Spec:
 `docs/superpowers/specs/2026-07-10-r7-merge-proposals-design.md`; FR-154, FR-155,
 FR-156.)
 
+### ADR-033 — Actions as checkbox lines with a derived, disposable index *(accepted — built)*
+
+**Status:** Accepted (2026-07-10, roadmap 1.2.5 T1). The action model underpinning
+the whole "act on it" theme.
+
+**Context:** Actions (tasks) are scattered across the vault as Markdown checkbox
+lines in daily notes, project notes, and meeting notes. AXON needs one trusted,
+always-current view of them without inventing a task database, locking the user into
+a proprietary syntax, or storing task truth only in SQLite (S9).
+
+**Decision:** A checkbox line **in the Obsidian Tasks emoji grammar is the single
+source of truth** — AXON adds conventions (`#someday`/`#waiting` GTD lists,
+`@context` tokens, project = the containing note unless an explicit `[[project]]`
+wins), never new syntax, so everything renders and toggles natively in Obsidian (the
+Tasks plugin is already assumed). A pure leaf package `internal/actions` is the one
+structured task parser (`Parse`/`Extract`, tolerant of unknown checkbox markers,
+3 states open/done/cancelled, emoji dates/priority, fenced-code + `axon:actions`-block
+skipping). A **derived, disposable `actions` SQLite table** (migration `0007`) is
+rebuilt inside the reindex transaction from Markdown alone (the `memory_facts`/ADR-028
+delete-all+insert pattern), so `reindex` reconstructs it byte-equivalently and nothing
+about a task lives only in the DB. Stable identity is
+`sha256(source_path + "\n" + checkbox-stripped-normalized-line)` — **state-independent**
+(toggling `[ ]`→`[x]` keeps identity) but **content-sensitive** (a reschedule is a new
+identity). The GTD **status bucket is computed at read time** by a fixed precedence
+(`done > cancelled > someday > waiting > overdue > today > scheduled > next`) with the
+raw date/tag fields stored alongside for independent filtering, so no writer runs at
+midnight to age a task. Index scope is all notes except system dirs, with `04-Archive/`
+indexed but flagged so open views exclude it. T1 is **read-only** — `axon actions` +
+an advisory `doctor` check; zero model calls.
+
+**Why:** the vault stays the database (a fresh clone works with everything off, S8;
+the DB is disposable, S9); no lock-in (a plain checkbox is a first-class action, and
+Obsidian keeps working if AXON is removed); the identity/bucket design lets a later
+completion mutation (its own ADR-034 in T3) match a line byte-precisely and detect a
+stale view, without T1 taking on any write risk.
+
+**Trade-offs:** the parser is emoji-grammar-only for v1 (Dataview `[due:: ]` inline
+fields and recurrence expansion are deferred; recurrence markers are tolerated
+verbatim); subtasks are flattened (no hierarchy); duplicate identical lines in one
+note share a hash (completion targets the first still-open match). No embeddings on
+the table (a "similar tasks" surface is explicitly out of scope). (Spec:
+`docs/superpowers/specs/2026-07-10-t1-action-index-design.md`; FR-157, FR-158, FR-159.)
+
 ### ADR-027 — Local reranking as a retrieval primitive (outside the chokepoint) *(accepted — built)*
 
 **Status:** Accepted (2026-07-05, roadmap 1.1 B2).
