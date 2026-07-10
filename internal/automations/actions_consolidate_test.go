@@ -1,12 +1,86 @@
 package automations
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/jandro-es/axon/internal/db"
 )
+
+func seedActions(t *testing.T, rc RunCtx, rows []db.Action) {
+	t.Helper()
+	if err := db.ReplaceActions(context.Background(), rc.DB, rows); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestActionsConsolidateWritesBlock(t *testing.T) {
+	ctx := context.Background()
+	rc, _ := newRC(t, map[string]string{})
+	seedActions(t, rc, []db.Action{
+		{Hash: "h1", SourcePath: "01-Projects/work.md", Text: "fix login", State: "open", Checkbox: " ", Due: "2000-01-01", Updated: "u"},
+	})
+	res, err := ActionsConsolidate{}.Run(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.EstimatedTokens != 0 {
+		t.Errorf("zero-model automation must report 0 tokens, got %d", res.EstimatedTokens)
+	}
+	n, err := rc.Vault.Read(ctx, actionsNotePath)
+	if err != nil {
+		t.Fatalf("actions note not created: %v", err)
+	}
+	for _, want := range []string{"axon:actions:start", "never overwrites them", "## 🔴 Overdue", "fix login — [[01-Projects/work]]"} {
+		if !strings.Contains(n.Body, want) {
+			t.Errorf("block missing %q:\n%s", want, n.Body)
+		}
+	}
+	if strings.Contains(n.Body, "- [ ]") {
+		t.Error("projection must have no checkboxes")
+	}
+}
+
+func TestActionsConsolidateChangeGate(t *testing.T) {
+	ctx := context.Background()
+	rc, _ := newRC(t, map[string]string{})
+
+	// Empty index + no note → not changed.
+	ch, err := ActionsConsolidate{}.DetectChange(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ch.Changed {
+		t.Error("empty index + no note should be Changed:false")
+	}
+
+	seedActions(t, rc, []db.Action{{Hash: "h1", SourcePath: "a.md", Text: "x", State: "open", Checkbox: " ", Updated: "u"}})
+	ch, _ = ActionsConsolidate{}.DetectChange(ctx, rc)
+	if !ch.Changed || ch.Cursor == "" {
+		t.Fatalf("new task should be Changed:true with a cursor: %+v", ch)
+	}
+	// Same index, same day → the returned cursor, fed back, is a no-op.
+	rc.LastCursor = ch.Cursor
+	ch2, _ := ActionsConsolidate{}.DetectChange(ctx, rc)
+	if ch2.Changed {
+		t.Error("unchanged index should be Changed:false when LastCursor matches")
+	}
+}
+
+func TestActionsConsolidateDryRunWritesNothing(t *testing.T) {
+	ctx := context.Background()
+	rc, _ := newRC(t, map[string]string{})
+	seedActions(t, rc, []db.Action{{Hash: "h1", SourcePath: "a.md", Text: "x", State: "open", Checkbox: " ", Updated: "u"}})
+	rc.DryRun = true
+	if _, err := (ActionsConsolidate{}).Run(ctx, rc); err != nil {
+		t.Fatal(err)
+	}
+	if rc.Vault.Exists(actionsNotePath) {
+		t.Error("dry-run must not create the note")
+	}
+}
 
 func day(s string) time.Time { t, _ := time.Parse("2006-01-02", s); return t }
 

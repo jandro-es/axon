@@ -1,6 +1,7 @@
 package automations
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -202,4 +203,65 @@ func actionsNoteStub() string {
 		"> AXON maintains your consolidated action list below inside the `axon:actions` block.\n" +
 		"> These are references — tick tasks off in their source notes (linked), not here.\n" +
 		"> Write your own notes above this line — AXON never overwrites them.\n\n"
+}
+
+// ActionsConsolidate renders the whole action index into 01-Projects/Actions.md.
+// Zero-model, enabled by default. Change-gated on the rendered projection so a
+// day with no visible change writes nothing.
+type ActionsConsolidate struct{}
+
+func (ActionsConsolidate) Name() string    { return "actions-consolidate" }
+func (ActionsConsolidate) Essential() bool { return false }
+
+// buildActionsBody reads the index and renders the block body (no footer).
+func buildActionsBody(ctx context.Context, rc RunCtx) (string, int, error) {
+	rows, err := db.ListActions(ctx, rc.DB, db.ListActionsOpts{IncludeAll: true})
+	if err != nil {
+		return "", 0, err
+	}
+	body, total := renderActionsSections(rows, rc.now())
+	return body, total, nil
+}
+
+func (a ActionsConsolidate) DetectChange(ctx context.Context, rc RunCtx) (Change, error) {
+	body, total, err := buildActionsBody(ctx, rc)
+	if err != nil {
+		return Change{}, err
+	}
+	if total == 0 && !rc.Vault.Exists(actionsNotePath) {
+		return Change{Changed: false, Reason: "no actions yet"}, nil
+	}
+	cursor := "actions:" + hashShort(body)
+	if cursor == rc.LastCursor {
+		return Change{Changed: false, Reason: "actions unchanged"}, nil
+	}
+	return Change{Changed: true, Reason: fmt.Sprintf("%d open action(s)", total), Cursor: cursor}, nil
+}
+
+func (a ActionsConsolidate) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
+	body, total, err := buildActionsBody(ctx, rc)
+	if err != nil {
+		return RunResult{}, err
+	}
+	if rc.DryRun {
+		return RunResult{
+			Summary: fmt.Sprintf("would consolidate %d open action(s) → %s", total, actionsNotePath),
+			Changes: []string{actionsNotePath + ": axon:actions (dry-run)"},
+		}, nil
+	}
+	footer := fmt.Sprintf("_generated %s UTC · %d open_", rc.now().UTC().Format("2006-01-02 15:04"), total)
+	block := strings.TrimSpace(body + "\n\n" + footer)
+
+	if !rc.Vault.Exists(actionsNotePath) {
+		if _, cerr := rc.Vault.Create(actionsNotePath, actionsNoteStub()); cerr != nil {
+			return RunResult{}, cerr
+		}
+	}
+	if perr := rc.Vault.Patch(ctx, actionsNotePath, actionsBlock, block); perr != nil {
+		return RunResult{}, perr
+	}
+	return RunResult{
+		Summary: fmt.Sprintf("actions consolidated (%d open) → %s", total, actionsNotePath),
+		Changes: []string{actionsNotePath + ": axon:actions updated"},
+	}, nil
 }
