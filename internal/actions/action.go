@@ -56,9 +56,9 @@ var (
 
 var priorityEmoji = []struct{ glyph, word string }{
 	{"\U0001F53A", "highest"}, // 🔺
-	{"⏫", "high"},        // ⏫
+	{"⏫", "high"},             // ⏫
 	{"\U0001F53C", "medium"},  // 🔼
-	{"⏬", "lowest"},      // ⏬
+	{"⏬", "lowest"},           // ⏬
 	{"\U0001F53D", "low"},     // 🔽
 }
 

@@ -112,7 +112,7 @@ func filterActions(items []actionItem, status, project, ctx string, today time.T
 			switch status {
 			case "open": // already open-only unless --all; keep
 			case "week":
-				if !(it.Due != "" && it.Due >= tStr && it.Due <= weekEnd) {
+				if it.Due == "" || it.Due < tStr || it.Due > weekEnd {
 					continue
 				}
 			default:

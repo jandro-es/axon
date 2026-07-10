@@ -136,7 +136,7 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 			checks = append(checks, annIndexCheck(p, paths))
 			checks = append(checks, relatedCheck(p, paths))
 			checks = append(checks, memoryFactsCheck(paths))
-		checks = append(checks, actionsCheck(paths))
+			checks = append(checks, actionsCheck(paths))
 			checks = append(checks, localModelsVettingChecks(paths, p)...)
 			// 8–9. Multi-client wiring (FR-75): is the AXON MCP server registered
 			// with each Claude client, and is each client's guarantee honest.

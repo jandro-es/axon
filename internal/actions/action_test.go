@@ -100,10 +100,10 @@ func TestHashStateIndependentButContentSensitive(t *testing.T) {
 func TestParsePathological(t *testing.T) {
 	// Must never panic: emoji-dense, huge, no fields.
 	Parse("- [ ] " + repeat("📅⏫🔺x@a #b [[c]] ", 500))
-	Parse("- [ ]")   // no space after bracket → not a task (no body)
-	Parse("- [ ] ")  // empty body
+	Parse("- [ ]")  // no space after bracket → not a task (no body)
+	Parse("- [ ] ") // empty body
 }
 
 // tiny local helpers so the test file reads self-documenting.
-func contains(s, sub string) bool { return strings.Contains(s, sub) }
+func contains(s, sub string) bool   { return strings.Contains(s, sub) }
 func repeat(s string, n int) string { return strings.Repeat(s, n) }
