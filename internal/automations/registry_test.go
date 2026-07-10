@@ -11,7 +11,7 @@ func TestRegistryHasAllStandardAutomations(t *testing.T) {
 		"budget-guard", "heartbeat", "knowledge-reindex", "context-export",
 		"link-suggester", "daily-log", "inbox-triage", "compaction", "knowledge-digest",
 		"memory-distill", "capture", "briefing", "resurfacer", "subscriptions", "session-distill",
-		"research-questions", "entity-pages", "project-pulse", "eval-drift",
+		"research-questions", "deep-research", "entity-pages", "project-pulse", "eval-drift",
 		"merge-proposals", "actions-consolidate", "actions-review", "action-extract",
 	}
 	reg := Registry(config.Profile{})
