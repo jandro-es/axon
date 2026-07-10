@@ -12,7 +12,7 @@ func TestComplete(t *testing.T) {
 		want string // when ok
 	}{
 		{"- [ ] call bob", true, "- [x] call bob ✅ 2026-07-10"},
-		{"- [/] in progress", true, "- [x] in progress ✅ 2026-07-10"}, // unknown-open marker
+		{"- [/] in progress", true, "- [x] in progress ✅ 2026-07-10"},         // unknown-open marker
 		{"  * [ ] indented star", true, "  * [x] indented star ✅ 2026-07-10"}, // preserves indent+bullet
 		{"- [ ] has date 📅 2026-07-15", true, "- [x] has date 📅 2026-07-15 ✅ 2026-07-10"},
 		{"- [x] already done", false, ""},
