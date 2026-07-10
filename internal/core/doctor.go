@@ -117,6 +117,7 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 			// 4g. R7 near-duplicate merge-proposals sweep (advisory).
 			checks = append(checks, mergeCheck(p))
 			checks = append(checks, actionsReviewCheck(p))
+			checks = append(checks, actionExtractCheck(p))
 			embChecked = true
 		}
 	}
@@ -270,6 +271,18 @@ func resurfaceCheck(p config.Profile) Check {
 		state = fmt.Sprintf("contradiction path active (routine tier, ≤%d checks/run)", p.Resurfacing.ContradictionMaxChecksOr())
 	}
 	return Check{name, StatusOK, fmt.Sprintf("resurfacer ladder %v weeks; %s", weeks, state)}
+}
+
+// actionExtractCheck reports the T6 implicit action extractor. Advisory (always
+// StatusOK): routine-tier, off by default, chokepoint-gated, proposes to the
+// review queue only.
+func actionExtractCheck(p config.Profile) Check {
+	const name = "action-extract"
+	auto, ok := p.Automations["action-extract"]
+	if !ok || !auto.Enabled {
+		return Check{name, StatusOK, "action-extract off (opt-in model extraction of implicit action items)"}
+	}
+	return Check{name, StatusOK, "action-extract active (routine tier, local-routable; extracts commitments → review queue → axon:tasks)"}
 }
 
 // actionsReviewCheck reports the T5 stale-action sweep. Advisory (always

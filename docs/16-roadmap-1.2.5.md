@@ -198,7 +198,9 @@ if the queue shows demand.
 interval; accept tags the source line `#someday` and it moves to
 Someday/Maybe in every view; nothing proposed twice while pending.
 
-### T6 — Implicit action extraction (S, opt-in, off by default) · provisional FR-169/170
+### T6 — Implicit action extraction (S, opt-in, off by default) · FR-169/170, no ADR ✅ **BUILT 2026-07-10**
+**Shipped:** routine-tier `action-extract` automation (off by default, chokepoint, local-routable, change-gated, budget-bounded, NFR-05) proposes implicit commitments from recent notes to the review queue (`action` kind); **accept appends a real checkbox to the source note's `axon:tasks` block** (`vault.AppendToBlock`), indexed by T1. The only 1.2.5 token spender. Both decisions Jandro-picked-recommended (all-recent-capped scan; source-note axon:tasks). **With T6 shipped, the 1.2.5 net-new slate (T1–T6) is COMPLETE.**
+
 **Build:** the capture net for actions nobody wrote as checkboxes. A
 routine-tier `action-extract` automation (FR-169; **disabled by default**,
 local-routable per ADR-015, chokepoint, change-gated on notes updated in the

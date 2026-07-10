@@ -44,6 +44,29 @@ func TestCompleteActionFlipsLine(t *testing.T) {
 	}
 }
 
+func TestAppendToBlockCreatesAndAppends(t *testing.T) {
+	ctx := context.Background()
+	v := newTempVault(t, map[string]string{"p.md": "---\ntitle: P\n---\nHuman prose.\n"})
+
+	if err := v.AppendToBlock(ctx, "p.md", "tasks", "- [ ] first"); err != nil {
+		t.Fatal(err)
+	}
+	n, _ := v.Read(ctx, "p.md")
+	if !strings.Contains(n.Body, "<!-- axon:tasks:start -->") || !strings.Contains(n.Body, "- [ ] first") {
+		t.Fatalf("block not created:\n%s", n.Body)
+	}
+	if !strings.Contains(n.Body, "Human prose.") {
+		t.Error("human prose must survive")
+	}
+	if err := v.AppendToBlock(ctx, "p.md", "tasks", "- [ ] second"); err != nil {
+		t.Fatal(err)
+	}
+	n2, _ := v.Read(ctx, "p.md")
+	if !strings.Contains(n2.Body, "- [ ] first") || !strings.Contains(n2.Body, "- [ ] second") {
+		t.Errorf("append lost a line:\n%s", n2.Body)
+	}
+}
+
 func TestTagActionAppendsTag(t *testing.T) {
 	ctx := context.Background()
 	note := "---\ntitle: T\n---\n## Todo\n- [ ] email John\n- [ ] other\n"
