@@ -527,6 +527,16 @@ out of scope (completion is the only mutation). Introduces a one-way `vault` →
 `docs/superpowers/specs/2026-07-10-t3-dashboard-actions-design.md`; FR-162, FR-163,
 FR-164.)
 
+**Extension (T5, FR-168):** the same "byte-precise, user-initiated, never-agentic,
+additive checkbox-line edit" now also covers **demotion** — `vault.TagAction`
+appends `#someday` to a stale action's source line when the user *accepts* an
+`actions-review` proposal in the review queue. It is text-addressed (the review
+line carries the action text; a changed line → `ErrActionNotFound`), idempotent,
+and reachable only through the review-queue accept — never an agent/MCP path.
+Completion (`CompleteAction`) and demotion (`TagAction`) are the two members of
+this class; both are additive and reversible by hand, neither deletes. (Spec:
+`docs/superpowers/specs/2026-07-10-t5-actions-review-design.md`; FR-167, FR-168.)
+
 ### ADR-027 — Local reranking as a retrieval primitive (outside the chokepoint) *(accepted — built)*
 
 **Status:** Accepted (2026-07-05, roadmap 1.1 B2).

@@ -94,6 +94,10 @@ profiles:
       project-pulse:     { enabled: false, schedule: "0 10 * * 1",      model: routine,   budget_tokens: 40_000 }
       merge-proposals:   { enabled: false, schedule: "0 11 * * 1",      model: none,      budget_tokens: 0 }
       actions-consolidate: { enabled: true, schedule: "0 7 * * *",      model: none,      budget_tokens: 0 }
+      actions-review:      { enabled: false, schedule: "0 8 * * 6",      model: none,      budget_tokens: 0 }
+
+    actions:
+      stale_after_days: 30
 
     memory:
       inject: true

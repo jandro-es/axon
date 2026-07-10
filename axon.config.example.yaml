@@ -155,6 +155,8 @@ profiles:
       entity-pages:      { enabled: false, schedule: "0 9 * * 1",       model: classify,  budget_tokens: 60_000 }   # extract people/projects → Entities/ pages (opt-in)
       project-pulse:     { enabled: false, schedule: "0 10 * * 1",      model: routine,   budget_tokens: 40_000 }   # weekly project pulse + stale-project nudges (opt-in)
       actions-consolidate: { enabled: true, schedule: "0 7 * * *",      model: none,      budget_tokens: 0 }        # daily zero-model GTD action list → 01-Projects/Actions.md (FR-160)
+      actions-review:      { enabled: false, schedule: "0 8 * * 6",      model: none,      budget_tokens: 0 }        # weekly stale-action sweep → review queue; accept → #someday (T5/FR-167, off by default)
+    # actions: { stale_after_days: 30 }   # T5: sweep open undated actions in notes untouched this long (default 30)
 
     # Personal identity & memory layer (Component 12). Injected at SessionStart so
     # the assistant knows you. Optional block — these are the defaults.

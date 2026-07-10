@@ -177,7 +177,9 @@ existing token ceiling). Expect the usual MCP tool-count assertion bumps.
 cannot invoke `action_complete` (allowlist test); injection line appears only
 when non-zero and costs no model call.
 
-### T5 — GTD hygiene: stale sweep & weekly review (S) · provisional FR-167/168
+### T5 — GTD hygiene: stale sweep & weekly review (S) · FR-167/168, no ADR ✅ **BUILT 2026-07-10**
+**Shipped:** zero-model `actions-review` automation (weekly, off by default) proposes stale open undated actions (source note untouched > `actions.stale_after_days`, default 30) to the review queue as a `stalled` kind; **accept demotes to #someday** via a new additive `vault.TagAction` (ADR-034 extension), dismiss silences (proposal memory). Both decisions Jandro-picked-recommended (note-last-updated staleness; someday-only). Live-smoked.
+
 **Build:** the reflect step that keeps the system trusted. A zero-model
 weekly `actions-review` automation (off by default) sweeps open actions older
 than `actions.stale_after_days` (default 30) with no due date and proposes

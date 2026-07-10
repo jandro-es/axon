@@ -288,6 +288,11 @@ profiles:
     # (survivor keeps prose + gains the loser's body, inbound links retarget, the
     # loser is archived to .trash/merged/ — never deleted).
     merge: { threshold: 0.92, max_proposals: 5 }
+    # actions: the 1.2.5 T5 stale-sweep threshold. stale_after_days: an open,
+    # undated action whose source note hasn't been updated in this many days is
+    # proposed to the review queue by the (off-by-default) actions-review
+    # automation; accepting demotes it to Someday/Maybe (#someday). Default 30.
+    actions: { stale_after_days: 30 }
     policy:
       data_residency: local-only
       egress_allowlist: ["localhost", "*"]

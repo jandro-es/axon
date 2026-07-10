@@ -32,6 +32,7 @@ func Registry(profile config.Profile) map[string]Automation {
 		EvalDrift{}.Name():          EvalDrift{},
 		MergeProposals{}.Name():     MergeProposals{},
 		ActionsConsolidate{}.Name(): ActionsConsolidate{},
+		ActionsReview{}.Name():      ActionsReview{},
 	}
 	return reg
 }
