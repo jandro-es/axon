@@ -93,6 +93,7 @@ profiles:
       entity-pages:      { enabled: false, schedule: "0 9 * * 1",       model: classify,  budget_tokens: 60_000 }
       project-pulse:     { enabled: false, schedule: "0 10 * * 1",      model: routine,   budget_tokens: 40_000 }
       merge-proposals:   { enabled: false, schedule: "0 11 * * 1",      model: none,      budget_tokens: 0 }
+      actions-consolidate: { enabled: true, schedule: "0 7 * * *",      model: none,      budget_tokens: 0 }
 
     memory:
       inject: true
