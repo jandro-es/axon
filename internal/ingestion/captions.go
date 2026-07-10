@@ -78,10 +78,12 @@ func (c *captionFetcher) Fetch(ctx context.Context, url string) (string, string,
 // dir (page order) and the title.
 func ytDlpRun(ctx context.Context, url, langs, outDir string) ([]string, string, error) {
 	tmpl := filepath.Join(outDir, "sub.%(ext)s")
+	// "--" terminates option parsing so a URL that begins with "-" can never be
+	// smuggled in as a yt-dlp flag (argv injection), regardless of caller.
 	cmd := exec.CommandContext(ctx, "yt-dlp",
 		"--skip-download", "--write-subs", "--write-auto-subs",
 		"--sub-format", "vtt", "--sub-langs", langs,
-		"--print", "title", "-o", tmpl, url)
+		"--print", "title", "-o", tmpl, "--", url)
 	cmd.WaitDelay = 5 * time.Second
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
