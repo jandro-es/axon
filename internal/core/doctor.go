@@ -116,6 +116,7 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 			checks = append(checks, resurfaceCheck(p))
 			// 4g. R7 near-duplicate merge-proposals sweep (advisory).
 			checks = append(checks, mergeCheck(p))
+			checks = append(checks, actionsReviewCheck(p))
 			embChecked = true
 		}
 	}
@@ -269,6 +270,17 @@ func resurfaceCheck(p config.Profile) Check {
 		state = fmt.Sprintf("contradiction path active (routine tier, ≤%d checks/run)", p.Resurfacing.ContradictionMaxChecksOr())
 	}
 	return Check{name, StatusOK, fmt.Sprintf("resurfacer ladder %v weeks; %s", weeks, state)}
+}
+
+// actionsReviewCheck reports the T5 stale-action sweep. Advisory (always
+// StatusOK): zero-model, off by default; accept demotes to #someday (never deletes).
+func actionsReviewCheck(p config.Profile) Check {
+	const name = "actions-review"
+	auto, ok := p.Automations["actions-review"]
+	if !ok || !auto.Enabled {
+		return Check{name, StatusOK, "actions-review off (stale-action sweep; enable to nudge forgotten tasks)"}
+	}
+	return Check{name, StatusOK, fmt.Sprintf("actions-review active (open undated actions in notes untouched > %dd → review queue; accept → #someday)", p.Actions.StaleAfterDaysOr())}
 }
 
 // mergeCheck reports the R7 near-duplicate merge-proposals sweep. Advisory
