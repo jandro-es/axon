@@ -13,14 +13,14 @@ Detail is in `@docs/`. Do not duplicate it here; reference it.
 - `@docs/00-research-and-best-practices.md` — the "why" behind every decision.
 - `@docs/01-prd.md` — vision, goals (G1–G7), users, success criteria (S1–S9).
 - `@docs/02-architecture.md` — module boundaries, data flow, **ADR-001…033**.
-- `@docs/03-requirements.md` — **FR-01…FR-159 / NFR-01…NFR-14**. The contract. Trace your work to these IDs.
+- `@docs/03-requirements.md` — **FR-01…FR-161 / NFR-01…NFR-14**. The contract. Trace your work to these IDs.
 - `@docs/04-data-model-and-config.md` — vault layout, SQLite DDL, frontmatter, full config reference.
 - `@docs/05…09` — component specs (ingestion, automation, token manager, agent bridge/MCP, dashboard).
 - `@docs/10-component-installer-bootstrap.md` — `axon init`, prereq checks, idempotency, profiles.
 - `@docs/11-build-roadmap.md` — phased plan with acceptance gates. **Build in this order.**
 - `@docs/14-roadmap-1.1.md` — the 1.1 plan (shipped 2026-07-06; FR-108…133, ADR-023…027).
 - `@docs/15-roadmap-1.2.md` — the 1.2 roadmap ("remember & reason": R1 temporal memory, R2/R5/R7/R8/R9; **shipped 2026-07-10; FR-134…156, ADR-028…032**).
-- `@docs/16-roadmap-1.2.5.md` — the 1.2.5 plan ("act on it": GTD actions). **T1 shipped 2026-07-10 (FR-157…159, ADR-033, migration `0007_actions.sql`): `internal/actions` parser + derived `actions` table + `axon actions`.** Remaining: T2 consolidation, T3 dashboard Actions tab, T4 MCP/session, T5 stale sweep, T6 opt-in extraction (provisional FR-160…170, ADR-034).
+- `@docs/16-roadmap-1.2.5.md` — the 1.2.5 plan ("act on it": GTD actions). **T1+T2 shipped 2026-07-10 (FR-157…161, ADR-033, migration `0007_actions.sql`): `internal/actions` parser + derived `actions` table + `axon actions` (T1); `actions-consolidate` automation → `01-Projects/Actions.md` + heartbeat task counter (T2).** Remaining: T3 dashboard Actions tab + completion mutation (ADR-034), T4 MCP/session, T5 stale sweep, T6 opt-in extraction (provisional FR-162…170, ADR-034).
 
 ## Two cardinal rules (never violate)
 
