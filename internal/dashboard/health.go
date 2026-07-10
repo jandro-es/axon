@@ -24,6 +24,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	out["ask_enabled"] = s.cfg.AskEnabled
 	out["capture_enabled"] = s.cfg.CaptureEnabled
 	out["related_enabled"] = s.cfg.RelatedEnabled
+	out["actions_enabled"] = s.cfg.ActionsEnabled
 
 	if s.cfg.Health != nil {
 		for k, v := range s.cfg.Health(ctx) {

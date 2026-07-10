@@ -14,6 +14,18 @@ func TestAskAllowedDefaultsOn(t *testing.T) {
 	}
 }
 
+func TestActionsAllowedDefaultsOn(t *testing.T) {
+	var d DashboardConfig // ActionsEnabled nil
+	if !d.ActionsAllowed() {
+		t.Fatal("ActionsAllowed() = false with nil pointer, want true (default-ON)")
+	}
+	f := false
+	d.ActionsEnabled = &f
+	if d.ActionsAllowed() {
+		t.Fatal("ActionsAllowed() = true with *false, want false")
+	}
+}
+
 func TestCaptureAllowedDefaultsOn(t *testing.T) {
 	var d DashboardConfig // CaptureEnabled nil
 	if !d.CaptureAllowed() {
