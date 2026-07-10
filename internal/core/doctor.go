@@ -136,6 +136,7 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 			checks = append(checks, annIndexCheck(p, paths))
 			checks = append(checks, relatedCheck(p, paths))
 			checks = append(checks, memoryFactsCheck(paths))
+		checks = append(checks, actionsCheck(paths))
 			checks = append(checks, localModelsVettingChecks(paths, p)...)
 			// 8–9. Multi-client wiring (FR-75): is the AXON MCP server registered
 			// with each Claude client, and is each client's guarantee honest.
@@ -538,6 +539,28 @@ func residencyCheck(p config.Profile) Check {
 // enabling ann once the corpus is large, and warn when ann is enabled but the
 // index has not been built. Read-only and tolerant — a missing/unreadable DB is
 // reported as ok and never fails doctor.
+// actionsCheck reports the derived action-index size. Advisory (always
+// StatusOK): the index is read-only and rebuilt from Markdown by reindex (ADR-033).
+func actionsCheck(paths config.ResolvedPaths) Check {
+	const name = "actions"
+	ctx := context.Background()
+	if _, err := os.Stat(paths.DBPath); err != nil {
+		return Check{name, StatusOK, "no database yet"}
+	}
+	d, err := sql.Open("sqlite", paths.DBPath)
+	if err != nil {
+		return Check{name, StatusOK, "database not readable; skipped"}
+	}
+	defer func() { _ = d.Close() }()
+
+	total, open, done, cancelled, _, err := db.ActionStateCounts(ctx, d)
+	if err != nil {
+		return Check{name, StatusOK, "actions not counted; skipped"}
+	}
+	return Check{name, StatusOK,
+		fmt.Sprintf("%d actions indexed (%d open / %d done / %d cancelled)", total, open, done, cancelled)}
+}
+
 // memoryFactsCheck reports the derived memory_facts index size (open/superseded)
 // and flags any axon:memory block line that fails ParseFact — a parse anomaly
 // means someone hand-edited a fact into an unparseable shape. Advisory: a
