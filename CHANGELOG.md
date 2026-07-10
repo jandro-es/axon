@@ -6,6 +6,37 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **1.3 "perceive & research" — COMPLETE (2026-07-11).** Both slices shipped;
+  the release widens what AXON can take in and reason over. No migration
+  (schema stays v7); no new MCP tool for H2.
+- **Multimodal ingestion (H1, FR-171…173, ADR-035).** Images/screenshots ingest
+  via **OCR-first** (Apple on-device / tesseract, incl. a Swift `--image` helper
+  mode) then a **local Vision seam** (`ollama:<model>` now, Apple image tier
+  behind the same seam) when OCR text is sparse; the source image is archived to
+  `03-Resources/Knowledge/attachments/<hash>.<ext>` and embedded `![[…]]`
+  (archive-never-delete). Media URLs (YouTube family + `--media` + `media_hosts`)
+  become transcript notes via a detected `yt-dlp`; caption-less URLs land as a
+  flagged `00-Inbox` capture with zero model calls. Vision is a **local
+  perception primitive** — budget-exempt, not chokepoint-routed (no Claude vision
+  path). Images are CLI-only (the `AllowLocalFiles`/SSRF guard). Config:
+  `ingestion.vision`/`media_hosts`/`caption_langs`; advisory `vision`+`media`
+  doctor checks.
+- **Deep-research automation (H2, FR-174…176, ADR-036).** A new `deep-research`
+  automation (off by default, personal-first): a `#deep`-tagged question in
+  `03-Resources/Research Questions.md` carrying curated seed URLs fetches each
+  through the existing `Pipeline.Ingest` (egress policy + pre-send redaction +
+  dedup + chunk/embed) into `03-Resources/Knowledge/`, then one **closed-book
+  `synthesis`-tier chokepoint call** (no web tools; sources are data, NFR-05)
+  writes a wikilink-safe `axon:report` note under `03-Resources/Research/<slug>.md`
+  with a deterministic **Sources** list, plus an `axon:deep` pointer block in the
+  questions note. Bounded by `research.max_fetches` (8) + `research.budget_tokens`
+  (120k); a current report + no fresh content + unchanged question ⇒ currency
+  skip; a denied host is never fetched. Config: `research.enabled`/`max_fetches`/
+  `budget_tokens` + the `deep-research` automation seed; advisory `research`
+  doctor check.
+
 ### Changed
 
 - **1.3 roadmap rescoped (planning only, no shipped code).** The 1.3 release was

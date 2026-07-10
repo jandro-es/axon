@@ -27,8 +27,9 @@ This document is the 1.3 *plan*, in the style of the earlier roadmap docs
 its own design cycle (brainstorm → spec → **ADR** → FR rows → TDD → live smoke)
 before any code. FR/ADR numbers here were **provisional** — pre-1.3 maxima were
 **FR-170, ADR-034, migration 0007**. **H1 shipped and consumed FR-171…173 +
-ADR-035** (no migration); **H2 is next, taking FR-174… + ADR-036**. A slice
-isn't "done" until its acceptance gate passes.
+ADR-035** (no migration); **H2 shipped and consumed FR-174…176 + ADR-036** (no
+migration). **1.3 is COMPLETE 2026-07-11** — both slices passed their acceptance
+gates. Post-1.3 maxima: **FR-176, ADR-036, migration 0007**.
 
 > **Scope note (2026-07-10).** 1.3 originally scoped seven slices under a
 > "reach" theme. Five were **removed** — channel delivery & capture-back,
@@ -116,7 +117,30 @@ both **idempotent by content hash** (re-ingest is a no-op); vision provider
 absent ⇒ OCR-only note, no crash; a caption-less URL is captured and flagged,
 nothing crashes.
 
-### H2 — Deep research automation (M) · provisional FR-174/175/176, ADR-036
+### H2 — Deep research automation (M) · **SHIPPED 2026-07-11** — FR-174/175/176, ADR-036
+> **Status (2026-07-11).** Shipped to `main`. A new `deep-research` automation
+> (the 24th; sibling to the unchanged `research-questions`). A question flagged
+> `#deep` in the human region of `03-Resources/Research Questions.md`, carrying
+> curated seed URLs as nested list items, triggers a **bounded, budgeted** run:
+> each seed is fetched through the **existing `Pipeline.Ingest`** (egress-policy
+> gate + pre-send redaction + dedup + chunk/embed) into `03-Resources/Knowledge/`,
+> then **one closed-book `synthesis`-tier chokepoint call** (`runModel`, no web
+> tools — sources are data, NFR-05) writes a wikilink-safe `axon:report` note at
+> `03-Resources/Research/<slug>.md` with a deterministic **Sources** list, plus an
+> `axon:deep` pointer block in the questions note. **Off by default,
+> personal-first**; work-safety comes from default-off + work's deny-by-default
+> egress (no profile-name check). Bounded by `research.max_fetches` (8) +
+> `research.budget_tokens` (120k, passed as the chokepoint input cap). A current
+> report + no fresh content + unchanged question ⇒ **currency skip** (no
+> synthesis). Config: `research.enabled`/`max_fetches`/`budget_tokens` +
+> `deep-research` automation seed; advisory `research` doctor check. **No new DB
+> table, migration, or MCP tool.** Spec:
+> `docs/superpowers/specs/2026-07-10-h2-deep-research-design.md`; plan:
+> `docs/superpowers/plans/2026-07-10-h2-deep-research.md`. Gate met (live-smoked
+> on macOS: doctor + dry-run planning + a real allow-listed Wikipedia fetch → an
+> Ollama-embedded Knowledge note + the SSRF/egress deny path; the paid synthesis
+> call is unit-covered and rides the proven `runModel` chokepoint wiring).
+
 **Build:** graduate the shipped **A3 `research-questions`** automation. A
 question flagged `deep` (in the human region of `03-Resources/Research
 Questions.md`) triggers a **bounded, budgeted web research run**: N fetches
@@ -143,7 +167,7 @@ work profile with research off ⇒ no egress.
 | Order | Slice | Size | Why here |
 |-------|-------|------|----------|
 | 1 | H1 multimodal ingestion | M | **SHIPPED 2026-07-10.** Table stakes; Ollama-vision first, Apple image tier behind the same seam. FR-171/172/173, ADR-035. |
-| 2 | H2 deep research | M | **NEXT.** Highest new token spend — wants R5's local savings banked first. ADR-036, personal-only. |
+| 2 | H2 deep research | M | **SHIPPED 2026-07-11.** #deep questions + curated seeds → fetched Knowledge notes + one cited synthesis report. FR-174/175/176, ADR-036, personal-only. |
 
 The two are largely independent — build in either order. H1 is the broader
 table-stakes slice (more surfaces reuse the vision/OCR seam); H2 is the higher
@@ -152,8 +176,8 @@ proven first.
 
 **Release criterion 1.3:** ships when **both H1 (multimodal ingestion) and H2
 (deep research)** land, each passing its acceptance gate. **H1 shipped
-2026-07-10; H2 is the last remaining slice.** Neither depends on the removed
-slices.
+2026-07-10; H2 shipped 2026-07-11 — 1.3 is COMPLETE.** Neither depended on the
+removed slices.
 
 ## Config & observability *(accumulated across slices, all defaults shown)*
 
