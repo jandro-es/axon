@@ -60,11 +60,40 @@ func TestActionsAPIReturnsList(t *testing.T) {
 	if len(out.Actions) != 1 || out.Actions[0]["bucket"] != "overdue" {
 		t.Errorf("actions payload wrong: %+v", out.Actions)
 	}
+	// The SPA filters/renders on snake_case fields (a.state, a.source_path,
+	// a.hash, a.line_no) — PascalCase Go field names silently break the list.
+	a0 := out.Actions[0]
+	for k, want := range map[string]any{"state": "open", "source_path": "a.md", "hash": "h1", "archived": false} {
+		if a0[k] != want {
+			t.Errorf("action[%q] = %v, want %v (full: %+v)", k, a0[k], want, a0)
+		}
+	}
 	if out.Counts["overdue"] != 1 || out.Counts["open"] != 1 {
 		t.Errorf("counts wrong: %+v", out.Counts)
 	}
 	if len(out.Trend) != 30 {
 		t.Errorf("trend len = %d, want 30", len(out.Trend))
+	}
+}
+
+func TestActionsAPIIncludesVaultName(t *testing.T) {
+	ts, v, _ := actionsWriteServer(t)
+	req, _ := http.NewRequest("GET", ts.URL+"/api/actions", nil)
+	req.Header.Set("X-Axon-Actions", "1")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Vault string `json:"vault"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	// The SPA builds obsidian://open?vault=<this> deep links from the payload.
+	if want := filepath.Base(v.Root()); out.Vault != want {
+		t.Errorf("vault = %q, want %q", out.Vault, want)
 	}
 }
 

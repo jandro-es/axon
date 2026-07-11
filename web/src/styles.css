@@ -285,11 +285,89 @@ body {
 .review-actions button { cursor: pointer; }
 .review-actions .ghost { opacity: .6; }
 
-.action-group { margin-top: 12px; }
-.action-bucket { font-size: 12px; font-weight: 600; opacity: .8; margin-bottom: 4px; }
-.action-group .related-list li { display: flex; align-items: center; gap: 10px; }
-.action-group .related-list li button { cursor: pointer; margin-left: auto; }
-.action-group .related-path em { opacity: .55; font-style: normal; font-size: 11px; }
+/* ── Actions tab — GTD action queue ───────────────────────────────────── */
+.actions-scroll { max-height: 640px; overflow-y: auto; margin: -2px -6px 0; padding: 0 6px; }
+
+.act-group { margin-bottom: 4px; }
+.act-group:last-child { margin-bottom: 0; }
+
+/* Bucket header: sticky so you keep your place scrolling a long queue. A
+   semantic dot (urgency red → grey someday) replaces the emoji labels. */
+.act-head {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: center; gap: 9px;
+  padding: 11px 2px 7px;
+  background: linear-gradient(180deg, var(--panel) 62%, rgba(16, 20, 29, 0));
+}
+.act-head-label { font: 600 10.5px/1 var(--mono); letter-spacing: 1.7px; text-transform: uppercase; color: var(--ink-dim); }
+.act-count {
+  font: 600 10px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-faint);
+  padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.02);
+}
+.act-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; background: var(--ink-faint); }
+.act-head.overdue   .act-dot { background: var(--err);      box-shadow: 0 0 8px rgba(251, 111, 111, 0.55); }
+.act-head.today     .act-dot { background: var(--warn);     box-shadow: 0 0 8px rgba(245, 177, 75, 0.5); }
+.act-head.scheduled .act-dot { background: var(--signal-3); }
+.act-head.next      .act-dot { background: var(--signal-1); box-shadow: 0 0 8px rgba(47, 224, 207, 0.45); }
+.act-head.waiting   .act-dot { background: var(--signal-2); }
+.act-head.someday   .act-dot { background: var(--ink-faint); }
+
+.act-list { list-style: none; margin: 0; padding: 0; }
+.act-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 8px 10px; border-radius: 9px; border-bottom: 1px solid var(--line);
+  transition: background 0.14s;
+}
+.act-row:last-child { border-bottom: 0; }
+.act-row:hover { background: var(--panel-2); }
+
+.act-text { flex: 1 1 auto; min-width: 0; color: var(--ink); line-height: 1.45; }
+
+.act-meta { display: inline-flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+
+.act-src {
+  font: 500 11px/1 var(--mono); color: var(--ink-faint);
+  max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-decoration: none; transition: color 0.14s;
+}
+.act-src::before { content: "↳"; color: var(--line-hi); margin-right: 5px; transition: color 0.14s; }
+/* When it's a real link (vault name known), it opens the note in Obsidian. */
+a.act-src { cursor: pointer; }
+a.act-src:hover { color: var(--signal-1); }
+a.act-src:hover::before { content: "⤢"; color: var(--signal-1); }
+a.act-src:focus-visible { outline: 2px solid var(--signal-2); outline-offset: 2px; border-radius: 4px; color: var(--signal-1); }
+
+.act-due {
+  font: 600 10.5px/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: 0.3px;
+  padding: 3px 7px; border-radius: 6px; white-space: nowrap;
+  color: var(--ink-dim); border: 1px solid var(--line-hi); background: rgba(255, 255, 255, 0.02);
+}
+.act-due.over { color: #f7b9b9; border-color: rgba(251, 111, 111, 0.35); background: rgba(251, 111, 111, 0.07); }
+.act-due.now  { color: #f6d9a8; border-color: rgba(245, 177, 75, 0.35);  background: rgba(245, 177, 75, 0.07); }
+
+.act-pri { font: 700 10px/1 var(--mono); letter-spacing: -1px; flex: 0 0 auto; }
+.act-pri.p-highest, .act-pri.p-high { color: var(--err); }
+.act-pri.p-medium { color: var(--warn); }
+
+/* Quiet until the row is hovered/focused — a full column of buttons was the
+   loudest thing on the old screen; here the action recedes until you want it. */
+.act-done {
+  flex: 0 0 auto; cursor: pointer; white-space: nowrap;
+  font: 600 10px/1 var(--mono); letter-spacing: 0.7px; text-transform: uppercase;
+  color: var(--ink-faint); background: transparent;
+  border: 1px solid var(--line-hi); border-radius: 7px; padding: 5px 11px;
+  opacity: 0.32; transition: opacity 0.14s, color 0.14s, border-color 0.14s, background 0.14s;
+}
+.act-row:hover .act-done { opacity: 1; }
+.act-done:hover { color: #04140f; background: var(--ok); border-color: var(--ok); }
+.act-done:focus-visible { opacity: 1; outline: 2px solid var(--signal-2); outline-offset: 1px; }
+.act-done:disabled { cursor: default; opacity: 0.6; background: transparent; color: var(--ink-faint); border-color: var(--line); }
+
+@media (max-width: 720px) {
+  .act-meta { gap: 8px; }
+  .act-src { max-width: 120px; }
+  .act-done { opacity: 1; }
+}
 .review-err { flex-basis: 100%; color: #fb6f6f; font-size: 12px; }
 .li.dim { opacity: .45; }
 .list.resolved { margin-top: 14px; border-top: 1px solid rgba(255,255,255,.06); padding-top: 8px; }

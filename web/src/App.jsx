@@ -688,7 +688,28 @@ function postComplete(path, hash) {
 }
 
 const BUCKET_ORDER = ['overdue', 'today', 'scheduled', 'next', 'waiting', 'someday']
-const BUCKET_LABEL = { overdue: '🔴 Overdue', today: '📅 Today', scheduled: '⏳ Scheduled', next: '▶ Next', waiting: '🕓 Waiting', someday: '💭 Someday' }
+const BUCKET_LABEL = { overdue: 'Overdue', today: 'Today', scheduled: 'Scheduled', next: 'Next actions', waiting: 'Waiting for', someday: 'Someday / Maybe' }
+
+// Source path → the note's bare name (drop folders + .md); full path stays in a title.
+const noteName = (p) => (p || '').split('/').pop().replace(/\.md$/i, '')
+
+// obsidian://open deep link to the note that holds the task. Needs the vault
+// name from the payload; returns null when it's absent (link degrades to text).
+const vaultURI = (vault, srcPath) =>
+  vault && srcPath ? `obsidian://open?vault=${encodeURIComponent(vault)}&file=${encodeURIComponent(srcPath.replace(/\.md$/i, ''))}` : null
+
+// Action text is raw Markdown — unwrap wikilinks and strip emphasis so the queue
+// reads as plain, scannable lines instead of a wall of [[…]] and **…**.
+const cleanText = (t) => (t || '')
+  .replace(/\[\[[^\]|]+\|([^\]]+)\]\]/g, '$1')  // [[target|alias]] → alias
+  .replace(/\[\[([^\]]+)\]\]/g, '$1')           // [[target]] → target
+  .replace(/\*\*([^*]+)\*\*/g, '$1')            // **bold** → bold
+  .replace(/`([^`]+)`/g, '$1')                  // `code` → code
+  .trim()
+
+// Only surface the priorities that change what you do next; a single caret,
+// colored, reads faster than an emoji ladder.
+const PRIORITY_GLYPH = { highest: '▲▲', high: '▲', medium: '▲' }
 
 function ActionsTab() {
   const [nonce, setNonce] = useState(0)
@@ -742,19 +763,48 @@ function ActionsTab() {
       </Card>
       <Card title="Open actions" meta={`${open.length} shown`} span="span-12">
         {open.length === 0 && <Empty>Nothing open — inbox zero on actions. 🎉</Empty>}
-        {BUCKET_ORDER.filter((b) => byBucket(b).length > 0).map((b) => (
-          <div key={b} className="action-group">
-            <div className="action-bucket">{BUCKET_LABEL[b]}</div>
-            <ul className="related-list">
-              {byBucket(b).map((a) => (
-                <li key={a.hash + a.source_path + a.line_no}>
-                  <span className="related-path">{a.text}{a.due ? ` · 📅 ${a.due}` : ''} <em>{a.source_path}</em></span>
-                  <button disabled={busy === a.hash} onClick={() => complete(a.source_path, a.hash)}>{busy === a.hash ? '…' : 'done'}</button>
-                </li>
-              ))}
-            </ul>
+        {open.length > 0 && (
+          <div className="actions-scroll">
+            {BUCKET_ORDER.filter((b) => byBucket(b).length > 0).map((b) => {
+              const rows = byBucket(b)
+              return (
+                <div key={b} className="act-group">
+                  <div className={`act-head ${b}`}>
+                    <span className="act-dot" />
+                    <span className="act-head-label">{BUCKET_LABEL[b]}</span>
+                    <span className="act-count">{rows.length}</span>
+                  </div>
+                  <ul className="act-list">
+                    {rows.map((a) => (
+                      <li key={a.hash + a.source_path + a.line_no} className="act-row">
+                        <span className="act-text">{cleanText(a.text)}</span>
+                        <span className="act-meta">
+                          {PRIORITY_GLYPH[a.priority] && (
+                            <span className={`act-pri p-${a.priority}`} title={`${a.priority} priority`}>{PRIORITY_GLYPH[a.priority]}</span>
+                          )}
+                          {a.due && (
+                            <span className={`act-due${b === 'overdue' ? ' over' : b === 'today' ? ' now' : ''}`}>{a.due}</span>
+                          )}
+                          {vaultURI(data.vault, a.source_path) ? (
+                            <a className="act-src" href={vaultURI(data.vault, a.source_path)} title={`Open ${a.source_path} in Obsidian`}>{noteName(a.source_path)}</a>
+                          ) : (
+                            <span className="act-src" title={a.source_path}>{noteName(a.source_path)}</span>
+                          )}
+                          <button
+                            className="act-done"
+                            disabled={busy === a.hash}
+                            onClick={() => complete(a.source_path, a.hash)}
+                            title="Mark done in the source note"
+                          >{busy === a.hash ? '…' : 'done'}</button>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })}
           </div>
-        ))}
+        )}
       </Card>
     </>
   )

@@ -12,25 +12,25 @@ import (
 // projection of a checkbox line; reindex delete-all+inserts these from Markdown,
 // so they are disposable (S9).
 type Action struct {
-	ID         int64
-	Hash       string
-	SourcePath string
-	LineNo     int
-	Section    string
-	Text       string
-	Raw        string
-	State      string
-	Checkbox   string
-	Priority   string
-	Due        string
-	Scheduled  string
-	Start      string
-	DoneDate   string
-	Project    string
-	Contexts   []string
-	Tags       []string
-	Archived   bool
-	Updated    string
+	ID         int64    `json:"id"`
+	Hash       string   `json:"hash"`
+	SourcePath string   `json:"source_path"`
+	LineNo     int      `json:"line_no"`
+	Section    string   `json:"section"`
+	Text       string   `json:"text"`
+	Raw        string   `json:"raw"`
+	State      string   `json:"state"`
+	Checkbox   string   `json:"checkbox"`
+	Priority   string   `json:"priority"`
+	Due        string   `json:"due"`
+	Scheduled  string   `json:"scheduled"`
+	Start      string   `json:"start"`
+	DoneDate   string   `json:"done_date"`
+	Project    string   `json:"project"`
+	Contexts   []string `json:"contexts"`
+	Tags       []string `json:"tags"`
+	Archived   bool     `json:"archived"`
+	Updated    string   `json:"updated"`
 }
 
 // ListActionsOpts filters ListActions. Zero value = all non-archived actions.

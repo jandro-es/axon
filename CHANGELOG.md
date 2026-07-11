@@ -6,6 +6,36 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-07-11
+
+**Actions dashboard: fix, polish, and open-in-Obsidian.** A dashboard-only patch —
+no schema change (stays v7), no config change, no new MCP tool.
+
+### Fixed
+
+- **Actions tab showed "0 shown" despite a non-zero open count.** `GET /api/actions`
+  serialised the derived `db.Action` rows with Go's default PascalCase field names,
+  but the SPA filtered and rendered on snake_case (`a.state`, `a.source_path`,
+  `a.hash`), so every row was dropped from the "Open actions" list while the count
+  tiles (a separate server-side map) still read correctly. Added snake_case JSON
+  tags to `db.Action`; the dashboard is the only consumer of its raw JSON (the MCP
+  path uses its own view type).
+
+### Changed
+
+- **Redesigned the Actions "Open actions" list** to match the console: sticky
+  per-bucket headers with a semantic urgency dot and a count, hairline rows with a
+  hover lift, wikilink/emphasis stripped from task text for scannability, source
+  notes collapsed to their bare name (full path on hover), and a quiet `done`
+  affordance that surfaces on row hover/focus.
+
+### Added
+
+- **Open-in-Obsidian links.** Each action's source-note chip is now an
+  `obsidian://open?vault=…&file=…` deep link that opens the note holding the task.
+  `GET /api/actions` carries the vault name (its folder basename) when a vault is
+  wired; the link degrades to plain text otherwise.
+
 ## [1.3] — 2026-07-11
 
 **"Perceive & research."** 1.2 deepened what AXON *knows*; 1.3 widens what it can

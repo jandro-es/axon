@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -27,7 +28,14 @@ func (s *Server) handleActions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, buildActionsPayload(rows, time.Now()))
+	payload := buildActionsPayload(rows, time.Now())
+	// The Obsidian vault name (its folder basename) lets the SPA build
+	// `obsidian://open?vault=…&file=…` deep links per action. Only present when
+	// a vault is wired; the SPA falls back to a plain label otherwise.
+	if s.cfg.Vault != nil {
+		payload["vault"] = filepath.Base(s.cfg.Vault.Root())
+	}
+	writeJSON(w, payload)
 }
 
 // buildActionsPayload turns the derived rows into the tab's data: the non-archived
