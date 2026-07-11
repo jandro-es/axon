@@ -6,11 +6,22 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.3] — 2026-07-11
+
+**"Perceive & research."** 1.2 deepened what AXON *knows*; 1.3 widens what it can
+*take in and reason over*. Two slices land together: **images and screenshots**
+become understood, searchable, tagged notes (read locally — OCR first, on-device
+vision when the text is sparse), **long-form video and podcast URLs** become
+linked transcript notes, and a question flagged for depth triggers **bounded,
+budgeted, cited web research** that lands as a synthesised vault note. Same
+constitution as always: local-first, every model call through the chokepoint,
+every write wikilink-safe, everything toggleable, all-off still useful, the vault
+rebuilds the DB and never the reverse. No migration (schema stays v7); no new MCP
+tool. Both new input surfaces are opt-in, allow-listed, redacted, and off on the
+work profile by default.
+
 ### Added
 
-- **1.3 "perceive & research" — COMPLETE (2026-07-11).** Both slices shipped;
-  the release widens what AXON can take in and reason over. No migration
-  (schema stays v7); no new MCP tool for H2.
 - **Multimodal ingestion (H1, FR-171…173, ADR-035).** Images/screenshots ingest
   via **OCR-first** (Apple on-device / tesseract, incl. a Swift `--image` helper
   mode) then a **local Vision seam** (`ollama:<model>` now, Apple image tier
@@ -39,17 +50,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
-- **1.3 roadmap rescoped (planning only, no shipped code).** The 1.3 release was
-  narrowed from seven slices under a "reach" theme to **two** under
-  **"perceive & research"**: **multimodal ingestion** (images/screenshots via
-  OCR + local vision; YouTube/podcast via captions) and **deep-research
-  automation** (bounded, budgeted, cited web research; personal-profile only).
-  **Removed from 1.3** (not currently scheduled): channel delivery & capture-back,
-  the meeting & voice pipeline, calendar & email read-only context,
-  continuous-capture import, and Obsidian CLI / Bases integration. Provisional
-  IDs are now FR-171…176 / ADR-035…036; the release ships when both remaining
-  slices land. Docs updated: `docs/17-roadmap-1.3.md`, the 1.2–1.3 PRD / Purpose /
-  Development Plan notes, and the `CLAUDE.md` pack line. No runtime code changed.
+- **1.3 rescoped before build.** The release was narrowed from seven slices under
+  a "reach" theme to the **two** shipped above under **"perceive & research"**.
+  **Removed from 1.3** (not currently scheduled, may return on their own merits in
+  a later roadmap): channel delivery & capture-back, the meeting & voice pipeline,
+  calendar & email read-only context, continuous-capture import, and Obsidian
+  CLI / Bases integration.
 
 ## [1.2.5] — 2026-07-10
 

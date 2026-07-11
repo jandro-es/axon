@@ -18,8 +18,10 @@ vault stays plain Markdown; everything else is derived and disposable.
 ## What it does
 
 **Knowledge flows in from everywhere.**
-- Drop a URL, article, or PDF: `axon ingest` turns it into a clean, linked,
-  redacted Markdown note — chunked, embedded (local Ollama), and indexed.
+- Drop a URL, article, PDF, image/screenshot, or a YouTube/podcast link:
+  `axon ingest` turns it into a clean, linked, redacted Markdown note — chunked,
+  embedded (local Ollama), and indexed. Images are read locally (OCR + on-device
+  vision); media becomes a transcript note from its captions.
 - Paste a URL into an inbox note or drop a file into `00-Inbox/` — the
   **capture** automation ingests it for you. The inbox is a funnel.
 - Subscribe to RSS/Atom feeds (`axon subscribe`) and standing sources flow
@@ -190,7 +192,7 @@ memory injection entirely. `axon profiles` shows the isolation surface.
 | [Requirements](docs/03-requirements.md) | The numbered contract: FR-01…156, NFR-01…14. |
 | [Data model & config](docs/04-data-model-and-config.md) | Vault layout, DB schema, frontmatter, full config reference. |
 | [Knowledge ingestion](docs/05-component-knowledge-ingestion.md) | URL/PDF/capture/feeds → Markdown → chunk → embed → index. |
-| [Automation engine](docs/06-component-automation-engine.md) | Scheduler, the twenty-three standard automations, agentic runs. |
+| [Automation engine](docs/06-component-automation-engine.md) | Scheduler, the twenty-four standard automations, agentic runs. |
 | [Context & token manager](docs/07-component-context-token-manager.md) | Counting, budgets, local routing, compaction, frugality. |
 | [Agent bridge & MCP](docs/08-component-agent-bridge-mcp.md) | MCP tools, hooks, agentic allowlists, wikilink safety. |
 | [Dashboard & observability](docs/09-component-dashboard-observability.md) | Live charts, the Review tab, the knowledge graph. |
@@ -198,6 +200,8 @@ memory injection entirely. `axon profiles` shows the isolation surface.
 | [Multi-client (Claude Desktop)](docs/13-component-multi-client-claude-desktop.md) | One MCP server, many Claude clients. |
 | [1.1 roadmap](docs/14-roadmap-1.1.md) | Shipped in 1.1: ask-your-vault, ANN + reranker retrieval, memory/entity/pulse intelligence, capture + OCR reach. |
 | [1.2 roadmap](docs/15-roadmap-1.2.md) | Shipped in 1.2 ("remember & reason, cheaply"): temporal memory, contradiction-aware ask, eval-gated local tier + verification cascade, related-notes surface, resurfacing scheduling, near-duplicate merge proposals. |
+| [1.2.5 roadmap](docs/16-roadmap-1.2.5.md) | Shipped in 1.2.5 ("act on it"): GTD actions — one trusted list, the dashboard Actions tab, the hash-addressed complete mutation. |
+| [1.3 roadmap](docs/17-roadmap-1.3.md) | Shipped in 1.3 ("perceive & research"): multimodal ingestion (images via OCR + local vision; YouTube/podcast captions) and bounded, budgeted, cited deep-research. |
 
 Deeper design notes (vision, research, installer internals) live in
 [docs/](docs/); build conventions are in [`CLAUDE.md`](CLAUDE.md).
