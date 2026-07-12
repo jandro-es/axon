@@ -19,7 +19,7 @@
 |------|---------|--------|
 | **Tokens** | tokens over time; stacked by automation and by model; input/output/cache split | `token_ledger` |
 | **Usage & budget** | day/week token-window gauges + guard state; on `api_key` mode also cost vs cap and projected spend | `token_ledger` + `budget_state` |
-| **Runs** | timeline of automation runs; status (ok/skipped/failed/dry-run); skip reasons; duration; success rate | `runs` |
+| **Runs** | timeline of automation runs; status (ok/skipped/failed/dry-run); skip reasons; failure errors (the `runs.error` text, inline on failed rows); duration; success rate | `runs` |
 | **Ingestion** | sources/day; success vs failed/redacted; embedding queue depth; throughput | `sources` + queue |
 | **Vault growth** | notes, links, words over time; inbox backlog; review-queue size | `notes`/`links` snapshots |
 | **Knowledge graph** | interactive graph: nodes=notes, edges=wikilinks (+ optional similarity edges, toggle); filter by folder/tag; click → note metadata | `links` + `vec_chunks` neighbours |

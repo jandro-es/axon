@@ -870,6 +870,7 @@ also come from the real environment).
 | `dashboard-port` warn in doctor | A daemon is already running on that port, or change `dashboard.port`. |
 | Automations never run anything | Check `enabled` **and** `allowed_automations` (an allow-list gate); see `axon profiles`. |
 | `go build` fails on `embed all:dist` | Build the SPA first (`cd web && npm run build`) or use the committed placeholder. |
+| Automations fail with `exec: "claude": executable file not found in $PATH` while your shell finds it | The daemon runs under launchd/systemd, whose default PATH misses user-local installs (`~/.local/bin`, `/opt/homebrew/bin`). Re-run `axon service install` and reload the unit — generated units embed a PATH covering `claude`/`yt-dlp`/`ollama`. `doctor`'s `service-path` check catches this; the dashboard Runs list shows the error on failed rows. |
 | Claude Code doesn't see AXON tools | Re-run `axon init` (writes `.claude/.mcp.json`); confirm `axon` is on `PATH`. |
 | Search/automation seems stale after editing notes in Obsidian | `axon reindex` (or let `knowledge-reindex` run). The vault is the source of truth. |
 

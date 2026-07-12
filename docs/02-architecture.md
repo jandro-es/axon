@@ -183,6 +183,7 @@ A profile is the unit of isolation. Resolution order for any setting: CLI flag �
 ### ADR-008 — Scheduling in-daemon, OS units optional *(implemented with robfig/cron/v3)*
 **Decision:** Default scheduling runs inside the daemon for cross-platform parity; `axon` can *emit* launchd/systemd/Task-Scheduler units on request.
 **Why:** One config behaves identically on macOS/Linux/Windows; users who want OS-level supervision can opt in without the core depending on a specific OS scheduler.
+**Consequence (1.3.2):** launchd/systemd start daemons with a minimal system PATH, so a `claude` visible in the user's shell can be invisible to the supervised daemon (every automation then fails at `exec`). Emitted units therefore embed a `PATH` resolved at generation time — the directories of the daemon's external tools (`claude`, `yt-dlp`, `ollama`) plus the standard system dirs — and `axon doctor` gained a `service-path` check that parses the installed unit and warns when its PATH cannot resolve `claude`.
 
 ### ADR-009 — Auth via Claude subscription/enterprise; Claude Code is the execution path
 **Decision:** AXON reaches Claude **through Claude Code**, not a direct API key. Each installation sets one `claude.auth_mode`:
