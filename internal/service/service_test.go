@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -82,6 +83,61 @@ func TestEnvFlagIsOptional(t *testing.T) {
 	p.EnvPath = "/home/u/.axon/.env"
 	if c := LaunchdUnit(p).Content; !strings.Contains(c, "--env") {
 		t.Error("expected --env flag when EnvPath is set")
+	}
+}
+
+func TestUnitsCarryDaemonPathEnv(t *testing.T) {
+	p := testParams()
+	p.PathEnv = "/home/u/.local/bin:/usr/local/bin:/usr/bin:/bin"
+
+	l := LaunchdUnit(p).Content
+	if !strings.Contains(l, "<key>PATH</key>") || !strings.Contains(l, "<string>/home/u/.local/bin:/usr/local/bin:/usr/bin:/bin</string>") {
+		t.Errorf("launchd unit missing PATH env:\n%s", l)
+	}
+	s := SystemdUnit(p).Content
+	if !strings.Contains(s, "Environment=PATH=/home/u/.local/bin:/usr/local/bin:/usr/bin:/bin") {
+		t.Errorf("systemd unit missing PATH env:\n%s", s)
+	}
+
+	p.PathEnv = ""
+	if c := LaunchdUnit(p).Content; strings.Contains(c, "<key>PATH</key>") {
+		t.Errorf("expected no PATH key when PathEnv is empty:\n%s", c)
+	}
+}
+
+func TestDaemonPathEnv(t *testing.T) {
+	look := func(tools map[string]string) func(string) (string, error) {
+		return func(name string) (string, error) {
+			if p, ok := tools[name]; ok {
+				return p, nil
+			}
+			return "", fmt.Errorf("%s not found", name)
+		}
+	}
+
+	// Tool dirs come first (dedup'd), then the standard system dirs.
+	got := DaemonPathEnv(look(map[string]string{
+		"claude": "/home/u/.local/bin/claude",
+		"yt-dlp": "/opt/homebrew/bin/yt-dlp",
+		"ollama": "/opt/homebrew/bin/ollama",
+	}))
+	want := "/home/u/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+	if got != want {
+		t.Errorf("DaemonPathEnv = %q, want %q", got, want)
+	}
+
+	// No tools resolvable → still a sane system PATH.
+	got = DaemonPathEnv(look(nil))
+	want = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+	if got != want {
+		t.Errorf("DaemonPathEnv (no tools) = %q, want %q", got, want)
+	}
+
+	// A tool already under a system dir adds nothing twice.
+	got = DaemonPathEnv(look(map[string]string{"claude": "/usr/local/bin/claude"}))
+	want = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+	if got != want {
+		t.Errorf("DaemonPathEnv (system-dir tool) = %q, want %q", got, want)
 	}
 }
 

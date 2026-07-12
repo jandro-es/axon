@@ -244,3 +244,58 @@ func TestDoctorResearchEnabled(t *testing.T) {
 		t.Fatalf("research enabled check = %+v (want caps in detail)", c)
 	}
 }
+
+func TestServiceUnitPathCheck(t *testing.T) {
+	dir := t.TempDir()
+	binDir := filepath.Join(dir, "local", "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(binDir, "claude"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeUnit := func(name, content string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+
+	plistWithPath := writeUnit("with-path.plist",
+		"<dict>\n  <key>PATH</key>\n  <string>"+binDir+":/usr/bin</string>\n</dict>\n")
+	plistNoPath := writeUnit("no-path.plist",
+		"<dict>\n  <key>AXON_HOME</key>\n  <string>/home/u/.axon</string>\n</dict>\n")
+	plistBadPath := writeUnit("bad-path.plist",
+		"<dict>\n  <key>PATH</key>\n  <string>/usr/bin:/bin</string>\n</dict>\n")
+	systemdWithPath := writeUnit("with-path.service",
+		"[Service]\nEnvironment=PATH="+binDir+":/usr/bin\n")
+
+	for _, tc := range []struct {
+		name, kind, path string
+		want             CheckStatus
+		detail           string
+	}{
+		{"launchd PATH resolves claude", "launchd", plistWithPath, StatusOK, "claude"},
+		{"launchd unit without PATH warns", "launchd", plistNoPath, StatusWarn, "PATH"},
+		{"launchd PATH missing claude dir warns", "launchd", plistBadPath, StatusWarn, "axon service install"},
+		{"systemd PATH resolves claude", "systemd", systemdWithPath, StatusOK, "claude"},
+		{"absent unit is skipped ok", "launchd", filepath.Join(dir, "absent.plist"), StatusOK, "no OS service unit"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := serviceUnitPathCheck(tc.kind, tc.path)
+			if c.Status != tc.want || !strings.Contains(c.Detail, tc.detail) {
+				t.Errorf("serviceUnitPathCheck(%s, %s) = %+v, want status %s containing %q",
+					tc.kind, tc.path, c, tc.want, tc.detail)
+			}
+		})
+	}
+}
+
+func TestDoctorIncludesServicePathCheck(t *testing.T) {
+	withStubs(t, map[string]string{}, nil)
+	r := Doctor(cfgWithAuth("subscription"), "personal")
+	if _, ok := findCheck(r, "service-path"); !ok {
+		t.Fatal("doctor report missing service-path check")
+	}
+}

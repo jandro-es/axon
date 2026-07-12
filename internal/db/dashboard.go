@@ -104,6 +104,7 @@ type RunRow struct {
 	Status     string `json:"status"`
 	SkipReason string `json:"skip_reason"`
 	Tokens     int64  `json:"tokens"`
+	Error      string `json:"error"`
 }
 
 // RecentRuns returns recent runs, newest first.
@@ -113,7 +114,7 @@ func RecentRuns(ctx context.Context, q Queryer2, limit int) ([]RunRow, error) {
 	}
 	rows, err := q.QueryContext(ctx,
 		`SELECT id, automation, COALESCE(started_at,''), COALESCE(finished_at,''),
-		        COALESCE(status,''), COALESCE(skip_reason,''), COALESCE(tokens,0)
+		        COALESCE(status,''), COALESCE(skip_reason,''), COALESCE(tokens,0), COALESCE(error,'')
 		   FROM runs ORDER BY id DESC LIMIT ?;`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("recent runs: %w", err)
@@ -122,7 +123,7 @@ func RecentRuns(ctx context.Context, q Queryer2, limit int) ([]RunRow, error) {
 	var out []RunRow
 	for rows.Next() {
 		var r RunRow
-		if err := rows.Scan(&r.ID, &r.Automation, &r.StartedAt, &r.FinishedAt, &r.Status, &r.SkipReason, &r.Tokens); err != nil {
+		if err := rows.Scan(&r.ID, &r.Automation, &r.StartedAt, &r.FinishedAt, &r.Status, &r.SkipReason, &r.Tokens, &r.Error); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

@@ -23,6 +23,7 @@ type Params struct {
 	AxonHome   string // AXON_HOME
 	LogDir     string // where to write stdout/stderr
 	HomeDir    string // user home, for resolving install paths
+	PathEnv    string // PATH for the daemon process (see DaemonPathEnv); empty omits it
 }
 
 // Unit is a generated service unit and where/how to install it.
@@ -175,7 +176,45 @@ func (p Params) env() [][2]string {
 	if p.ConfigDir != "" {
 		env = append(env, [2]string{"CLAUDE_CONFIG_DIR", p.ConfigDir})
 	}
+	if p.PathEnv != "" {
+		env = append(env, [2]string{"PATH", p.PathEnv})
+	}
 	return env
+}
+
+// daemonTools are the external binaries the supervised daemon spawns at
+// runtime. launchd/systemd start daemons with a minimal system PATH that
+// misses user-local install dirs (~/.local/bin, /opt/homebrew/bin), so the
+// generated unit must pin the directories these tools resolve to.
+var daemonTools = []string{"claude", "yt-dlp", "ollama"}
+
+// systemPathDirs is the baseline PATH every unit carries regardless of what
+// resolves at generation time.
+var systemPathDirs = []string{"/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"}
+
+// DaemonPathEnv builds the PATH to embed in a service unit: the directories of
+// the daemon's external tools as resolved by look (typically exec.LookPath, in
+// the installing shell's full PATH), followed by the standard system dirs,
+// deduplicated in a stable order. Tools that don't resolve are skipped — the
+// corresponding subsystems degrade at runtime exactly as they do today.
+func DaemonPathEnv(look func(string) (string, error)) string {
+	var dirs []string
+	seen := map[string]bool{}
+	add := func(d string) {
+		if d != "" && !seen[d] {
+			seen[d] = true
+			dirs = append(dirs, d)
+		}
+	}
+	for _, tool := range daemonTools {
+		if p, err := look(tool); err == nil {
+			add(filepath.Dir(p))
+		}
+	}
+	for _, d := range systemPathDirs {
+		add(d)
+	}
+	return strings.Join(dirs, ":")
 }
 
 func xmlEscape(s string) string {

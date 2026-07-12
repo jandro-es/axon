@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -33,6 +34,20 @@ func TestDashboardReadLayer(t *testing.T) {
 	runs, err := RecentRuns(ctx, d, 10)
 	if err != nil || len(runs) != 1 || runs[0].Status != RunOK {
 		t.Errorf("RecentRuns = %+v, %v", runs, err)
+	}
+	if len(runs) == 1 && runs[0].Error != "" {
+		t.Errorf("ok run carries error %q, want empty", runs[0].Error)
+	}
+
+	// A failed run surfaces its recorded error so the dashboard can show WHY.
+	fid, _ := InsertRun(ctx, d, "inbox-triage", now)
+	_ = FinishRun(ctx, d, RunUpdate{ID: fid, Status: RunFailed, FinishedAt: now, Error: `exec: "claude": executable file not found in $PATH`})
+	runs, err = RecentRuns(ctx, d, 10)
+	if err != nil || len(runs) != 2 {
+		t.Fatalf("RecentRuns after failed run = %+v, %v", runs, err)
+	}
+	if runs[0].Automation != "inbox-triage" || !strings.Contains(runs[0].Error, "claude") {
+		t.Errorf("failed run error not surfaced: %+v", runs[0])
 	}
 
 	src, err := SourceSeries(ctx, d)

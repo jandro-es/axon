@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 
@@ -45,6 +46,7 @@ func newServiceCmd(gf *globalFlags) *cobra.Command {
 				AxonHome:   config.AxonHome(),
 				LogDir:     paths.LogsDir,
 				HomeDir:    homeDir(),
+				PathEnv:    service.DaemonPathEnv(exec.LookPath),
 			})
 			if err != nil {
 				return err

@@ -65,6 +65,7 @@ const kfmt = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3
 const shortDay = (d) => (d || '').slice(5)
 const parseTags = (t) => { try { const a = JSON.parse(t || '[]'); return Array.isArray(a) ? a : [] } catch { return [] } }
 const shortOp = (op) => (op || '').replace(/^automation\./, '').replace(/^ingest\./, 'ingest:')
+const truncate = (s, n) => ((s || '').length > n ? s.slice(0, n - 1) + '…' : s || '')
 function fmtTime(ts) { try { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) } catch { return ts } }
 function fmtDur(a, b) {
   const s = (new Date(b) - new Date(a)) / 1000
@@ -303,7 +304,11 @@ function RunsList({ runs, span, limit = 14, title = 'Recent automations' }) {
         {list.map((r) => (
           <div className="li" key={r.id}>
             <span className={`sdot ${r.status}`} />
-            <span className="grow">{r.automation}{r.skip_reason ? <span className="muted" style={{ color: SEMA.faint }}> · {r.skip_reason}</span> : ''}</span>
+            <span className="grow">
+              {r.automation}
+              {r.skip_reason ? <span className="muted" style={{ color: SEMA.faint }}> · {r.skip_reason}</span> : ''}
+              {r.status === 'failed' && r.error ? <span className="muted" style={{ color: SEMA.err, opacity: 0.85 }} title={r.error}> · {truncate(r.error, 110)}</span> : ''}
+            </span>
             {r.tokens > 0 && <span className="mono">{kfmt(r.tokens)} tok</span>}
             <span className="mono">{r.finished_at ? fmtDur(r.started_at, r.finished_at) : '…'}</span>
             <span className={`badge ${r.status}`}>{r.status}</span>

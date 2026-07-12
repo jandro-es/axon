@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/embeddings"
 	"github.com/jandro-es/axon/internal/identity"
+	"github.com/jandro-es/axon/internal/service"
 	"github.com/jandro-es/axon/internal/vault"
 )
 
@@ -91,6 +93,11 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 	checks = append(checks, binaryCheck("claude-cli", "claude",
 		"Claude Code CLI found", "claude CLI not found on PATH (needed for automations + interactive use)"))
 
+	// 3b. If an OS service unit supervises the daemon, its PATH must resolve
+	// claude too — launchd/systemd default to a minimal system PATH, so a
+	// shell-visible claude can still be invisible to the supervised daemon.
+	checks = append(checks, serviceUnitCheck(activeProfile))
+
 	// 4. Embeddings provider prerequisite (informational — local embeddings):
 	// the ollama binary, or the compiled Apple helper, per the profile's config.
 	// Without a resolvable profile, fall back to the generic ollama check.
@@ -153,6 +160,77 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 	}
 
 	return DoctorReport{Checks: checks}
+}
+
+// serviceUnitCheck locates this profile's OS service unit (if the platform has
+// one) and delegates to serviceUnitPathCheck.
+func serviceUnitCheck(activeProfile string) Check {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return Check{"service-path", StatusOK, "cannot resolve home dir — service unit check skipped"}
+	}
+	unit, err := service.ForOS("", service.Params{Profile: activeProfile, HomeDir: home})
+	if err != nil {
+		return Check{"service-path", StatusOK, "no OS service units on this platform"}
+	}
+	return serviceUnitPathCheck(unit.Kind, unit.Path)
+}
+
+// serviceUnitPathCheck warns when an installed service unit carries no PATH
+// able to resolve the claude CLI. The daemon it supervises would then fail
+// every automation with `exec: "claude": executable file not found` even
+// though the user's login shell finds it, because launchd/systemd start
+// daemons with a minimal system PATH. Advisory: absent unit = daemon not
+// OS-supervised = nothing to check.
+func serviceUnitPathCheck(kind, unitPath string) Check {
+	const name = "service-path"
+	content, err := os.ReadFile(unitPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return Check{name, StatusOK, "no OS service unit installed — daemon runs manually with your shell's PATH"}
+		}
+		return Check{name, StatusWarn, fmt.Sprintf("cannot read service unit %s: %v", unitPath, err)}
+	}
+	pathEnv := unitPathEnv(kind, string(content))
+	if pathEnv == "" {
+		return Check{name, StatusWarn, fmt.Sprintf("service unit %s sets no PATH — the supervised daemon cannot find claude outside system dirs; re-run `axon service install` and reload", unitPath)}
+	}
+	if dir := findExecutable("claude", pathEnv); dir != "" {
+		return Check{name, StatusOK, "service unit PATH resolves claude (" + dir + ")"}
+	}
+	return Check{name, StatusWarn, fmt.Sprintf("service unit PATH cannot resolve claude — automations run under it will fail; re-run `axon service install` and reload (unit: %s)", unitPath)}
+}
+
+var (
+	plistPathRe   = regexp.MustCompile(`(?s)<key>PATH</key>\s*<string>([^<]*)</string>`)
+	systemdPathRe = regexp.MustCompile(`(?m)^Environment=PATH=(.*)$`)
+)
+
+// unitPathEnv extracts the PATH value a service unit hands its daemon.
+func unitPathEnv(kind, content string) string {
+	re := plistPathRe
+	if kind == "systemd" {
+		re = systemdPathRe
+	}
+	if m := re.FindStringSubmatch(content); m != nil {
+		return strings.TrimSpace(m[1])
+	}
+	return ""
+}
+
+// findExecutable reports the directory of pathEnv that holds an executable
+// file named name, or "" — exec.LookPath against an explicit PATH string.
+func findExecutable(name, pathEnv string) string {
+	for _, dir := range filepath.SplitList(pathEnv) {
+		if dir == "" {
+			continue
+		}
+		st, err := os.Stat(filepath.Join(dir, name))
+		if err == nil && st.Mode().IsRegular() && st.Mode()&0o111 != 0 {
+			return dir
+		}
+	}
+	return ""
 }
 
 // embeddingsCheck verifies the configured embeddings provider's local
