@@ -44,8 +44,8 @@ data: {"ts":"2026-08-16T17:14:20.010455+01:00","level":"warn","kind":"token.deny
 : ping
 
 event: automation.fail
-data: {"ts":"2026-08-16T17:15:00.000001+01:00","level":"error","kind":"automation.fail","message":"multiline: failed"}
-data: {"outcome":{"automation":"multiline","status":"failed","error":"a data field split across two lines must concatenate"}}
+data: {"ts":"2026-08-16T17:15:00.000001+01:00","level":"error","kind":"automation.fail","message":"multiline: failed",
+data: "data":{"outcome":{"automation":"multiline","status":"failed","error":"one JSON document split across two data lines must concatenate"}}}
 
 event: future.kind.axon.does.not.emit.yet
 data: {"ts":"2026-08-16T17:16:00.000002+01:00","level":"info","kind":"future.kind.axon.does.not.emit.yet","message":"tolerant decoding: unknown kinds must not break the stream","data":{"unknown_field":{"nested":true}}}

@@ -3,59 +3,10 @@ import Testing
 
 @testable import AxonKit
 
-// MARK: - stub transport
-
-/// Serves fixture bytes per path so client tests never touch the network.
-final class MockURLProtocol: URLProtocol, @unchecked Sendable {
-    struct Response: Sendable {
-        var status: Int = 200
-        var body: Data = Data()
-        var headers: [String: String] = [:]
-    }
-
-    /// path -> response, or an error to fail the request with.
-    nonisolated(unsafe) static var routes: [String: Response] = [:]
-    nonisolated(unsafe) static var failure: Error?
-    /// Every request the client made, for header/URL assertions.
-    nonisolated(unsafe) static var recorded: [URLRequest] = []
-
-    static func reset() {
-        routes = [:]
-        failure = nil
-        recorded = []
-    }
-
-    override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-
-    override func startLoading() {
-        Self.recorded.append(request)
-
-        if let failure = Self.failure {
-            client?.urlProtocol(self, didFailWithError: failure)
-            return
-        }
-        let path = request.url?.path ?? ""
-        guard let route = Self.routes[path] else {
-            client?.urlProtocol(self, didFailWithError: URLError(.unsupportedURL))
-            return
-        }
-        let response = HTTPURLResponse(
-            url: request.url!, statusCode: route.status,
-            httpVersion: "HTTP/1.1", headerFields: route.headers
-        )!
-        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: route.body)
-        client?.urlProtocolDidFinishLoading(self)
-    }
-
-    override func stopLoading() {}
-}
+private let stub = DashboardStubProtocol.shared
 
 private func makeClient() -> DashboardClient {
-    let config = URLSessionConfiguration.ephemeral
-    config.protocolClasses = [MockURLProtocol.self]
-    return DashboardClient(session: URLSession(configuration: config))
+    DashboardClient(session: .stubbed(DashboardStubProtocol.self))
 }
 
 // MARK: - tests
@@ -63,16 +14,16 @@ private func makeClient() -> DashboardClient {
 @Suite(.serialized)
 struct DashboardClientTests {
     @Test func healthDecodesFromTransport() async throws {
-        MockURLProtocol.reset()
-        MockURLProtocol.routes["/health"] = .init(body: try fixture("health"))
+        stub.reset()
+        stub.routes["/health"] = .init(body: try fixture("health"))
 
         let health = try await makeClient().health()
         #expect(health.profile == "personal")
     }
 
     @Test func connectionFailureSurfacesAsUnreachable() async throws {
-        MockURLProtocol.reset()
-        MockURLProtocol.failure = URLError(.cannotConnectToHost)
+        stub.reset()
+        stub.failure = URLError(.cannotConnectToHost)
 
         await #expect(throws: DashboardError.unreachable) {
             _ = try await makeClient().health()
@@ -80,8 +31,8 @@ struct DashboardClientTests {
     }
 
     @Test func nonSuccessStatusSurfacesTheCode() async throws {
-        MockURLProtocol.reset()
-        MockURLProtocol.routes["/health"] = .init(status: 503, body: Data("nope".utf8))
+        stub.reset()
+        stub.routes["/health"] = .init(status: 503, body: Data("nope".utf8))
 
         await #expect(throws: DashboardError.badStatus(503)) {
             _ = try await makeClient().health()
@@ -89,8 +40,8 @@ struct DashboardClientTests {
     }
 
     @Test func malformedBodySurfacesAsDecodingError() async throws {
-        MockURLProtocol.reset()
-        MockURLProtocol.routes["/health"] = .init(body: Data("{not json".utf8))
+        stub.reset()
+        stub.routes["/health"] = .init(body: Data("{not json".utf8))
 
         await #expect(throws: DashboardError.self) {
             _ = try await makeClient().health()
@@ -101,12 +52,12 @@ struct DashboardClientTests {
     /// the single easiest thing to get wrong and it fails silently as a badge
     /// that never appears — so assert the header on the wire.
     @Test func actionsRequestCarriesItsGuardHeader() async throws {
-        MockURLProtocol.reset()
-        MockURLProtocol.routes["/api/actions"] = .init(body: try fixture("actions"))
+        stub.reset()
+        stub.routes["/api/actions"] = .init(body: try fixture("actions"))
 
         _ = try await makeClient().actionsCount()
 
-        let request = try #require(MockURLProtocol.recorded.first)
+        let request = try #require(stub.recorded.first)
         #expect(request.value(forHTTPHeaderField: "X-Axon-Actions") == "1")
     }
 
@@ -114,12 +65,12 @@ struct DashboardClientTests {
     /// one where the daemon does not expect it is harmless today but encodes a
     /// wrong belief about the contract.
     @Test func plainReadsSendNoGuardHeader() async throws {
-        MockURLProtocol.reset()
-        MockURLProtocol.routes["/api/review"] = .init(body: try fixture("review"))
+        stub.reset()
+        stub.routes["/api/review"] = .init(body: try fixture("review"))
 
         _ = try await makeClient().reviewCount()
 
-        let request = try #require(MockURLProtocol.recorded.first)
+        let request = try #require(stub.recorded.first)
         #expect(request.value(forHTTPHeaderField: "X-Axon-Actions") == nil)
         #expect(request.value(forHTTPHeaderField: "X-Axon-Review") == nil)
     }
@@ -127,36 +78,36 @@ struct DashboardClientTests {
     /// A 404 means the profile disabled actions — the badge hides, it is not an
     /// error the user should see (CONTRACT.md §7).
     @Test func disabledActionsReturnNilRatherThanThrowing() async throws {
-        MockURLProtocol.reset()
-        MockURLProtocol.routes["/api/actions"] = .init(status: 404, body: Data())
+        stub.reset()
+        stub.routes["/api/actions"] = .init(status: 404, body: Data())
 
         let count = try await makeClient().actionsCount()
         #expect(count == nil)
     }
 
     @Test func tokensRequestPassesTheDayWindow() async throws {
-        MockURLProtocol.reset()
-        MockURLProtocol.routes["/api/tokens"] = .init(body: try fixture("tokens"))
+        stub.reset()
+        stub.routes["/api/tokens"] = .init(body: try fixture("tokens"))
 
         _ = try await makeClient().tokens(days: 7)
 
-        let url = try #require(MockURLProtocol.recorded.first?.url)
+        let url = try #require(stub.recorded.first?.url)
         #expect(url.query()?.contains("days=7") == true)
     }
 
     @Test func runsRequestPassesTheRowLimit() async throws {
-        MockURLProtocol.reset()
-        MockURLProtocol.routes["/api/runs"] = .init(body: try fixture("runs"))
+        stub.reset()
+        stub.routes["/api/runs"] = .init(body: try fixture("runs"))
 
         _ = try await makeClient().runs(limit: 250)
 
-        let url = try #require(MockURLProtocol.recorded.first?.url)
+        let url = try #require(stub.recorded.first?.url)
         #expect(url.query()?.contains("limit=250") == true)
     }
 
     @Test func everyReadDecodesItsFixtureThroughTheTransport() async throws {
-        MockURLProtocol.reset()
-        MockURLProtocol.routes = [
+        stub.reset()
+        stub.routes = [
             "/health": .init(body: try fixture("health")),
             "/api/usage": .init(body: try fixture("usage")),
             "/api/tokens": .init(body: try fixture("tokens")),
