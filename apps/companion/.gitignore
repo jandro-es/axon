@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+Package.resolved
+# Packaging output — package_app.sh emits the bundle beside version.env.
+Axon.app/
+dist/
+Icon.icns
