@@ -17,7 +17,10 @@ source "$ROOT/version.env"
 
 DIST="$ROOT/${DIST_DIR:-dist}"
 ZIP="${1:-$DIST/${APP_NAME}-${MARKETING_VERSION}.zip}"
-APPCAST="$DIST/companion-appcast.xml"
+# The published feed is the copy committed at appcast/, because a stable URL
+# cannot depend on which release happens to be newest. dist/ gets a copy for
+# convenience when attaching it to the release.
+APPCAST="$ROOT/appcast/companion-appcast.xml"
 
 log() { printf '\033[1mappcast:\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31mappcast: ERROR:\033[0m %s\n' "$*" >&2; exit 1; }
@@ -63,8 +66,10 @@ log "signing $(basename "$ZIP")"
   -o "$WORK/companion-appcast.xml" \
   "$WORK"
 
-mkdir -p "$DIST"
+mkdir -p "$DIST" "$ROOT/appcast"
 cp "$WORK/companion-appcast.xml" "$APPCAST"
+cp "$WORK/companion-appcast.xml" "$DIST/companion-appcast.xml"
 
 log "wrote $APPCAST"
-log "upload it plus $(basename "$ZIP") to the companion-v${MARKETING_VERSION} release"
+log "COMMIT it — that path IS the feed — then attach $(basename "$ZIP") to the"
+log "companion-v${MARKETING_VERSION} release (the enclosure URL points there)."

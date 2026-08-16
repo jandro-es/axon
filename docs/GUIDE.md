@@ -1045,8 +1045,9 @@ It is Developer ID-signed and notarised by Apple, so it opens normally on first
 launch. If macOS ever does complain, the download was damaged or altered —
 re-download rather than working around Gatekeeper.
 
-Companion updates itself through Sparkle; the daemon updates through
-`axon update`. The two are deliberately independent, and Companion never
+Companion updates itself through Sparkle (feed:
+`raw.githubusercontent.com/jandro-es/axon/main/apps/companion/appcast/companion-appcast.xml`);
+the daemon updates through `axon update`. The two are deliberately independent, and Companion never
 updates the daemon behind your back.
 
 ### What it shows

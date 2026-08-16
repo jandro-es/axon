@@ -1,0 +1,15 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Axon</title>
+        <item>
+            <title>0.1.0</title>
+            <pubDate>Sun, 16 Aug 2026 20:44:04 +0100</pubDate>
+            <link>https://github.com/jandro-es/axon</link>
+            <sparkle:version>1</sparkle:version>
+            <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/jandro-es/axon/releases/download/companion-v0.1.0/Axon-0.1.0.zip" length="3097762" type="application/octet-stream" sparkle:edSignature="vkBk6mmETfTBiuCtWcVzJFihIP7Dwg8BdJuVIMgsgnS/+9yhnS+uPvL+HdW0I3BTrKXA3nAFTfcLglwCH8q+Bg=="/>
+        </item>
+    </channel>
+</rss>

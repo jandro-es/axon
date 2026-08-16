@@ -5,12 +5,22 @@ Where Sparkle looks for Companion updates, and how a release gets there.
 ## The feed
 
 ```
-https://github.com/jandro-es/axon/releases/latest/download/companion-appcast.xml
+https://raw.githubusercontent.com/jandro-es/axon/main/apps/companion/appcast/companion-appcast.xml
 ```
 
-GitHub Releases, alongside the daemon's own release assets — one hosting
-story, no extra infrastructure. The `latest/download/` form always resolves to
-the newest release's asset, so the URL baked into shipped apps never changes.
+**`companion-appcast.xml` in this directory IS the published feed.** Committing
+it is what publishes an update.
+
+It is deliberately *not* served from
+`releases/latest/download/`. GitHub resolves `latest` across **all** releases in
+a repo, and this repo publishes two independent streams — daemon `v*` and
+`companion-v*`. Whichever released most recently wins, so the next daemon
+release would take `latest` over and 404 this feed permanently, for every copy
+already installed with that URL baked into its Info.plist. A repo path does not
+care about release order.
+
+Release *assets* still live on the `companion-v<version>` release — the
+`<enclosure url>` in each entry points at its own tag, which is stable.
 
 This is the **only** non-loopback host Companion contacts. It is disclosed in
 Settings → About, per CFR-81.
@@ -21,10 +31,8 @@ Settings → About, per CFR-81.
 # 1. Bump both in apps/companion/version.env. BUILD_NUMBER must INCREASE:
 #    Sparkle compares CFBundleVersion, so a release that reuses it is
 #    invisible to every existing install. make_appcast.sh refuses to publish
-#    one, but only if the previous appcast is present in dist/ — pull the
-#    published one down first when releasing from a clean checkout:
-curl -fsSL -o apps/companion/dist/companion-appcast.xml \
-  https://github.com/jandro-es/axon/releases/latest/download/companion-appcast.xml
+#    one — the previous entries are in the committed appcast, so a clean
+#    checkout already has what it needs to check.
 
 # 2. Build, sign, notarize, staple:
 make companion-release
@@ -32,11 +40,14 @@ make companion-release
 # 3. Sign the appcast entry:
 make companion-appcast
 
-# 4. Upload BOTH to a release tagged companion-v<version>:
+# 4. Publish. The tag must be companion-v<version>, and --latest=false keeps
+#    the daemon's own release as the repo's headline:
 gh release create companion-v0.1.0 \
   apps/companion/dist/Axon-0.1.0.zip \
-  apps/companion/dist/companion-appcast.xml \
-  --title "Axon Companion 0.1.0" --notes-file <notes>
+  --title "Axon Companion 0.1.0" --notes-file <notes> --latest=false
+
+# 5. Commit the appcast — THIS is what makes the update visible:
+git add apps/companion/appcast/companion-appcast.xml && git commit && git push
 ```
 
 The tag must be `companion-v<version>` — `SPARKLE_DOWNLOAD_URL_PREFIX` in
@@ -66,7 +77,7 @@ Export it with:
 ## Verifying a published feed
 
 ```bash
-curl -fsSL https://github.com/jandro-es/axon/releases/latest/download/companion-appcast.xml
+curl -fsSL https://raw.githubusercontent.com/jandro-es/axon/main/apps/companion/appcast/companion-appcast.xml
 ```
 
 Each `<item>` must carry a `sparkle:edSignature`, a `sparkle:version` greater
