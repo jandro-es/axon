@@ -1,0 +1,43 @@
+#!/bin/bash
+# A stand-in for the real `axon` binary in CLIRunner/AxonCLI tests.
+# Echoes the captured fixture JSON per subcommand, and reproduces the daemon's
+# error convention exactly: stderr only, empty stdout, non-zero exit.
+DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Record the exact argv so tests can assert it (AXON_ARGV_LOG is set by tests).
+if [[ -n "${AXON_ARGV_LOG:-}" ]]; then
+  printf '%s\n' "$*" >> "$AXON_ARGV_LOG"
+fi
+
+# Simulate a hung command so the runner's timeout can be exercised.
+if [[ "${AXON_FAKE_HANG:-}" == "1" ]]; then
+  sleep 120
+  exit 0
+fi
+
+fail() { printf '\n\xe2\x9c\x97 Error: %s\n' "$1" >&2; exit 1; }
+
+case "$1" in
+  status)      cat "$DIR/status-cli.json" ;;
+  doctor)
+    cat "$DIR/doctor-cli.json"
+    # doctor exits non-zero on a failing check while still emitting JSON.
+    # Note the explicit `else`: a bare `[[ ]] && exit 1` as the last command of
+    # a case branch makes the whole script exit 1 when the test is false.
+    if [[ "${AXON_FAKE_DOCTOR_FAIL:-}" == "1" ]]; then exit 1; fi
+    ;;
+  automations) cat "$DIR/automations-cli.json" ;;
+  profiles)    cat "$DIR/profiles-cli.json" ;;
+  version)     echo "v1.3.2" ;;
+  config)
+    case "$2" in
+      get) [[ "$3" == "nope.nope" ]] && fail "key \"nope.nope\" not found"
+           cat "$DIR/config-get-cli.json" ;;
+      set) cat "$DIR/config-set-cli.json" ;;
+      *)   fail "unknown config subcommand" ;;
+    esac ;;
+  start|stop|update) echo "ok" ;;
+  service)     echo "service $2" ;;
+  boom)        fail "the daemon exploded" ;;
+  *)           fail "unknown command \"$1\"" ;;
+esac
