@@ -15,7 +15,8 @@ fi
 echo "Creating self-signed certificate '$CERT_NAME'..."
 
 TEMP_CONFIG=$(mktemp)
-trap "rm -f $TEMP_CONFIG" EXIT
+# Single-quoted so TEMP_CONFIG expands when the trap fires, not now.
+trap 'rm -f "$TEMP_CONFIG"' EXIT
 
 cat > "$TEMP_CONFIG" <<EOFCONF
 [ req ]

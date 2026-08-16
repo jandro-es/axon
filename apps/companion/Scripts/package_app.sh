@@ -22,6 +22,8 @@ else
   BUILD_NUMBER=${BUILD_NUMBER:-1}
 fi
 
+# Word-splitting ARCHES is the intent: it is a space-separated arch list.
+# shellcheck disable=SC2206
 ARCH_LIST=( ${ARCHES:-} )
 if [[ ${#ARCH_LIST[@]} -eq 0 ]]; then
   HOST_ARCH=$(uname -m)
@@ -59,6 +61,17 @@ if [[ "$MENU_BAR_APP" == "1" ]]; then
   LSUI_VALUE="true"
 fi
 
+# Sparkle compares CFBundleVersion, so a release whose BUILD_NUMBER did not
+# increase is invisible to every existing install. Fail loudly rather than
+# shipping an update nobody receives.
+if [[ -n "${REQUIRE_BUILD_NUMBER_ABOVE:-}" ]]; then
+  if [[ "$BUILD_NUMBER" -le "$REQUIRE_BUILD_NUMBER_ABOVE" ]]; then
+    echo "ERROR: BUILD_NUMBER ($BUILD_NUMBER) must exceed the last release ($REQUIRE_BUILD_NUMBER_ABOVE)." >&2
+    echo "       Sparkle compares CFBundleVersion; existing installs would never see this update." >&2
+    exit 1
+  fi
+fi
+
 BUILD_TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
@@ -79,6 +92,12 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleIconFile</key><string>Icon</string>
     <key>BuildTimestamp</key><string>${BUILD_TIMESTAMP}</string>
     <key>GitCommit</key><string>${GIT_COMMIT}</string>
+    <!-- Sparkle 2. The feed is the only non-loopback host this app contacts. -->
+    <key>SUFeedURL</key><string>${SPARKLE_FEED_URL}</string>
+    <key>SUPublicEDKey</key><string>${SPARKLE_PUBLIC_KEY}</string>
+    <!-- Opt in by default, but never silently: Sparkle asks on first run. -->
+    <key>SUEnableAutomaticChecks</key><true/>
+    <key>SUScheduledCheckInterval</key><integer>86400</integer>
 </dict>
 </plist>
 PLIST

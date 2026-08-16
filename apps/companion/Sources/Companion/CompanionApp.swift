@@ -72,6 +72,7 @@ final class AppModel {
     let controller: DaemonController
     let settings: SettingsStore
     let metrics: MetricsStore
+    let updater = UpdaterModel()
     private(set) var badges = BadgeCounts()
     private(set) var sparkline: [TokenPoint] = []
     private(set) var vaultPath: String?

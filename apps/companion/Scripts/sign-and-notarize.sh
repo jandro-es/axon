@@ -71,12 +71,15 @@ fi
 
 # ------------------------------------------------------------- credentials ---
 
+# One temp directory for every secret and intermediate, removed on exit.
+TMP_DIR=$(mktemp -d /tmp/axon-notarize.XXXXXX)
+trap 'rm -rf "$TMP_DIR"' EXIT
+
 NOTARY_ARGS=()
 if [[ -n "${APP_STORE_CONNECT_API_KEY_P8:-}" ]]; then
   [[ -n "${APP_STORE_CONNECT_KEY_ID:-}" && -n "${APP_STORE_CONNECT_ISSUER_ID:-}" ]] \
     || die "APP_STORE_CONNECT_API_KEY_P8 set without _KEY_ID and _ISSUER_ID"
-  KEY_FILE=$(mktemp /tmp/asc-key.XXXXXX.p8)
-  trap 'rm -f "$KEY_FILE" "$SUBMIT_ZIP"' EXIT
+  KEY_FILE="$TMP_DIR/asc-key.p8"
   printf '%s' "$APP_STORE_CONNECT_API_KEY_P8" | sed 's/\\n/\n/g' > "$KEY_FILE"
   NOTARY_ARGS=(--key "$KEY_FILE"
                --key-id "$APP_STORE_CONNECT_KEY_ID"
@@ -103,8 +106,7 @@ fi
 
 # --------------------------------------------------------------- notarize ---
 
-SUBMIT_ZIP=$(mktemp /tmp/"${APP_NAME}"-notarize.XXXXXX.zip)
-rm -f "$SUBMIT_ZIP"
+SUBMIT_ZIP="$TMP_DIR/${APP_NAME}-submit.zip"
 "$DITTO_BIN" --norsrc -c -k --keepParent "$APP_BUNDLE" "$SUBMIT_ZIP"
 
 log "submitting to Apple (typically 1-5 minutes)"

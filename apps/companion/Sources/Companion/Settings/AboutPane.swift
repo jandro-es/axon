@@ -37,6 +37,32 @@ struct AboutPane: View {
                 }
             }
 
+            Section("Updates") {
+                Toggle(
+                    "Check for Companion updates automatically",
+                    isOn: Binding(
+                        get: { app.updater.automaticallyChecks },
+                        set: { app.updater.automaticallyChecks = $0 }
+                    )
+                )
+                HStack {
+                    Button("Check Now") { app.updater.checkForUpdates() }
+                        .disabled(!app.updater.canCheck)
+                    Spacer()
+                    if let last = app.updater.lastCheck {
+                        Text("Last checked \(AxonFormat.relative(last))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                // The one piece of network egress Companion adds beyond
+                // loopback, disclosed rather than implied (CFR-81).
+                Text("Checks \(app.updater.feedURL). Companion and the AXON daemon update independently — this never touches the daemon.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Section("Open") {
                 Button("Dashboard") { Opener.open(.dashboard) }
                 Button("Vault in Obsidian") {

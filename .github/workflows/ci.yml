@@ -64,7 +64,81 @@ jobs:
       # `cmd && ok || warn` reporting pattern) are accepted; warnings+ fail.
       - name: shellcheck
         if: runner.os == 'Linux'
-        run: shellcheck --severity=warning scripts/*.sh
+        run: shellcheck --severity=warning scripts/*.sh apps/companion/Scripts/*.sh
+
+  # The macOS Companion app (apps/companion). A separate job because it needs
+  # a macOS runner and the Swift toolchain, and because it must NOT gate the
+  # daemon's own CI — Companion is strictly optional (PRD §1).
+  companion:
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version && xcodebuild -version
+
+      # Cache the Sparkle checkout/artifact; it is an 11 MB download and the
+      # only dependency the package has.
+      - name: Cache SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: apps/companion/.build
+          key: spm-${{ runner.os }}-${{ hashFiles('apps/companion/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Build
+        run: cd apps/companion && swift build
+
+      - name: Test
+        run: cd apps/companion && swift test
+
+      # The fixtures ARE the contract (apps/companion/CONTRACT.md), so a daemon
+      # that stopped serving a documented route would leave the decoder tests
+      # passing against stale bytes and ship the drift. A cheap structural
+      # check against the router and CLI flags in this same commit.
+      - name: Contract seams still exist
+        run: |
+          set -euo pipefail
+          missing=0
+          for route in /health /events /api/tokens /api/usage /api/runs \
+                       /api/ingestion /api/vault /api/review /api/actions /api/export; do
+            grep -qE "\"(GET|POST) ${route}\"" internal/dashboard/server.go || {
+              echo "::error::CONTRACT.md documents ${route} but the router no longer registers it"
+              missing=1
+            }
+          done
+          # The --json seams Companion depends on, three of which this branch added.
+          for cmd in status doctor health automations profiles service; do
+            grep -q '"json"' "cmd/axon/${cmd}_cmd.go" || {
+              echo "::error::cmd/axon/${cmd}_cmd.go lost its --json flag"
+              missing=1
+            }
+          done
+          exit $missing
+
+  # Allowed to fail: the newest beta SDK, so macOS 27 deprecations surface
+  # before a release rather than at one (CFR-91).
+  companion-beta-sdk:
+    runs-on: macos-26
+    continue-on-error: true
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select newest available Xcode
+        run: |
+          newest=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "using $newest"
+          sudo xcode-select -s "$newest"
+      - name: Build (warnings are the point)
+        run: cd apps/companion && swift build 2>&1 | tee build.log
+      - name: Fail on deprecation warnings
+        run: |
+          if grep -q "is deprecated" apps/companion/build.log; then
+            echo "::warning::deprecated API usage — see CFR-91"
+            grep "is deprecated" apps/companion/build.log | head -20
+            exit 1
+          fi
 
   govulncheck:
     runs-on: ubuntu-latest
