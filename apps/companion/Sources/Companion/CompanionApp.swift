@@ -165,6 +165,16 @@ final class AppModel {
         sparkline = (try? await client.tokens(days: 7))?.points ?? []
     }
 
+    /// An onboarding model wired to real detection and the app's own start
+    /// path, so the wizard's final button does exactly what the popover does.
+    func makeOnboardingModel() -> OnboardingModel {
+        OnboardingModel(
+            probe: SystemPrerequisiteProbe(explicitBinaryPath: settings.explicitBinaryPath),
+            settings: settings,
+            startDaemon: { [controller] in await controller.startDaemon() }
+        )
+    }
+
     /// A Doctor model bound to the same CLI and dashboard the rest of the app
     /// uses. Built per-window rather than held, so a re-opened Doctor window
     /// starts from a fresh run rather than a stale report.
