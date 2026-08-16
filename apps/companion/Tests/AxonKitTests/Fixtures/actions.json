@@ -1,0 +1,311 @@
+{
+  "actions": [
+    {
+      "id": 1,
+      "hash": "2ddd7f356a63f5aed4ca30667a9606401e4f68aaffec1ff6b7a2494c901a0981",
+      "source_path": "01-Projects/Axon/Axon 1.2–1.3 — Development Plan.md",
+      "line_no": 73,
+      "section": "Next actions",
+      "text": "Finish 1.1 (B2/C2/C3/B3 or ship at criterion and roll them)",
+      "raw": "- [x] Finish 1.1 (B2/C2/C3/B3 or ship at criterion and roll them) ✅ 2026-07-12",
+      "state": "done",
+      "checkbox": "x",
+      "priority": "",
+      "due": "",
+      "scheduled": "",
+      "start": "",
+      "done_date": "2026-07-12",
+      "project": "",
+      "contexts": null,
+      "tags": null,
+      "archived": false,
+      "updated": "2026-08-16T01:18:41Z",
+      "bucket": "done"
+    },
+    {
+      "id": 2,
+      "hash": "d4da6543ed051cb3ae2546927201da2d78edef658d9c03db13f985698d32edf3",
+      "source_path": "01-Projects/Axon/Axon 1.2–1.3 — Development Plan.md",
+      "line_no": 74,
+      "section": "Next actions",
+      "text": "Owner review of [[Axon 1.2–1.3 — PRD]] §Assumptions (channel choice, STT default, H5 scope, R5 target)",
+      "raw": "- [x] Owner review of [[Axon 1.2–1.3 — PRD]] §Assumptions (channel choice, STT default, H5 scope, R5 target) ✅ 2026-07-12",
+      "state": "done",
+      "checkbox": "x",
+      "priority": "",
+      "due": "",
+      "scheduled": "",
+      "start": "",
+      "done_date": "2026-07-12",
+      "project": "Axon 1.2–1.3 — PRD",
+      "contexts": null,
+      "tags": null,
+      "archived": false,
+      "updated": "2026-08-16T01:18:41Z",
+      "bucket": "done"
+    },
+    {
+      "id": 3,
+      "hash": "6fc1ab2a3270dafbb36a3cb703f902e5e03537b372113a2d32303d20392881c2",
+      "source_path": "01-Projects/Axon/Axon 1.2–1.3 — Development Plan.md",
+      "line_no": 75,
+      "section": "Next actions",
+      "text": "Graduate 1.2 into `docs/15-roadmap-1.2.md` via the standing design cycle when adopted",
+      "raw": "- [x] Graduate 1.2 into `docs/15-roadmap-1.2.md` via the standing design cycle when adopted ✅ 2026-07-12",
+      "state": "done",
+      "checkbox": "x",
+      "priority": "",
+      "due": "",
+      "scheduled": "",
+      "start": "",
+      "done_date": "2026-07-12",
+      "project": "",
+      "contexts": null,
+      "tags": null,
+      "archived": false,
+      "updated": "2026-08-16T01:18:41Z",
+      "bucket": "done"
+    },
+    {
+      "id": 4,
+      "hash": "adad5f070c2896374ceef21562d989c66354dc28b124e82e2d1c2abc9b44a336",
+      "source_path": "01-Projects/Axon/Axon 2.0 — Development Plan.md",
+      "line_no": 69,
+      "section": "Beta → GA checklist",
+      "text": "[[Axon 1.4 — Bridge to 2.0|1.4]] and [[Axon 1.5 — Polish & Coexistence|1.5]] release criteria met **and the T2 (60-day) + U2 (30-day sync) soaks completed** before beta invitations go out",
+      "raw": "- [ ] [[Axon 1.4 — Bridge to 2.0|1.4]] and [[Axon 1.5 — Polish & Coexistence|1.5]] release criteria met **and the T2 (60-day) + U2 (30-day sync) soaks completed** before beta invitations go out",
+      "state": "open",
+      "checkbox": " ",
+      "priority": "",
+      "due": "",
+      "scheduled": "",
+      "start": "",
+      "done_date": "",
+      "project": "Axon 1.4 — Bridge to 2.0",
+      "contexts": null,
+      "tags": null,
+      "archived": false,
+      "updated": "2026-08-16T01:18:41Z",
+      "bucket": "next"
+    },
+    {
+      "id": 5,
+      "hash": "051e881a2fc520764cbaaa763cc76cdd1e50ec8a0e1e25d333a83a84bd4e45f0",
+      "source_path": "01-Projects/Axon/Axon 2.0 — Development Plan.md",
+      "line_no": 70,
+      "section": "Beta → GA checklist",
+      "text": "All E-slices at gate; P7 beta gates met (≥10 through onboarding unassisted)",
+      "raw": "- [ ] All E-slices at gate; P7 beta gates met (≥10 through onboarding unassisted)",
+      "state": "open",
+      "checkbox": " ",
+      "priority": "",
+      "due": "",
+      "scheduled": "",
+      "start": "",
+      "done_date": "",
+      "project": "",
+      "contexts": null,
+      "tags": null,
+      "archived": false,
+      "updated": "2026-08-16T01:18:41Z",
+      "bucket": "next"
+    },
+    {
+      "id": 6,
+      "hash": "db5cea8cd45e0172c24e71ce42360f5896fc211f100132a6d31e490a7db806e1",
+      "source_path": "01-Projects/Axon/Axon 2.0 — Development Plan.md",
+      "line_no": 71,
+      "section": "Beta → GA checklist",
+      "text": "Pricing frozen from beta evidence (default: Pro $99/yr *or* $199 perpetual+1yr; Teams deferred)",
+      "raw": "- [ ] Pricing frozen from beta evidence (default: Pro $99/yr *or* $199 perpetual+1yr; Teams deferred)",
+      "state": "open",
+      "checkbox": " ",
+      "priority": "",
+      "due": "",
+      "scheduled": "",
+      "start": "",
+      "done_date": "",
+      "project": "",
+      "contexts": null,
+      "tags": null,
+      "archived": false,
+      "updated": "2026-08-16T01:18:41Z",
+      "bucket": "next"
+    },
+    {
+      "id": 7,
+      "hash": "fe196f1c1f387bda6b44d651cd3b499cad2d19c4e264dd2f0ce3a2429ad8ad84",
+      "source_path": "01-Projects/Axon/Axon 2.0 — Development Plan.md",
+      "line_no": 72,
+      "section": "Beta → GA checklist",
+      "text": "Relicense in effect for the 2.0 tree; 1.x MIT tags untouched",
+      "raw": "- [ ] Relicense in effect for the 2.0 tree; 1.x MIT tags untouched",
+      "state": "open",
+      "checkbox": " ",
+      "priority": "",
+      "due": "",
+      "scheduled": "",
+      "start": "",
+      "done_date": "",
+      "project": "",
+      "contexts": null,
+      "tags": null,
+      "archived": false,
+      "updated": "2026-08-16T01:18:41Z",
+      "bucket": "next"
+    },
+    {
+      "id": 8,
+      "hash": "307c1bba7dd478e94eb415f95afdb40b1459e9fa4cf69dc710778a727b1f5796",
+      "source_path": "01-Projects/Axon/Axon 2.0 — Development Plan.md",
+      "line_no": 73,
+      "section": "Beta → GA checklist",
+      "text": "Trust page + threat model public; diagnostics bundle in support flow",
+      "raw": "- [ ] Trust page + threat model public; diagnostics bundle in support flow",
+      "state": "open",
+      "checkbox": " ",
+      "priority": "",
+      "due": "",
+      "scheduled": "",
+      "start": "",
+      "done_date": "",
+      "project": "",
+      "contexts": null,
+      "tags": null,
+      "archived": false,
+      "updated": "2026-08-16T01:18:41Z",
+      "bucket": "next"
+    }
+  ],
+  "counts": {
+    "done7": 0,
+    "open": 458,
+    "overdue": 0,
+    "someday": 0,
+    "today": 0,
+    "waiting": 0
+  },
+  "trend": [
+    {
+      "day": "2026-07-18",
+      "done": 0
+    },
+    {
+      "day": "2026-07-19",
+      "done": 0
+    },
+    {
+      "day": "2026-07-20",
+      "done": 0
+    },
+    {
+      "day": "2026-07-21",
+      "done": 0
+    },
+    {
+      "day": "2026-07-22",
+      "done": 0
+    },
+    {
+      "day": "2026-07-23",
+      "done": 0
+    },
+    {
+      "day": "2026-07-24",
+      "done": 0
+    },
+    {
+      "day": "2026-07-25",
+      "done": 0
+    },
+    {
+      "day": "2026-07-26",
+      "done": 0
+    },
+    {
+      "day": "2026-07-27",
+      "done": 0
+    },
+    {
+      "day": "2026-07-28",
+      "done": 0
+    },
+    {
+      "day": "2026-07-29",
+      "done": 0
+    },
+    {
+      "day": "2026-07-30",
+      "done": 0
+    },
+    {
+      "day": "2026-07-31",
+      "done": 0
+    },
+    {
+      "day": "2026-08-01",
+      "done": 0
+    },
+    {
+      "day": "2026-08-02",
+      "done": 0
+    },
+    {
+      "day": "2026-08-03",
+      "done": 0
+    },
+    {
+      "day": "2026-08-04",
+      "done": 0
+    },
+    {
+      "day": "2026-08-05",
+      "done": 0
+    },
+    {
+      "day": "2026-08-06",
+      "done": 0
+    },
+    {
+      "day": "2026-08-07",
+      "done": 0
+    },
+    {
+      "day": "2026-08-08",
+      "done": 0
+    },
+    {
+      "day": "2026-08-09",
+      "done": 0
+    },
+    {
+      "day": "2026-08-10",
+      "done": 0
+    },
+    {
+      "day": "2026-08-11",
+      "done": 0
+    },
+    {
+      "day": "2026-08-12",
+      "done": 0
+    },
+    {
+      "day": "2026-08-13",
+      "done": 0
+    },
+    {
+      "day": "2026-08-14",
+      "done": 0
+    },
+    {
+      "day": "2026-08-15",
+      "done": 0
+    },
+    {
+      "day": "2026-08-16",
+      "done": 0
+    }
+  ],
+  "vault": "Personal"
+}

@@ -1,0 +1,15 @@
+{
+  "day_cost_cap": 0,
+  "day_cost_pct": 0,
+  "day_cost_used": 0,
+  "day_limit": 1500000,
+  "day_pct": 0.2482666666666667,
+  "day_used": 3724,
+  "guard_paused": false,
+  "guard_pct": 80,
+  "guard_reason": "",
+  "profile": "personal",
+  "week_limit": 8000000,
+  "week_pct": 0.38411249999999997,
+  "week_used": 30729
+}

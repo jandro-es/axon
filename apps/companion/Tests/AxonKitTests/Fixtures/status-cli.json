@@ -1,0 +1,22 @@
+{
+  "Profile": "personal",
+  "Day": {
+    "Used": 4024,
+    "Limit": 1500000,
+    "Pct": 0.26826666666666665,
+    "CostUsed": 0,
+    "CostCap": 0,
+    "CostPct": 0
+  },
+  "Week": {
+    "Used": 31029,
+    "Limit": 8000000,
+    "Pct": 0.3878625,
+    "CostUsed": 0,
+    "CostCap": 0,
+    "CostPct": 0
+  },
+  "GuardPct": 80,
+  "GuardPaused": false,
+  "GuardReason": ""
+}

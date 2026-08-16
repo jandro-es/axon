@@ -1,0 +1,32 @@
+[
+  {
+    "name": "personal",
+    "active": true,
+    "auth_mode": "subscription",
+    "vault_path": "/Users/jandro/Notes/Personal",
+    "data_dir": "/Users/jandro/.axon/profiles/personal",
+    "db_path": "/Users/jandro/.axon/profiles/personal/db.sqlite",
+    "config_dir": "/Users/jandro/.axon/profiles/personal/claude",
+    "oauth_token_ref": "env:CLAUDE_CODE_OAUTH_TOKEN_PERSONAL",
+    "allowed_automations": [
+      "*"
+    ]
+  },
+  {
+    "name": "work",
+    "active": false,
+    "auth_mode": "enterprise",
+    "vault_path": "/Users/jandro/Notes/Work",
+    "data_dir": "/Users/jandro/.axon/profiles/work",
+    "db_path": "/Users/jandro/.axon/profiles/work/db.sqlite",
+    "config_dir": "/Users/jandro/.axon/profiles/work/claude",
+    "oauth_token_ref": "env:CLAUDE_CODE_OAUTH_TOKEN_WORK",
+    "allowed_automations": [
+      "heartbeat",
+      "daily-log",
+      "inbox-triage",
+      "knowledge-reindex",
+      "budget-guard"
+    ]
+  }
+]

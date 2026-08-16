@@ -1,0 +1,58 @@
+: connected
+
+event: action.done
+data: {"ts":"2026-07-11T23:51:43Z","level":"info","kind":"action.done","message":"completed action in 01-Projects/Axon/Axon 1.2–1.3 — Development Plan.md","data":{"date":"2026-07-12","path":"01-Projects/Axon/Axon 1.2–1.3 — Development Plan.md","profile":"personal"}}
+
+event: ask.refused
+data: {"ts":"2026-07-12T09:42:41Z","level":"info","kind":"ask.refused","message":"ask: What is the next project?","data":{"conflicted":false,"profile":"personal","refused":true,"tokens":643}}
+
+event: automation.fail
+data: {"ts":"2026-08-16T05:00:41Z","level":"error","kind":"automation.fail","message":"compaction: failed","data":{"outcome":{"automation":"compaction","status":"failed","tokens":0,"run_id":6912,"dry_run":false,"error":"agent run \"automation.compaction\": claude -p agentic \"automation.compaction\": exit status 1: "},"profile":"personal"}}
+
+event: automation.run
+data: {"ts":"2026-08-16T16:49:31Z","level":"info","kind":"automation.run","message":"heartbeat: ok","data":{"outcome":{"automation":"heartbeat","status":"ok","summary":"heartbeat: inbox: 0 · tasks: 458 open · budget day 0% week 0% · 458 open tasks and 160 pending proposals represent significant backlog—prioritize triage to clarify what's actually actionable.","changes":["Daily/2026-08-16.md: axon:heartbeat updated"],"tokens":476,"estimated_tokens":109,"run_id":7001,"dry_run":false},"profile":"personal"}}
+
+event: automation.skip
+data: {"ts":"2026-08-16T16:55:00Z","level":"info","kind":"automation.skip","message":"capture: skipped","data":{"outcome":{"automation":"capture","status":"skipped","skip_reason":"inbox unchanged since last capture","tokens":0,"run_id":7004,"dry_run":false},"profile":"personal"}}
+
+event: review.accept
+data: {"ts":"2026-07-26T22:58:57Z","level":"info","kind":"review.accept","message":"accept: - [x] [[01-Projects/Spinnaker/Spinnaker — PRD]] ↔ [[01-Projects/KeepFolio/KeepFolio — PRD]] — ✓ applied 2026-07-26","data":{"id":"76d50d9d7801","kind":"pair","profile":"personal"}}
+
+event: review.dismiss
+data: {"ts":"2026-07-26T22:59:02Z","level":"info","kind":"review.dismiss","message":"dismiss: - [x] reconcile: \"Automations ran cleanly with 5 ok/0 failed on 2026-07-24 (not 6 ok/0 failed as on 2026-07-23), with no new sources ingested and only one note ([[Daily/2026-07-23]]) changed.\" supersedes \"Automations ran cleanly with 6 ok/0 failed on 2026-07-23, with no new sources ingested and only one note ([[Daily/2026-07-22]]) changed; review queue held steady at 100 pending items (no growth from 2026-07-22).\" — ✗ dismissed 2026-07-26","data":{"id":"3f839f9dd8ed","kind":"reconcile","profile":"personal"}}
+
+event: token.error
+data: {"ts":"2026-08-16T14:48:33Z","level":"error","kind":"token.error","message":"automation.session-distill: ","data":{"decision":"proceed","error":"output validation: line \"I'm ready to proceed. What would you like me to work on?\" is not `decision|lesson|preference: ...` or NONE","est_input":2089,"operation":"automation.session-distill","profile":"personal","reason":""}}
+
+event: token.ledger
+data: {"ts":"2026-08-16T16:49:31Z","level":"info","kind":"token.ledger","message":"automation.heartbeat: ","data":{"cost_usd":null,"decision":"proceed","est_input":109,"input":10,"ledger_id":286,"model":"claude-haiku-4-5","operation":"automation.heartbeat","output":466,"profile":"personal","reason":""}}
+
+: ping
+
+event: ingest.done
+data: {"ts":"2026-08-16T17:12:04.881204+01:00","level":"info","kind":"ingest.done","message":"ingested https://example.com/post -> 03-Resources/Sources/Example Post.md (7 chunks, 7 embedded)","data":{"profile":"personal","result":{"status":"ok","input":"https://example.com/post","note_path":"03-Resources/Sources/Example Post.md","title":"Example Post","chunks":7,"embedded":7,"redacted":false,"enrich_kind":"heuristic","input_tokens":0,"output_tokens":0,"tokens":0}}}
+
+event: ingest.skip
+data: {"ts":"2026-08-16T17:12:44.102003+01:00","level":"info","kind":"ingest.skip","message":"skipped https://example.com/post — unchanged","data":{"profile":"personal","result":{"status":"skipped","input":"https://example.com/post","chunks":0,"embedded":0,"redacted":false,"skipped_reason":"content hash unchanged","input_tokens":0,"output_tokens":0,"tokens":0}}}
+
+event: ingest.embed.fail
+data: {"ts":"2026-08-16T17:13:01.556711+01:00","level":"warn","kind":"ingest.embed.fail","message":"embed chunk 3: ollama: connection refused","data":{"profile":"personal"}}
+
+event: token.deny
+data: {"ts":"2026-08-16T17:14:20.010455+01:00","level":"warn","kind":"token.deny","message":"automation.briefing: daily budget exhausted","data":{"profile":"personal","operation":"automation.briefing","decision":"deny","est_input":1820,"reason":"daily budget exhausted"}}
+
+: ping
+
+event: automation.fail
+data: {"ts":"2026-08-16T17:15:00.000001+01:00","level":"error","kind":"automation.fail","message":"multiline: failed"}
+data: {"outcome":{"automation":"multiline","status":"failed","error":"a data field split across two lines must concatenate"}}
+
+event: future.kind.axon.does.not.emit.yet
+data: {"ts":"2026-08-16T17:16:00.000002+01:00","level":"info","kind":"future.kind.axon.does.not.emit.yet","message":"tolerant decoding: unknown kinds must not break the stream","data":{"unknown_field":{"nested":true}}}
+
+event: malformed.frame
+data: {"ts":"2026-08-16T17:17:00.
+
+event: automation.run
+data: {"ts":"2026-08-16T17:18:00.000003+01:00","level":"info","kind":"automation.run","message":"knowledge-reindex: ok","data":{"outcome":{"automation":"knowledge-reindex","status":"ok","summary":"indexed 168 notes, 556 links","tokens":0,"run_id":6931,"dry_run":false}}}
+

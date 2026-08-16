@@ -1,0 +1,192 @@
+[
+  {
+    "id": 7003,
+    "automation": "capture",
+    "started_at": "2026-08-16T16:50:03Z",
+    "finished_at": "2026-08-16T16:50:03Z",
+    "status": "skipped",
+    "skip_reason": "inbox unchanged since last capture",
+    "tokens": 0,
+    "error": ""
+  },
+  {
+    "id": 7002,
+    "automation": "budget-guard",
+    "started_at": "2026-08-16T16:49:26Z",
+    "finished_at": "2026-08-16T16:49:26Z",
+    "status": "ok",
+    "skip_reason": "",
+    "tokens": 0,
+    "error": ""
+  },
+  {
+    "id": 7001,
+    "automation": "heartbeat",
+    "started_at": "2026-08-16T16:49:25Z",
+    "finished_at": "2026-08-16T16:49:31Z",
+    "status": "ok",
+    "skip_reason": "",
+    "tokens": 476,
+    "error": ""
+  },
+  {
+    "id": 7000,
+    "automation": "inbox-triage",
+    "started_at": "2026-08-16T16:49:25Z",
+    "finished_at": "2026-08-16T16:49:25Z",
+    "status": "skipped",
+    "skip_reason": "inbox empty",
+    "tokens": 0,
+    "error": ""
+  },
+  {
+    "id": 6999,
+    "automation": "subscriptions",
+    "started_at": "2026-08-16T16:49:24Z",
+    "finished_at": "2026-08-16T16:49:24Z",
+    "status": "skipped",
+    "skip_reason": "no feeds configured",
+    "tokens": 0,
+    "error": ""
+  },
+  {
+    "id": 6998,
+    "automation": "capture",
+    "started_at": "2026-08-16T16:49:24Z",
+    "finished_at": "2026-08-16T16:49:24Z",
+    "status": "skipped",
+    "skip_reason": "inbox unchanged since last capture",
+    "tokens": 0,
+    "error": ""
+  },
+  {
+    "id": 6997,
+    "automation": "budget-guard",
+    "started_at": "2026-08-16T16:05:23Z",
+    "finished_at": "2026-08-16T16:05:23Z",
+    "status": "ok",
+    "skip_reason": "",
+    "tokens": 0,
+    "error": ""
+  },
+  {
+    "id": 6996,
+    "automation": "session-distill",
+    "started_at": "2026-08-16T16:05:23Z",
+    "finished_at": "2026-08-16T16:05:23Z",
+    "status": "skipped",
+    "skip_reason": "no idle sessions pending",
+    "tokens": 0,
+    "error": ""
+  },
+  {
+    "id": 6995,
+    "automation": "subscriptions",
+    "started_at": "2026-08-16T15:59:03Z",
+    "finished_at": "2026-08-16T15:59:03Z",
+    "status": "skipped",
+    "skip_reason": "no feeds configured",
+    "tokens": 0,
+    "error": ""
+  },
+  {
+    "id": 6994,
+    "automation": "inbox-triage",
+    "started_at": "2026-08-16T15:59:03Z",
+    "finished_at": "2026-08-16T15:59:03Z",
+    "status": "skipped",
+    "skip_reason": "inbox empty",
+    "tokens": 0,
+    "error": ""
+  },
+  {
+    "id": 6993,
+    "automation": "capture",
+    "started_at": "2026-08-16T15:59:02Z",
+    "finished_at": "2026-08-16T15:59:02Z",
+    "status": "skipped",
+    "skip_reason": "inbox unchanged since last capture",
+    "tokens": 0,
+    "error": ""
+  },
+  {
+    "id": 6992,
+    "automation": "subscriptions",
+    "started_at": "2026-08-16T14:48:20Z",
+    "finished_at": "2026-08-16T14:48:20Z",
+    "status": "skipped",
+    "skip_reason": "no feeds configured",
+    "tokens": 0,
+    "error": ""
+  },
+  {
+    "id": 6991,
+    "automation": "session-distill",
+    "started_at": "2026-08-16T14:48:20Z",
+    "finished_at": "2026-08-16T14:48:33Z",
+    "status": "ok",
+    "skip_reason": "",
+    "tokens": 959,
+    "error": ""
+  },
+  {
+    "id": 6990,
+    "automation": "capture",
+    "started_at": "2026-08-16T14:48:19Z",
+    "finished_at": "2026-08-16T14:48:19Z",
+    "status": "skipped",
+    "skip_reason": "inbox unchanged since last capture",
+    "tokens": 0,
+    "error": ""
+  },
+  {
+    "id": 6989,
+    "automation": "inbox-triage",
+    "started_at": "2026-08-16T14:48:19Z",
+    "finished_at": "2026-08-16T14:48:19Z",
+    "status": "skipped",
+    "skip_reason": "inbox empty",
+    "tokens": 0,
+    "error": ""
+  },
+  {
+    "id": 6988,
+    "automation": "budget-guard",
+    "started_at": "2026-08-16T14:31:22Z",
+    "finished_at": "2026-08-16T14:31:22Z",
+    "status": "ok",
+    "skip_reason": "",
+    "tokens": 0,
+    "error": ""
+  },
+  {
+    "id": 6987,
+    "automation": "capture",
+    "started_at": "2026-08-16T13:00:03Z",
+    "finished_at": "2026-08-16T13:00:03Z",
+    "status": "skipped",
+    "skip_reason": "inbox unchanged since last capture",
+    "tokens": 0,
+    "error": ""
+  },
+  {
+    "id": 6986,
+    "automation": "budget-guard",
+    "started_at": "2026-08-16T13:00:03Z",
+    "finished_at": "2026-08-16T13:00:03Z",
+    "status": "ok",
+    "skip_reason": "",
+    "tokens": 0,
+    "error": ""
+  },
+  {
+    "id": 6912,
+    "automation": "compaction",
+    "started_at": "2026-08-16T04:44:59Z",
+    "finished_at": "2026-08-16T05:00:41Z",
+    "status": "failed",
+    "skip_reason": "",
+    "tokens": 0,
+    "error": "agent run \"automation.compaction\": claude -p agentic \"automation.compaction\": exit status 1: "
+  }
+]

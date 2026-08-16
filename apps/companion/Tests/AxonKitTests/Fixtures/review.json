@@ -1,0 +1,48 @@
+{
+  "items": [
+    {
+      "id": "89436b7356c8",
+      "kind": "info",
+      "section": "Memory reconciliation (2026-07-12 05:10)",
+      "line": "- [x] reconcile: \"A new Chartroom tabletop campaign proposal appeared in the inbox on 2026-07-11, despite Chartroom having previously been rejected/archived as a gaming concept covered by Shanty.\" supersedes \"Product pipeline (set 2026-07-11): [[01-Projects/KeepFolio/KeepFolio|KeepFolio]] submits iOS 27 GA week (~mid-Sept 2026) → [[01-Projects/Shanty/Shanty|Shanty]] mid-Nov (party season) → [[01-Projects/Logbook/Logbook|Logbook]] mid-Jan 2027 ('last year's book' window) → [[01-Projects/Spyglass/Spyglass|Spyglass]] shelved as next candidate. Each launch is tied to an organic window; all four share the platform muscle: zero-fabrication law, tiered capability service (iOS 27 optimised / 26 fallback), eval-harness spine, KeepFolio-born PDF composer. Rejected: Keel (fintech — regulated/crowded, archived), Chartroom (gaming — segment covered by Shanty).\" — ✓ reconciled 2026-07-12",
+      "checked": true
+    },
+    {
+      "id": "e3e1ba25f9ef",
+      "kind": "pair",
+      "section": "Link suggestions (2026-07-13 00:36)",
+      "line": "- [x] [[00-Inbox/README]] ↔ [[Daily/2026-07-12]] — ✓ applied 2026-07-26",
+      "checked": true,
+      "note": "00-Inbox/README",
+      "target": "Daily/2026-07-12"
+    },
+    {
+      "id": "597a091973f7",
+      "kind": "pair",
+      "section": "Link suggestions (2026-07-13 00:36)",
+      "line": "- [x] [[00-Inbox/README]] ↔ [[01-Projects/Axon/Axon 2.0 — Purpose]] — ✓ applied 2026-07-26",
+      "checked": true,
+      "note": "00-Inbox/README",
+      "target": "01-Projects/Axon/Axon 2.0 — Purpose"
+    },
+    {
+      "id": "0c0c39f5cabb",
+      "kind": "pair",
+      "section": "Link suggestions (2026-07-13 00:36)",
+      "line": "- [x] [[01-Projects/Actions]] ↔ [[Templates/Knowledge Source]] — ✓ applied 2026-07-26",
+      "checked": true,
+      "note": "01-Projects/Actions",
+      "target": "Templates/Knowledge Source"
+    },
+    {
+      "id": "85eb191e2723",
+      "kind": "pair",
+      "section": "Link suggestions (2026-07-13 00:36)",
+      "line": "- [x] [[01-Projects/Actions]] ↔ [[02-Areas/Profile/MEMORY]] — ✓ applied 2026-07-26",
+      "checked": true,
+      "note": "01-Projects/Actions",
+      "target": "02-Areas/Profile/MEMORY"
+    }
+  ],
+  "pending": 160
+}

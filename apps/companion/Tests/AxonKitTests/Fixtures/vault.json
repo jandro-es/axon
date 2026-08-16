@@ -1,0 +1,31 @@
+{
+  "growth": [
+    {
+      "day": "2026-07-11",
+      "notes": 20,
+      "words": 20431
+    },
+    {
+      "day": "2026-08-06",
+      "notes": 21,
+      "words": 25002
+    },
+    {
+      "day": "2026-08-13",
+      "notes": 32,
+      "words": 36157
+    },
+    {
+      "day": "2026-08-16",
+      "notes": 165,
+      "words": 183737
+    }
+  ],
+  "stats": {
+    "notes": 165,
+    "links": 548,
+    "words": 183737,
+    "sources": 0,
+    "inbox_backlog": 0
+  }
+}
