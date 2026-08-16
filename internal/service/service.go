@@ -9,6 +9,7 @@ package service
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 )
@@ -215,6 +216,27 @@ func DaemonPathEnv(look func(string) (string, error)) string {
 		add(d)
 	}
 	return strings.Join(dirs, ":")
+}
+
+var (
+	plistPathRe   = regexp.MustCompile(`(?s)<key>PATH</key>\s*<string>([^<]*)</string>`)
+	systemdPathRe = regexp.MustCompile(`(?m)^Environment=PATH=(.*)$`)
+)
+
+// UnitPathEnv extracts the PATH an installed unit hands its daemon. That value
+// was resolved from the installing shell's full PATH (DaemonPathEnv), so it is
+// the best available answer to "where do this machine's tools live" for anything
+// that starts life with the minimal system PATH — a launchd daemon, or a GUI app
+// launched by LaunchServices. Returns "" when the unit carries no PATH.
+func UnitPathEnv(kind, content string) string {
+	re := plistPathRe
+	if kind == "systemd" {
+		re = systemdPathRe
+	}
+	if m := re.FindStringSubmatch(content); m != nil {
+		return strings.TrimSpace(m[1])
+	}
+	return ""
 }
 
 func xmlEscape(s string) string {

@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -39,6 +38,11 @@ type Check struct {
 	Name   string
 	Status CheckStatus
 	Detail string
+	// Fix is the concrete thing to do about a warn/fail — usually a command to
+	// run. Detail says what is wrong; Fix says what to do, so a GUI can render
+	// it as a copyable command rather than making the user parse prose. Empty
+	// when the check passes, or when there is nothing generic to suggest.
+	Fix string
 }
 
 // DoctorReport is the full set of checks plus a derived overall verdict.
@@ -167,13 +171,13 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 func serviceUnitCheck(activeProfile string) Check {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return Check{"service-path", StatusOK, "cannot resolve home dir — service unit check skipped"}
+		return Check{Name: "service-path", Status: StatusOK, Detail: "cannot resolve home dir — service unit check skipped"}
 	}
 	unit, err := service.ForOS("", service.Params{Profile: activeProfile, HomeDir: home})
 	if err != nil {
-		return Check{"service-path", StatusOK, "no OS service units on this platform"}
+		return Check{Name: "service-path", Status: StatusOK, Detail: "no OS service units on this platform"}
 	}
-	return serviceUnitPathCheck(unit.Kind, unit.Path)
+	return serviceUnitPathCheck(unit.Kind, unit.Path, activeProfile)
 }
 
 // serviceUnitPathCheck warns when an installed service unit carries no PATH
@@ -182,40 +186,36 @@ func serviceUnitCheck(activeProfile string) Check {
 // though the user's login shell finds it, because launchd/systemd start
 // daemons with a minimal system PATH. Advisory: absent unit = daemon not
 // OS-supervised = nothing to check.
-func serviceUnitPathCheck(kind, unitPath string) Check {
+func serviceUnitPathCheck(kind, unitPath, profile string) Check {
 	const name = "service-path"
 	content, err := os.ReadFile(unitPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return Check{name, StatusOK, "no OS service unit installed — daemon runs manually with your shell's PATH"}
+			return Check{Name: name, Status: StatusOK, Detail: "no OS service unit installed — daemon runs manually with your shell's PATH"}
 		}
-		return Check{name, StatusWarn, fmt.Sprintf("cannot read service unit %s: %v", unitPath, err)}
+		return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("cannot read service unit %s: %v", unitPath, err)}
 	}
-	pathEnv := unitPathEnv(kind, string(content))
+	pathEnv := service.UnitPathEnv(kind, string(content))
 	if pathEnv == "" {
-		return Check{name, StatusWarn, fmt.Sprintf("service unit %s sets no PATH — the supervised daemon cannot find claude outside system dirs; re-run `axon service install` and reload", unitPath)}
+		return Check{Name: name, Status: StatusWarn,
+			Detail: fmt.Sprintf("service unit %s sets no PATH — the supervised daemon cannot find claude outside system dirs", unitPath),
+			Fix:    serviceReinstallFix(profile)}
 	}
 	if dir := findExecutable("claude", pathEnv); dir != "" {
-		return Check{name, StatusOK, "service unit PATH resolves claude (" + dir + ")"}
+		return Check{Name: name, Status: StatusOK, Detail: "service unit PATH resolves claude (" + dir + ")"}
 	}
-	return Check{name, StatusWarn, fmt.Sprintf("service unit PATH cannot resolve claude — automations run under it will fail; re-run `axon service install` and reload (unit: %s)", unitPath)}
+	return Check{Name: name, Status: StatusWarn,
+		Detail: fmt.Sprintf("service unit PATH cannot resolve claude — automations run under it will fail (unit: %s)", unitPath),
+		Fix:    serviceReinstallFix(profile)}
 }
 
-var (
-	plistPathRe   = regexp.MustCompile(`(?s)<key>PATH</key>\s*<string>([^<]*)</string>`)
-	systemdPathRe = regexp.MustCompile(`(?m)^Environment=PATH=(.*)$`)
-)
-
-// unitPathEnv extracts the PATH value a service unit hands its daemon.
-func unitPathEnv(kind, content string) string {
-	re := plistPathRe
-	if kind == "systemd" {
-		re = systemdPathRe
+// serviceReinstallFix is the command that regenerates a service unit with a
+// working PATH and restarts it — the fix for every service-path warning.
+func serviceReinstallFix(profile string) string {
+	if runtime.GOOS == "darwin" {
+		return fmt.Sprintf("axon service install && launchctl kickstart -k gui/$(id -u)/com.axon.%s", profile)
 	}
-	if m := re.FindStringSubmatch(content); m != nil {
-		return strings.TrimSpace(m[1])
-	}
-	return ""
+	return fmt.Sprintf("axon service install && systemctl --user restart axon@%s", profile)
 }
 
 // findExecutable reports the directory of pathEnv that holds an executable
@@ -244,9 +244,9 @@ func embeddingsCheck(p config.Profile) Check {
 		}
 		st, err := os.Stat(helper)
 		if err != nil || st.Mode()&0o111 == 0 {
-			return Check{name, StatusWarn, fmt.Sprintf("Apple embeddings helper not built at %s — run `axon init` (requires Xcode CLT)", helper)}
+			return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("Apple embeddings helper not built at %s — run `axon init` (requires Xcode CLT)", helper), Fix: "axon init"}
 		}
-		return Check{name, StatusOK, "Apple embeddings helper present: " + helper}
+		return Check{Name: name, Status: StatusOK, Detail: "Apple embeddings helper present: " + helper}
 	}
 	return binaryCheck("ollama", "ollama",
 		"Ollama found", "ollama not found on PATH (needed for local embeddings in Phase 2)")
@@ -265,9 +265,9 @@ func ocrCheck(p config.Profile) Check {
 		}
 		st, err := os.Stat(helper)
 		if err != nil || st.Mode()&0o111 == 0 {
-			return Check{name, StatusWarn, fmt.Sprintf("Apple OCR helper not built at %s — run `axon init` (requires Xcode CLT)", helper)}
+			return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("Apple OCR helper not built at %s — run `axon init` (requires Xcode CLT)", helper), Fix: "axon init"}
 		}
-		return Check{name, StatusOK, "Apple OCR helper present: " + helper}
+		return Check{Name: name, Status: StatusOK, Detail: "Apple OCR helper present: " + helper}
 	case "tesseract":
 		var missing []string
 		for _, bin := range []string{"pdftoppm", "tesseract"} {
@@ -276,11 +276,11 @@ func ocrCheck(p config.Profile) Check {
 			}
 		}
 		if len(missing) > 0 {
-			return Check{name, StatusWarn, "OCR (tesseract) needs on PATH: " + strings.Join(missing, ", ") + " — install poppler + tesseract"}
+			return Check{Name: name, Status: StatusWarn, Detail: "OCR (tesseract) needs on PATH: " + strings.Join(missing, ", ") + " — install poppler + tesseract", Fix: installHint("tesseract")}
 		}
-		return Check{name, StatusOK, "tesseract OCR binaries present (pdftoppm, tesseract)"}
+		return Check{Name: name, Status: StatusOK, Detail: "tesseract OCR binaries present (pdftoppm, tesseract)"}
 	default:
-		return Check{name, StatusOK, "OCR off"}
+		return Check{Name: name, Status: StatusOK, Detail: "OCR off"}
 	}
 }
 
@@ -292,9 +292,9 @@ func visionCheck(p config.Profile) Check {
 	mode := p.Ingestion.VisionMode()
 	switch {
 	case mode == "off":
-		return Check{name, StatusOK, "vision off"}
+		return Check{Name: name, Status: StatusOK, Detail: "vision off"}
 	case mode == "apple":
-		return Check{name, StatusWarn, `vision provider "apple" requires macOS 27 on-device image input (not yet available) — use ollama:<model> or off`}
+		return Check{Name: name, Status: StatusWarn, Detail: `vision provider "apple" requires macOS 27 on-device image input (not yet available) — use ollama:<model> or off`, Fix: "axon config set ingestion.vision off"}
 	case strings.HasPrefix(mode, "ollama:"):
 		model := strings.TrimPrefix(mode, "ollama:")
 		host := p.Embeddings.Host
@@ -304,14 +304,14 @@ func visionCheck(p config.Profile) Check {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		if !ollamaReachable(ctx, host) {
-			return Check{name, StatusWarn, fmt.Sprintf("vision Ollama not reachable at %s — start `ollama serve` (images fall back to OCR-only)", host)}
+			return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("vision Ollama not reachable at %s — start `ollama serve` (images fall back to OCR-only)", host), Fix: "ollama serve"}
 		}
 		if !ollamaModelPresent(ctx, host, model) {
-			return Check{name, StatusWarn, fmt.Sprintf("vision model %q not pulled — run `ollama pull %s`", model, model)}
+			return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("vision model %q not pulled — run `ollama pull %s`", model, model), Fix: fmt.Sprintf("ollama pull %s", model)}
 		}
-		return Check{name, StatusOK, "vision ready: " + mode}
+		return Check{Name: name, Status: StatusOK, Detail: "vision ready: " + mode}
 	default:
-		return Check{name, StatusWarn, fmt.Sprintf("ingestion.vision %q not recognised — use off, ollama:<model>, or apple", mode)}
+		return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("ingestion.vision %q not recognised — use off, ollama:<model>, or apple", mode)}
 	}
 }
 
@@ -321,9 +321,9 @@ func visionCheck(p config.Profile) Check {
 func mediaCheck(_ config.Profile) Check {
 	const name = "media"
 	if _, err := lookPath("yt-dlp"); err != nil {
-		return Check{name, StatusWarn, "yt-dlp not found on PATH — media URLs will be captured and flagged (install yt-dlp for transcript ingestion)"}
+		return Check{Name: name, Status: StatusWarn, Detail: "yt-dlp not found on PATH — media URLs will be captured and flagged (install yt-dlp for transcript ingestion)", Fix: installHint("yt-dlp")}
 	}
-	return Check{name, StatusOK, "media caption ingestion ready (yt-dlp present)"}
+	return Check{Name: name, Status: StatusOK, Detail: "media caption ingestion ready (yt-dlp present)"}
 }
 
 // rerankCheck verifies the configured local reranker's prerequisite: a
@@ -334,7 +334,7 @@ func rerankCheck(p config.Profile) Check {
 	const name = "rerank"
 	mode := p.Retrieval.RerankMode()
 	if !strings.HasPrefix(mode, "ollama:") {
-		return Check{name, StatusWarn, fmt.Sprintf("retrieval.rerank %q not recognised — use off or ollama:<model>", mode)}
+		return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("retrieval.rerank %q not recognised — use off or ollama:<model>", mode)}
 	}
 	model := strings.TrimPrefix(mode, "ollama:")
 	host := p.Embeddings.Host
@@ -344,12 +344,12 @@ func rerankCheck(p config.Profile) Check {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if !ollamaReachable(ctx, host) {
-		return Check{name, StatusWarn, fmt.Sprintf("reranker Ollama not reachable at %s — start `ollama serve` (rerank falls back to fused order)", host)}
+		return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("reranker Ollama not reachable at %s — start `ollama serve` (rerank falls back to fused order)", host), Fix: "ollama serve"}
 	}
 	if !ollamaModelPresent(ctx, host, model) {
-		return Check{name, StatusWarn, fmt.Sprintf("reranker model %q not pulled — run `ollama pull %s`", model, model)}
+		return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("reranker model %q not pulled — run `ollama pull %s`", model, model), Fix: fmt.Sprintf("ollama pull %s", model)}
 	}
-	return Check{name, StatusOK, "reranker ready: " + mode}
+	return Check{Name: name, Status: StatusOK, Detail: "reranker ready: " + mode}
 }
 
 // verifyCheck reports the R5.3 verification cascade's prerequisites (FR-145):
@@ -360,10 +360,10 @@ func verifyCheck(p config.Profile) Check {
 	const name = "verify"
 	mode := p.Models.VerifyMode()
 	if !strings.HasPrefix(mode, "ollama:") {
-		return Check{name, StatusWarn, fmt.Sprintf("models.verify %q not recognised — use off or ollama:<model>", mode)}
+		return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("models.verify %q not recognised — use off or ollama:<model>", mode)}
 	}
 	if config.ParseModelRef(p.Models.Routine).Provider != config.ProviderOllama {
-		return Check{name, StatusWarn, "models.verify is set but the routine tier is not local — verification never triggers"}
+		return Check{Name: name, Status: StatusWarn, Detail: "models.verify is set but the routine tier is not local — verification never triggers"}
 	}
 	model := strings.TrimPrefix(mode, "ollama:")
 	host := p.Models.OllamaHost
@@ -374,12 +374,12 @@ func verifyCheck(p config.Profile) Check {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if !ollamaReachable(ctx, host) {
-		return Check{name, StatusWarn, fmt.Sprintf("verify Ollama not reachable at %s — start `ollama serve` (routine answers stay local, unverified)", host)}
+		return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("verify Ollama not reachable at %s — start `ollama serve` (routine answers stay local, unverified)", host), Fix: "ollama serve"}
 	}
 	if !ollamaModelPresent(ctx, host, model) {
-		return Check{name, StatusWarn, fmt.Sprintf("verify model %q not pulled — run `ollama pull %s`", model, model)}
+		return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("verify model %q not pulled — run `ollama pull %s`", model, model), Fix: fmt.Sprintf("ollama pull %s", model)}
 	}
-	return Check{name, StatusOK, fmt.Sprintf("verify ready: %s, floor %d/10", mode, p.Models.VerifyMinScoreOr())}
+	return Check{Name: name, Status: StatusOK, Detail: fmt.Sprintf("verify ready: %s, floor %d/10", mode, p.Models.VerifyMinScoreOr())}
 }
 
 // resurfaceCheck reports the R9 resurfacer's spaced-repetition + contradiction
@@ -394,7 +394,7 @@ func resurfaceCheck(p config.Profile) Check {
 	if active {
 		state = fmt.Sprintf("contradiction path active (routine tier, ≤%d checks/run)", p.Resurfacing.ContradictionMaxChecksOr())
 	}
-	return Check{name, StatusOK, fmt.Sprintf("resurfacer ladder %v weeks; %s", weeks, state)}
+	return Check{Name: name, Status: StatusOK, Detail: fmt.Sprintf("resurfacer ladder %v weeks; %s", weeks, state)}
 }
 
 // researchCheck reports the deep-research automation posture (1.3 H2). Advisory
@@ -403,9 +403,9 @@ func resurfaceCheck(p config.Profile) Check {
 func researchCheck(p config.Profile) Check {
 	const name = "research"
 	if !p.Research.Enabled {
-		return Check{name, StatusOK, "deep research off (set research.enabled on the personal profile to opt in)"}
+		return Check{Name: name, Status: StatusOK, Detail: "deep research off (set research.enabled on the personal profile to opt in)"}
 	}
-	return Check{name, StatusOK, fmt.Sprintf("deep research on — %d fetch(es) / %d token(s) per run; fetches obey the ingest allow-list",
+	return Check{Name: name, Status: StatusOK, Detail: fmt.Sprintf("deep research on — %d fetch(es) / %d token(s) per run; fetches obey the ingest allow-list",
 		p.Research.MaxFetchesOr(), p.Research.BudgetTokensOr())}
 }
 
@@ -416,9 +416,9 @@ func actionExtractCheck(p config.Profile) Check {
 	const name = "action-extract"
 	auto, ok := p.Automations["action-extract"]
 	if !ok || !auto.Enabled {
-		return Check{name, StatusOK, "action-extract off (opt-in model extraction of implicit action items)"}
+		return Check{Name: name, Status: StatusOK, Detail: "action-extract off (opt-in model extraction of implicit action items)"}
 	}
-	return Check{name, StatusOK, "action-extract active (routine tier, local-routable; extracts commitments → review queue → axon:tasks)"}
+	return Check{Name: name, Status: StatusOK, Detail: "action-extract active (routine tier, local-routable; extracts commitments → review queue → axon:tasks)"}
 }
 
 // actionsReviewCheck reports the T5 stale-action sweep. Advisory (always
@@ -427,9 +427,9 @@ func actionsReviewCheck(p config.Profile) Check {
 	const name = "actions-review"
 	auto, ok := p.Automations["actions-review"]
 	if !ok || !auto.Enabled {
-		return Check{name, StatusOK, "actions-review off (stale-action sweep; enable to nudge forgotten tasks)"}
+		return Check{Name: name, Status: StatusOK, Detail: "actions-review off (stale-action sweep; enable to nudge forgotten tasks)"}
 	}
-	return Check{name, StatusOK, fmt.Sprintf("actions-review active (open undated actions in notes untouched > %dd → review queue; accept → #someday)", p.Actions.StaleAfterDaysOr())}
+	return Check{Name: name, Status: StatusOK, Detail: fmt.Sprintf("actions-review active (open undated actions in notes untouched > %dd → review queue; accept → #someday)", p.Actions.StaleAfterDaysOr())}
 }
 
 // mergeCheck reports the R7 near-duplicate merge-proposals sweep. Advisory
@@ -439,9 +439,9 @@ func mergeCheck(p config.Profile) Check {
 	const name = "merge"
 	auto, ok := p.Automations["merge-proposals"]
 	if !ok || !auto.Enabled {
-		return Check{name, StatusOK, "merge-proposals off (near-duplicate sweep; enable in automations to propose merges)"}
+		return Check{Name: name, Status: StatusOK, Detail: "merge-proposals off (near-duplicate sweep; enable in automations to propose merges)"}
 	}
-	return Check{name, StatusOK, fmt.Sprintf("merge-proposals active (cosine ≥ %.2f, ≤%d proposals/run; accept archives to .trash, never deletes)",
+	return Check{Name: name, Status: StatusOK, Detail: fmt.Sprintf("merge-proposals active (cosine ≥ %.2f, ≤%d proposals/run; accept archives to .trash, never deletes)",
 		p.Merge.ThresholdOr(), p.Merge.MaxProposalsOr())}
 }
 
@@ -451,19 +451,15 @@ func mergeCheck(p config.Profile) Check {
 func vettingCheck(name, tier, ref string, minPass int, row db.EvalRun, haveRow bool, curDigest string, digestKnown bool) Check {
 	switch {
 	case minPass == 0:
-		return Check{name, StatusWarn,
-			fmt.Sprintf("local tier %s is ungated — set models.eval_min_pass to require evals", ref)}
+		return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("local tier %s is ungated — set models.eval_min_pass to require evals", ref)}
 	case !haveRow:
-		return Check{name, StatusWarn,
-			fmt.Sprintf("%s not vetted — run `axon eval --family %s --model %s`", ref, tier, ref)}
+		return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("%s not vetted — run `axon eval --family %s --model %s`", ref, tier, ref)}
 	case row.PassPct < minPass:
-		return Check{name, StatusWarn,
-			fmt.Sprintf("%s scored %d%% below %d%% — routes to Claude until it passes", ref, row.PassPct, minPass)}
+		return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("%s scored %d%% below %d%% — routes to Claude until it passes", ref, row.PassPct, minPass)}
 	case digestKnown && row.Digest != "" && curDigest != "" && row.Digest != curDigest:
-		return Check{name, StatusWarn,
-			fmt.Sprintf("%s changed since eval (%s → %s) — re-run `axon eval`", ref, short(row.Digest), short(curDigest))}
+		return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("%s changed since eval (%s → %s) — re-run `axon eval`", ref, short(row.Digest), short(curDigest))}
 	default:
-		return Check{name, StatusOK, fmt.Sprintf("%s vetted %d%%", ref, row.PassPct)}
+		return Check{Name: name, Status: StatusOK, Detail: fmt.Sprintf("%s vetted %d%%", ref, row.PassPct)}
 	}
 }
 
@@ -543,21 +539,17 @@ func localModelsCheck(p config.Profile) []Check {
 			host = strings.TrimRight(host, "/")
 			ctx := context.Background()
 			if !ollamaReachable(ctx, host) {
-				checks = append(checks, Check{name, StatusWarn,
-					fmt.Sprintf("Ollama not reachable at %s — %s calls will use models.local_fallback (%s)", host, t.tier, m.Fallback())})
+				checks = append(checks, Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("Ollama not reachable at %s — %s calls will use models.local_fallback (%s)", host, t.tier, m.Fallback())})
 				continue
 			}
 			if !ollamaModelPresent(ctx, host, ref.Model) {
-				checks = append(checks, Check{name, StatusWarn,
-					fmt.Sprintf("model %q not pulled — run `ollama pull %s` (until then %s calls use models.local_fallback: %s)", ref.Model, ref.Model, t.tier, m.Fallback())})
+				checks = append(checks, Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("model %q not pulled — run `ollama pull %s` (until then %s calls use models.local_fallback: %s)", ref.Model, ref.Model, t.tier, m.Fallback())})
 				continue
 			}
-			checks = append(checks, Check{name, StatusOK,
-				fmt.Sprintf("ollama model %q available at %s", ref.Model, host)})
+			checks = append(checks, Check{Name: name, Status: StatusOK, Detail: fmt.Sprintf("ollama model %q available at %s", ref.Model, host)})
 		case config.ProviderApple:
 			if runtime.GOOS != "darwin" {
-				checks = append(checks, Check{name, StatusWarn,
-					fmt.Sprintf("tier configured as apple but this machine is not a mac — calls will use models.local_fallback (%s)", m.Fallback())})
+				checks = append(checks, Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("tier configured as apple but this machine is not a mac — calls will use models.local_fallback (%s)", m.Fallback())})
 				continue
 			}
 			helper := m.AppleHelper
@@ -565,11 +557,10 @@ func localModelsCheck(p config.Profile) []Check {
 				helper = config.DefaultAppleLMHelperPath()
 			}
 			if st, err := os.Stat(helper); err != nil || st.Mode()&0o111 == 0 {
-				checks = append(checks, Check{name, StatusWarn,
-					fmt.Sprintf("Apple Foundation Models helper not built at %s — run `axon init` or `axon configure models classify apple` (requires Xcode CLT)", helper)})
+				checks = append(checks, Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("Apple Foundation Models helper not built at %s — run `axon init` or `axon configure models classify apple` (requires Xcode CLT)", helper)})
 				continue
 			}
-			checks = append(checks, Check{name, StatusOK, "Apple Foundation Models helper present: " + helper})
+			checks = append(checks, Check{Name: name, Status: StatusOK, Detail: "Apple Foundation Models helper present: " + helper})
 		}
 	}
 	return checks
@@ -581,9 +572,9 @@ func interopCheck(p config.Profile) Check {
 	const name = "interop:obsidian-mcp"
 	obs := p.Interop.ObsidianMCP
 	if !obs.Configured() {
-		return Check{name, StatusOK, "not configured (AXON's own server is the vault backend)"}
+		return Check{Name: name, Status: StatusOK, Detail: "not configured (AXON's own server is the vault backend)"}
 	}
-	return Check{name, StatusOK, fmt.Sprintf("configured (%s) — registered alongside AXON by `axon mcp install`", obs.Command)}
+	return Check{Name: name, Status: StatusOK, Detail: fmt.Sprintf("configured (%s) — registered alongside AXON by `axon mcp install`", obs.Command)}
 }
 
 // claudeCodeWiringCheck reports whether the project's Claude Code wiring exists
@@ -592,12 +583,12 @@ func interopCheck(p config.Profile) Check {
 func claudeCodeWiringCheck(vaultPath string) Check {
 	const name = "client:claude-code"
 	if vaultPath == "" {
-		return Check{name, StatusWarn, "no vault_path configured"}
+		return Check{Name: name, Status: StatusWarn, Detail: "no vault_path configured"}
 	}
 	if _, err := os.Stat(filepath.Join(vaultPath, ".claude", ".mcp.json")); err != nil {
-		return Check{name, StatusWarn, "not wired — run `axon init` or `axon mcp install --client code`"}
+		return Check{Name: name, Status: StatusWarn, Detail: "not wired — run `axon init` or `axon mcp install --client code`"}
 	}
-	return Check{name, StatusOK, "registered (full-featured: tools + hooks + skills + automations)"}
+	return Check{Name: name, Status: StatusOK, Detail: "registered (full-featured: tools + hooks + skills + automations)"}
 }
 
 // desktopConfigPath is indirected so tests can point the Desktop check at a temp
@@ -617,24 +608,24 @@ func claudeDesktopCheck(activeProfile string) Check {
 	const name = "client:claude-desktop"
 	path, err := desktopConfigPath()
 	if err != nil {
-		return Check{name, StatusOK, "Claude Desktop not detected (optional)"}
+		return Check{Name: name, Status: StatusOK, Detail: "Claude Desktop not detected (optional)"}
 	}
 	st, err := clients.DetectDesktop(path)
 	if err != nil {
-		return Check{name, StatusOK, "Claude Desktop not detected (optional)"}
+		return Check{Name: name, Status: StatusOK, Detail: "Claude Desktop not detected (optional)"}
 	}
 	switch {
 	case st.Registered:
 		note := "registered (tools only — no hooks/skills/profile injection; keep vault edits in AXON tools)"
 		if st.Profile != "" && st.Profile != activeProfile {
 			note = fmt.Sprintf("registered for profile %q, not active %q — re-run `axon mcp install --client desktop`", st.Profile, activeProfile)
-			return Check{name, StatusWarn, note}
+			return Check{Name: name, Status: StatusWarn, Detail: note}
 		}
-		return Check{name, StatusOK, note}
+		return Check{Name: name, Status: StatusOK, Detail: note}
 	case st.Present:
-		return Check{name, StatusWarn, "Claude Desktop present but AXON not registered — run `axon mcp install --client desktop`"}
+		return Check{Name: name, Status: StatusWarn, Detail: "Claude Desktop present but AXON not registered — run `axon mcp install --client desktop`"}
 	default:
-		return Check{name, StatusOK, "Claude Desktop not configured (optional; `axon mcp install --client desktop`)"}
+		return Check{Name: name, Status: StatusOK, Detail: "Claude Desktop not configured (optional; `axon mcp install --client desktop`)"}
 	}
 }
 
@@ -642,14 +633,14 @@ func claudeDesktopCheck(activeProfile string) Check {
 func vaultWritableCheck(vaultPath string) Check {
 	const name = "vault-writable"
 	if vaultPath == "" {
-		return Check{name, StatusWarn, "no vault_path configured"}
+		return Check{Name: name, Status: StatusWarn, Detail: "no vault_path configured"}
 	}
 	target := vaultPath
 	// Walk up to the nearest existing ancestor and test writability there.
 	for {
 		if info, err := os.Stat(target); err == nil {
 			if !info.IsDir() {
-				return Check{name, StatusFail, fmt.Sprintf("%s exists but is not a directory", target)}
+				return Check{Name: name, Status: StatusFail, Detail: fmt.Sprintf("%s exists but is not a directory", target)}
 			}
 			break
 		}
@@ -661,18 +652,18 @@ func vaultWritableCheck(vaultPath string) Check {
 	}
 	f, err := os.CreateTemp(target, ".axon-doctor-*")
 	if err != nil {
-		return Check{name, StatusFail, fmt.Sprintf("%s not writable: %v", target, err)}
+		return Check{Name: name, Status: StatusFail, Detail: fmt.Sprintf("%s not writable: %v", target, err)}
 	}
 	_ = f.Close()
 	_ = os.Remove(f.Name())
-	return Check{name, StatusOK, "vault path writable: " + vaultPath}
+	return Check{Name: name, Status: StatusOK, Detail: "vault path writable: " + vaultPath}
 }
 
 // portFreeCheck confirms the dashboard port is bindable on the loopback host.
 func portFreeCheck(host string, port int) Check {
 	const name = "dashboard-port"
 	if port == 0 {
-		return Check{name, StatusWarn, "no dashboard port configured"}
+		return Check{Name: name, Status: StatusWarn, Detail: "no dashboard port configured"}
 	}
 	if host == "" {
 		host = "127.0.0.1"
@@ -680,10 +671,10 @@ func portFreeCheck(host string, port int) Check {
 	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		return Check{name, StatusWarn, fmt.Sprintf("%s is in use (a daemon may already be running): %v", addr, err)}
+		return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("%s is in use (a daemon may already be running): %v", addr, err)}
 	}
 	_ = ln.Close()
-	return Check{name, StatusOK, "dashboard port free: " + addr}
+	return Check{Name: name, Status: StatusOK, Detail: "dashboard port free: " + addr}
 }
 
 // residencyCheck reports the data-residency posture (NFR-01: local-first).
@@ -693,7 +684,7 @@ func residencyCheck(p config.Profile) Check {
 	if res == "" {
 		res = "local-only"
 	}
-	return Check{name, StatusOK, fmt.Sprintf("%s (all state on local disk; only Claude + Ollama + allowed ingest domains egress)", res)}
+	return Check{Name: name, Status: StatusOK, Detail: fmt.Sprintf("%s (all state on local disk; only Claude + Ollama + allowed ingest domains egress)", res)}
 }
 
 // annIndexCheck advises on the vector-search backend (ADR-025, FR-115): suggest
@@ -706,20 +697,19 @@ func actionsCheck(paths config.ResolvedPaths) Check {
 	const name = "actions"
 	ctx := context.Background()
 	if _, err := os.Stat(paths.DBPath); err != nil {
-		return Check{name, StatusOK, "no database yet"}
+		return Check{Name: name, Status: StatusOK, Detail: "no database yet"}
 	}
 	d, err := sql.Open("sqlite", paths.DBPath)
 	if err != nil {
-		return Check{name, StatusOK, "database not readable; skipped"}
+		return Check{Name: name, Status: StatusOK, Detail: "database not readable; skipped"}
 	}
 	defer func() { _ = d.Close() }()
 
 	total, open, done, cancelled, _, err := db.ActionStateCounts(ctx, d)
 	if err != nil {
-		return Check{name, StatusOK, "actions not counted; skipped"}
+		return Check{Name: name, Status: StatusOK, Detail: "actions not counted; skipped"}
 	}
-	return Check{name, StatusOK,
-		fmt.Sprintf("%d actions indexed (%d open / %d done / %d cancelled)", total, open, done, cancelled)}
+	return Check{Name: name, Status: StatusOK, Detail: fmt.Sprintf("%d actions indexed (%d open / %d done / %d cancelled)", total, open, done, cancelled)}
 }
 
 // memoryFactsCheck reports the derived memory_facts index size (open/superseded)
@@ -735,58 +725,56 @@ func memoryFactsCheck(paths config.ResolvedPaths) Check {
 	if lines, err := identity.BlockLines(ctx, v); err == nil {
 		for _, line := range lines {
 			if _, ok := identity.ParseFact(line); !ok {
-				return Check{name, StatusWarn,
-					fmt.Sprintf("MEMORY.md has an unparseable memory line: %q — fix it in Obsidian", line)}
+				return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("MEMORY.md has an unparseable memory line: %q — fix it in Obsidian", line)}
 			}
 		}
 	}
 
 	if _, err := os.Stat(paths.DBPath); err != nil {
-		return Check{name, StatusOK, "no database yet"}
+		return Check{Name: name, Status: StatusOK, Detail: "no database yet"}
 	}
 	d, err := sql.Open("sqlite", paths.DBPath)
 	if err != nil {
-		return Check{name, StatusOK, "database not readable; skipped"}
+		return Check{Name: name, Status: StatusOK, Detail: "database not readable; skipped"}
 	}
 	defer func() { _ = d.Close() }()
 
 	total, open, superseded, err := db.MemoryFactCounts(ctx, d)
 	if err != nil {
-		return Check{name, StatusOK, "memory facts not counted; skipped"}
+		return Check{Name: name, Status: StatusOK, Detail: "memory facts not counted; skipped"}
 	}
-	return Check{name, StatusOK,
-		fmt.Sprintf("%d facts (%d open / %d superseded)", total, open, superseded)}
+	return Check{Name: name, Status: StatusOK, Detail: fmt.Sprintf("%d facts (%d open / %d superseded)", total, open, superseded)}
 }
 
 func annIndexCheck(p config.Profile, paths config.ResolvedPaths) Check {
 	const name = "ann-index"
 	if _, err := os.Stat(paths.DBPath); err != nil {
-		return Check{name, StatusOK, "no database yet"}
+		return Check{Name: name, Status: StatusOK, Detail: "no database yet"}
 	}
 	d, err := sql.Open("sqlite", paths.DBPath)
 	if err != nil {
-		return Check{name, StatusOK, "database not readable; skipped"}
+		return Check{Name: name, Status: StatusOK, Detail: "database not readable; skipped"}
 	}
 	defer func() { _ = d.Close() }()
 	ctx := context.Background()
 
 	vectors, err := db.CountVectors(ctx, d)
 	if err != nil {
-		return Check{name, StatusOK, "vectors not counted; skipped"}
+		return Check{Name: name, Status: StatusOK, Detail: "vectors not counted; skipped"}
 	}
 	centroids, _ := db.CountCentroids(ctx, d)
 	threshold := p.Retrieval.ANN.ThresholdOr()
 
 	if p.Retrieval.IndexMode() == "ann" {
 		if centroids == 0 && vectors > 0 {
-			return Check{name, StatusWarn, "retrieval.index: ann is set but the index is not built — run `axon reindex`"}
+			return Check{Name: name, Status: StatusWarn, Detail: "retrieval.index: ann is set but the index is not built — run `axon reindex`"}
 		}
-		return Check{name, StatusOK, fmt.Sprintf("ann index active (%d centroids over %d vectors)", centroids, vectors)}
+		return Check{Name: name, Status: StatusOK, Detail: fmt.Sprintf("ann index active (%d centroids over %d vectors)", centroids, vectors)}
 	}
 	if vectors > threshold {
-		return Check{name, StatusWarn, fmt.Sprintf("%d vectors indexed — set `retrieval.index: ann` and run `axon reindex` for faster search", vectors)}
+		return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("%d vectors indexed — set `retrieval.index: ann` and run `axon reindex` for faster search", vectors)}
 	}
-	return Check{name, StatusOK, fmt.Sprintf("brute-force search (%d vectors, threshold %d)", vectors, threshold)}
+	return Check{Name: name, Status: StatusOK, Detail: fmt.Sprintf("brute-force search (%d vectors, threshold %d)", vectors, threshold)}
 }
 
 // relatedCheck reports the related-notes surface (R8): whether the endpoint is
@@ -795,21 +783,21 @@ func annIndexCheck(p config.Profile, paths config.ResolvedPaths) Check {
 func relatedCheck(p config.Profile, paths config.ResolvedPaths) Check {
 	const name = "related"
 	if !p.Dashboard.RelatedAllowed() {
-		return Check{name, StatusOK, "related-notes endpoint disabled (dashboard.related_enabled: false)"}
+		return Check{Name: name, Status: StatusOK, Detail: "related-notes endpoint disabled (dashboard.related_enabled: false)"}
 	}
 	if _, err := os.Stat(paths.DBPath); err != nil {
-		return Check{name, StatusOK, "related-notes enabled; no database yet"}
+		return Check{Name: name, Status: StatusOK, Detail: "related-notes enabled; no database yet"}
 	}
 	d, err := sql.Open("sqlite", paths.DBPath)
 	if err != nil {
-		return Check{name, StatusOK, "related-notes enabled; database not readable, skipped"}
+		return Check{Name: name, Status: StatusOK, Detail: "related-notes enabled; database not readable, skipped"}
 	}
 	defer func() { _ = d.Close() }()
 	vectors, err := db.CountVectors(context.Background(), d)
 	if err != nil {
-		return Check{name, StatusOK, "related-notes enabled; vectors not counted"}
+		return Check{Name: name, Status: StatusOK, Detail: "related-notes enabled; vectors not counted"}
 	}
-	return Check{name, StatusOK, fmt.Sprintf("related-notes enabled (%d vectors indexed)", vectors)}
+	return Check{Name: name, Status: StatusOK, Detail: fmt.Sprintf("related-notes enabled (%d vectors indexed)", vectors)}
 }
 
 // apiKeyCheck implements the cardinal-rule guard: warn if ANTHROPIC_API_KEY is
@@ -823,12 +811,12 @@ func claudeAuthCheck(p config.Profile, paths config.ResolvedPaths) Check {
 	const name = "claude-auth"
 	if p.Claude.AuthMode == "api_key" {
 		if _, set := lookupEnv("ANTHROPIC_API_KEY"); set {
-			return Check{name, StatusOK, "auth_mode api_key: ANTHROPIC_API_KEY set"}
+			return Check{Name: name, Status: StatusOK, Detail: "auth_mode api_key: ANTHROPIC_API_KEY set"}
 		}
 		if key, err := config.ResolveSecret(p.Claude.OAuthToken); err == nil && key != "" {
-			return Check{name, StatusOK, "auth_mode api_key: key resolvable from the configured secret ref"}
+			return Check{Name: name, Status: StatusOK, Detail: "auth_mode api_key: key resolvable from the configured secret ref"}
 		}
-		return Check{name, StatusFail, "auth_mode api_key but no ANTHROPIC_API_KEY and no resolvable secret ref — the agent adapter cannot authenticate"}
+		return Check{Name: name, Status: StatusFail, Detail: "auth_mode api_key but no ANTHROPIC_API_KEY and no resolvable secret ref — the agent adapter cannot authenticate"}
 	}
 
 	token, terr := config.ResolveSecret(p.Claude.OAuthToken)
@@ -841,13 +829,13 @@ func claudeAuthCheck(p config.Profile, paths config.ResolvedPaths) Check {
 	}
 	switch {
 	case hasToken && hasSession:
-		return Check{name, StatusOK, "OAuth token resolvable (headless) and login session present (interactive)"}
+		return Check{Name: name, Status: StatusOK, Detail: "OAuth token resolvable (headless) and login session present (interactive)"}
 	case hasToken:
-		return Check{name, StatusOK, "OAuth token resolvable — headless automations ready; run `claude login` in the vault for interactive sessions"}
+		return Check{Name: name, Status: StatusOK, Detail: "OAuth token resolvable — headless automations ready; run `claude login` in the vault for interactive sessions"}
 	case hasSession:
-		return Check{name, StatusWarn, "login session found but no CLAUDE_CODE_OAUTH_TOKEN resolvable — scheduled headless automations will fail; run `claude setup-token`"}
+		return Check{Name: name, Status: StatusWarn, Detail: "login session found but no CLAUDE_CODE_OAUTH_TOKEN resolvable — scheduled headless automations will fail; run `claude setup-token`"}
 	default:
-		return Check{name, StatusWarn, fmt.Sprintf("no OAuth token resolvable and no session file in %s (macOS may hold the session in the Keychain) — run `claude login` and `claude setup-token`", paths.ConfigDir)}
+		return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("no OAuth token resolvable and no session file in %s (macOS may hold the session in the Keychain) — run `claude login` and `claude setup-token`", paths.ConfigDir)}
 	}
 }
 
@@ -881,7 +869,33 @@ func apiKeyCheck(cfg *config.Config, activeProfile string) Check {
 
 func binaryCheck(name, bin, okDetail, missingDetail string) Check {
 	if _, err := lookPath(bin); err != nil {
-		return Check{Name: name, Status: StatusWarn, Detail: missingDetail}
+		return Check{Name: name, Status: StatusWarn, Detail: missingDetail, Fix: installHint(bin)}
 	}
 	return Check{Name: name, Status: StatusOK, Detail: okDetail}
+}
+
+// installHint is how you get a missing external tool on this machine. Kept
+// beside the checks rather than in a client so every consumer — the CLI, the
+// menu bar app, anything later — gives the same answer.
+func installHint(bin string) string {
+	switch bin {
+	case "ollama":
+		if runtime.GOOS == "darwin" {
+			return "brew install ollama && ollama serve && ollama pull nomic-embed-text"
+		}
+		return "curl -fsSL https://ollama.com/install.sh | sh && ollama pull nomic-embed-text"
+	case "claude":
+		return "npm install -g @anthropic-ai/claude-code && claude login"
+	case "yt-dlp":
+		if runtime.GOOS == "darwin" {
+			return "brew install yt-dlp"
+		}
+		return "pipx install yt-dlp"
+	case "tesseract", "pdftoppm":
+		if runtime.GOOS == "darwin" {
+			return "brew install tesseract poppler"
+		}
+		return "sudo apt-get install -y tesseract-ocr poppler-utils"
+	}
+	return ""
 }

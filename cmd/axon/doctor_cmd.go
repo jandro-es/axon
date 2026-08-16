@@ -20,6 +20,9 @@ type doctorJSONCheck struct {
 	Name   string `json:"name"`
 	Status string `json:"status"`
 	Detail string `json:"detail"`
+	// Remediation is the concrete command to run. Present only when there is
+	// one; Detail alone says what is wrong, not what to do about it.
+	Remediation string `json:"remediation,omitempty"`
 }
 
 // doctorJSONReport is what `axon doctor --json` emits. Status is the derived
@@ -72,6 +75,7 @@ func newDoctorCmd(gf *globalFlags) *cobra.Command {
 				for _, c := range report.Checks {
 					rep.Checks = append(rep.Checks, doctorJSONCheck{
 						Name: c.Name, Status: string(c.Status), Detail: c.Detail,
+						Remediation: c.Fix,
 					})
 				}
 				enc := json.NewEncoder(out)
@@ -90,7 +94,11 @@ func newDoctorCmd(gf *globalFlags) *cobra.Command {
 				steps := tui.NewSteps(out, "axon doctor", nil)
 				steps.Start()
 				for _, c := range report.Checks {
-					steps.Set(c.Name, c.Detail, doctorStepStatus(c.Status))
+					detail := c.Detail
+					if c.Fix != "" {
+						detail += "  ↳ " + c.Fix
+					}
+					steps.Set(c.Name, detail, doctorStepStatus(c.Status))
 				}
 				if report.HasFailure() {
 					_ = steps.Finish("status: FAIL")
@@ -114,6 +122,9 @@ func newDoctorCmd(gf *globalFlags) *cobra.Command {
 					detail = st.Red(detail)
 				}
 				fmt.Fprintf(out, "  %s  %-20s %s\n", glyph(st, c.Status), c.Name, detail)
+				if c.Fix != "" {
+					fmt.Fprintf(out, "     %s %s\n", st.Dim("↳ fix:"), st.Bold(c.Fix))
+				}
 			}
 			fmt.Fprintln(out, st.Divider(40))
 			if report.HasFailure() {

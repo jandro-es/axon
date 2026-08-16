@@ -278,15 +278,23 @@ func TestServiceUnitPathCheck(t *testing.T) {
 	}{
 		{"launchd PATH resolves claude", "launchd", plistWithPath, StatusOK, "claude"},
 		{"launchd unit without PATH warns", "launchd", plistNoPath, StatusWarn, "PATH"},
-		{"launchd PATH missing claude dir warns", "launchd", plistBadPath, StatusWarn, "axon service install"},
+		{"launchd PATH missing claude dir warns", "launchd", plistBadPath, StatusWarn, "cannot resolve claude"},
 		{"systemd PATH resolves claude", "systemd", systemdWithPath, StatusOK, "claude"},
 		{"absent unit is skipped ok", "launchd", filepath.Join(dir, "absent.plist"), StatusOK, "no OS service unit"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := serviceUnitPathCheck(tc.kind, tc.path)
+			c := serviceUnitPathCheck(tc.kind, tc.path, "personal")
 			if c.Status != tc.want || !strings.Contains(c.Detail, tc.detail) {
 				t.Errorf("serviceUnitPathCheck(%s, %s) = %+v, want status %s containing %q",
 					tc.kind, tc.path, c, tc.want, tc.detail)
+			}
+			// Detail says what is wrong; Fix says what to do about it. Every
+			// warning here is actionable, so it must carry a command.
+			if tc.want == StatusWarn && !strings.Contains(c.Fix, "axon service install") {
+				t.Errorf("warning %q carries no actionable Fix: %+v", tc.name, c)
+			}
+			if tc.want == StatusOK && c.Fix != "" {
+				t.Errorf("passing check should carry no Fix: %+v", c)
 			}
 		})
 	}
@@ -297,5 +305,29 @@ func TestDoctorIncludesServicePathCheck(t *testing.T) {
 	r := Doctor(cfgWithAuth("subscription"), "personal")
 	if _, ok := findCheck(r, "service-path"); !ok {
 		t.Fatal("doctor report missing service-path check")
+	}
+}
+
+// Every external tool the daemon shells out to must tell the user how to
+// install it when it is missing. A warning that names a missing binary without
+// naming the command to get it makes the reader go and search for it.
+func TestMissingBinaryChecksCarryAnInstallCommand(t *testing.T) {
+	original := lookPath
+	t.Cleanup(func() { lookPath = original })
+	lookPath = func(string) (string, error) { return "", errors.New("not found") }
+
+	for _, bin := range []string{"ollama", "claude", "yt-dlp"} {
+		c := binaryCheck(bin, bin, "found", bin+" not found on PATH")
+		if c.Status != StatusWarn {
+			t.Fatalf("binaryCheck(%s) status = %s, want warn", bin, c.Status)
+		}
+		if c.Fix == "" {
+			t.Errorf("missing %s carries no install command", bin)
+		}
+	}
+
+	// A binary with no generic install story must not invent one.
+	if got := installHint("some-unknown-tool"); got != "" {
+		t.Errorf("installHint for an unknown tool = %q, want empty", got)
 	}
 }

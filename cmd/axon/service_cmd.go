@@ -24,6 +24,12 @@ type serviceStatusJSON struct {
 	Path      string `json:"path"`
 	Installed bool   `json:"installed"`
 	Supported bool   `json:"supported"`
+	// PathEnv is the PATH the unit hands the daemon, resolved from the
+	// installing shell's full PATH. Clients that start with the minimal system
+	// PATH — a GUI app launched by LaunchServices, say — use it so the tools
+	// they spawn see the same machine the user's shell does. Falls back to the
+	// PATH this binary would generate now when no unit is installed.
+	PathEnv string `json:"path_env,omitempty"`
 }
 
 func newServiceCmd(gf *globalFlags) *cobra.Command {
@@ -69,8 +75,16 @@ func newServiceCmd(gf *globalFlags) *cobra.Command {
 			st := ui.For(out)
 			switch args[0] {
 			case "status":
-				_, statErr := os.Stat(unit.Path)
+				content, statErr := os.ReadFile(unit.Path)
+				pathEnv := service.UnitPathEnv(unit.Kind, string(content))
+				if pathEnv == "" {
+					// No unit, or one predating the embedded PATH: report what
+					// installing now would produce, which is still better than
+					// nothing for a caller trying to find the user's tools.
+					pathEnv = service.DaemonPathEnv(exec.LookPath)
+				}
 				status := serviceStatusJSON{
+					PathEnv:   pathEnv,
 					Profile:   name,
 					Kind:      unit.Kind,
 					Path:      unit.Path,
