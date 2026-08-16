@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.3.5] — 2026-08-16
+
+**One check that was always wrong.** A patch: no schema change (stays v7), no
+config change, no new MCP tool.
+
 ### Fixed
 
 - **`doctor`'s `dashboard-port` check no longer warns about the healthy state.**
@@ -16,6 +21,10 @@ All notable changes to this project are documented here. The format is based on
   an AXON daemon answers `/health`, and that is a pass naming the serving
   profile. A foreign listener still warns, and now carries the `lsof` command to
   find it.
+
+  The probe is loopback-only with a 1.5s timeout and a capped read, so `doctor`
+  cannot hang on a socket that accepts but never speaks HTTP, and cannot be fed
+  an unbounded body by whatever is listening.
 
 ## [1.3.4] — 2026-08-16
 
@@ -710,7 +719,8 @@ The initial feature-complete build, implemented in phases against
   `config get/set`. *(PDF ingestion, the api_key adapter and `config get/set`
   were implemented in 0.10.0.)*
 
-[Unreleased]: https://github.com/jandro-es/axon/compare/v1.3.4...HEAD
+[Unreleased]: https://github.com/jandro-es/axon/compare/v1.3.5...HEAD
+[1.3.5]: https://github.com/jandro-es/axon/releases/tag/v1.3.5
 [1.3.4]: https://github.com/jandro-es/axon/releases/tag/v1.3.4
 [1.3.3]: https://github.com/jandro-es/axon/releases/tag/v1.3.3
 [1.3.2]: https://github.com/jandro-es/axon/releases/tag/v1.3.2
