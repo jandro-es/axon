@@ -188,3 +188,46 @@ Binaries are pure-Go (no cgo), so cross-compilation needs no C toolchain.
   `<data_dir>/logs/` (macOS) or `systemctl --user status axon-<profile>` (Linux).
 - **Stray `ANTHROPIC_API_KEY`** — unset it on subscription/enterprise installs;
   `axon doctor` flags it (it would divert Claude Code onto API billing).
+
+---
+
+## Optional: Axon Companion (macOS menu bar app)
+
+Requires macOS 26 or later. Strictly optional — see the Guide's
+[Companion chapter](docs/GUIDE.md#20-the-macos-menu-bar-app-companion) for what
+it does and the CLI equivalent of every feature.
+
+1. Download `Axon-<version>.zip` from the
+   [latest release](https://github.com/jandro-es/axon/releases/latest).
+2. Unzip and drag **Axon.app** to `/Applications`.
+3. Open it.
+
+### Gatekeeper
+
+The app is signed with a Developer ID certificate and notarised by Apple, with
+the ticket stapled into the bundle. It therefore opens normally on first
+launch — no right-click → Open, no `xattr` incantation — and it works offline,
+because stapling means macOS does not need to reach Apple to check the ticket.
+
+Verify any download yourself:
+
+```bash
+spctl -a -vv /Applications/Axon.app
+# accepted
+# source=Notarized Developer ID
+# origin=Developer ID Application: Filtercode LTD (5R59WRDGLW)
+```
+
+If that prints anything else, the download was damaged or tampered with. Get a
+fresh copy rather than bypassing Gatekeeper.
+
+### Uninstalling
+
+Quit from the popover, drag `Axon.app` to the Trash, and optionally:
+
+```bash
+defaults delete com.axon.companion
+```
+
+Nothing else is left behind: Companion stores no files outside its preferences
+and writes nothing into `~/.axon` or your vault.

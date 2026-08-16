@@ -22,6 +22,9 @@ dashboard. This guide takes you from a clean machine to a running, useful system
 - [15. Command reference](#15-command-reference)
 - [16. Troubleshooting](#16-troubleshooting)
 - [17. Safety guarantees](#17-safety-guarantees)
+- [18. Personal memory & identity](#18-personal-memory--identity)
+- [19. Use AXON from Claude Desktop](#19-use-axon-from-claude-desktop)
+- [20. The macOS menu bar app (Companion)](#20-the-macos-menu-bar-app-companion)
 
 ---
 
@@ -996,3 +999,119 @@ to override it (e.g. for testing).
 *For design rationale and component specs, see the rest of [`docs/`](.) — the PRD
 (01), architecture + ADRs (02), requirements (03), data model & config (04), and
 the built component specs (05–10, 12, 13).*
+
+---
+
+## 20. The macOS menu bar app (Companion)
+
+**Axon Companion** is an optional macOS 26+ menu bar app: daemon state at a
+glance, budget gauges, start/stop, charts, a Doctor window, and a guided first
+run.
+
+### It is genuinely optional
+
+This is a design constraint, not a disclaimer. AXON installed *without*
+Companion is 100% functional, and uninstalling Companion leaves nothing behind
+in the daemon — no config keys, no files in `~/.axon`, no state of any kind.
+
+Companion contains no business logic. It reads through the dashboard's REST and
+SSE API on `127.0.0.1:7777`, and every change it makes goes through the `axon`
+CLI. It never edits `config.yaml`, never touches `launchctl`, and never opens
+`~/.axon/.env`.
+
+Everything it does, you can do without it:
+
+| Companion | Equivalent |
+|---|---|
+| Menu bar state, budget gauges | `axon status` |
+| Start / Stop / Restart | `axon start` / `axon stop` |
+| Run AXON at login toggle | `axon service install` / `uninstall` |
+| Review and Actions badges | the dashboard's Review and Actions tabs |
+| Insights charts | the dashboard, which has more of them |
+| Chart export | `GET /api/export?dataset=…&format=csv` |
+| Doctor window | `axon doctor` |
+| Budget editing | `axon config set limits.daily_tokens …` |
+| Automation toggles | `axon config set automations.<name>.enabled …` |
+| Diagnostics bundle | `axon doctor` + `curl 127.0.0.1:7777/health` |
+| First-run wizard | `axon setup` |
+
+### Installing
+
+Download `Axon-<version>.zip` from the
+[latest release](https://github.com/jandro-es/axon/releases/latest), unzip, and
+drag **Axon.app** to `/Applications`.
+
+It is Developer ID-signed and notarised by Apple, so it opens normally on first
+launch. If macOS ever does complain, the download was damaged or altered —
+re-download rather than working around Gatekeeper.
+
+Companion updates itself through Sparkle; the daemon updates through
+`axon update`. The two are deliberately independent, and Companion never
+updates the daemon behind your back.
+
+### What it shows
+
+- **Menu bar icon** — running, needs attention (degraded health, budget guard
+  tripped, or an AXON update available), stopped, or not installed. It notices
+  a daemon that has died within about five seconds.
+- **Popover** — profile, version, uptime, day and week budget gauges, review
+  and open-action counts, a 24-hour token sparkline, and the lifecycle buttons.
+- **Insights** (⌘-click the tile) — tokens stacked by automation or model,
+  budget, automation runs, ingestion throughput, vault growth. Each card
+  exports through the daemon's own `/api/export`.
+- **Settings** (⌘,) — the two login toggles, refresh interval, notification
+  switches, budgets, automation toggles, and read-only profile and embeddings
+  rows.
+- **Doctor** — `axon doctor` with each check's remediation text, plus a
+  **Copy Diagnostics** button producing a redacted bundle safe to paste into an
+  issue. It contains versions, the doctor report and `/health` — never vault
+  content, and it is regex-scanned for anything token-shaped before it reaches
+  the pasteboard.
+
+### Notifications
+
+Off-by-default where it matters and deliberately quiet: an automation failing
+(at most once per automation per hour), the budget guard tripping (once per
+episode), and AXON stopping unexpectedly. Stopping AXON yourself never
+notifies. Routine success never notifies at all.
+
+### Two "at login" toggles, on purpose
+
+Settings → General has both, and they do different things:
+
+- **Open Axon Companion at login** — the menu bar app only. Quitting Companion
+  never stops AXON.
+- **Run AXON at login** — installs the launchd service so automations run
+  whether or not the app is open. Exactly `axon service install`.
+
+If the launchd service is installed, stopping AXON from the popover stops the
+process and launchd starts it again. The Stop confirmation says so.
+
+### Privacy
+
+Companion talks to `127.0.0.1` and to one other host: the Sparkle update feed,
+disclosed in Settings → About. It holds no secrets, reads no credentials, and
+deliberately does not decode the OAuth token reference that `axon profiles`
+returns.
+
+### Troubleshooting
+
+| Symptom | Cause |
+|---|---|
+| Icon shows a "?" badge | No `axon` binary found. Settings → General → Run Setup Again, or set an explicit path. |
+| Doctor says AXON provides no machine-readable report | The daemon predates `axon doctor --json`. Run `axon update`; `axon doctor` in Terminal works on every version. |
+| No uptime pill | The daemon predates `started_at` on `/health`. Same fix. |
+| Actions badge missing | `actions_enabled` is false for this profile. |
+| Charts empty but the dashboard has data | Companion's range picker filters client-side for ingestion and vault, which the daemon serves as fixed windows. Widen the range. |
+
+### Building it yourself
+
+```bash
+make companion        # build and launch the dev build
+make companion-test   # AxonKit test suite
+make companion-release # Developer ID sign + notarise (needs credentials)
+```
+
+Source lives in `apps/companion/`. `CONTRACT.md` there is the frozen daemon API
+contract every decoder is tested against; `ENTITLEMENTS.md` records why the app
+is not sandboxed.

@@ -130,6 +130,21 @@ axon update      # later: checksum-verified self-update (source installs: make u
 axon uninstall   # remove daemon + binary; --purge also removes ~/.axon. Vault untouched.
 ```
 
+### 4. Optional: the macOS menu bar app
+
+**Axon Companion** puts daemon state, budgets and controls in the macOS menu
+bar. It is strictly optional — AXON is fully functional without it, and every
+feature it offers has a CLI or dashboard equivalent.
+
+1. Download `Axon-<version>.zip` from the
+   [latest release](https://github.com/jandro-es/axon/releases/latest).
+2. Unzip and drag **Axon.app** to `/Applications`.
+3. Open it. The app is Developer ID-signed and notarised, so Gatekeeper lets it
+   run on first launch with no right-click dance.
+
+Requires macOS 26 or later. See the Guide's
+[Companion chapter](docs/GUIDE.md#20-the-macos-menu-bar-app-companion).
+
 Full details — flags, Windows, moving your vault, troubleshooting — in
 [INSTALL.md](INSTALL.md) and the [Guide](docs/GUIDE.md). Daily commands live
 in the Guide's [command reference](docs/GUIDE.md#15-command-reference); the
