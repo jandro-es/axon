@@ -13,7 +13,7 @@ public enum AxonJSON {
     }
 
     /// Shared, immutable, and safe to hand across actors.
-    nonisolated(unsafe) static let decoder: JSONDecoder = {
+    static let decoder: JSONDecoder = {
         let d = JSONDecoder()
         // Timestamps are decoded per-field: REST uses RFC3339 with `Z`, SSE
         // uses a local offset with fractional seconds, and several fields are

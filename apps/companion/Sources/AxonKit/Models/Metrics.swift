@@ -273,7 +273,7 @@ public struct ActionsMeta: Decodable, Sendable, Equatable {
 /// The daemon's `YYYY-MM-DD` day keys. Parsed in **UTC** to match how the
 /// daemon buckets them; rendering converts to the user's calendar.
 enum DayString {
-    nonisolated(unsafe) private static let formatter: DateFormatter = {
+    private static let formatter: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .iso8601)
         f.locale = Locale(identifier: "en_US_POSIX")
