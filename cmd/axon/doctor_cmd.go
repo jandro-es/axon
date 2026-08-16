@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -12,8 +13,27 @@ import (
 	"github.com/jandro-es/axon/internal/ui"
 )
 
+// doctorJSONCheck is the machine-readable form of a core.Check. The daemon
+// folds its remediation advice into Detail, so consumers render Detail as the
+// remediation text (see apps/companion/CONTRACT.md).
+type doctorJSONCheck struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Detail string `json:"detail"`
+}
+
+// doctorJSONReport is what `axon doctor --json` emits. Status is the derived
+// overall verdict so consumers need not re-implement HasFailure.
+type doctorJSONReport struct {
+	Profile string            `json:"profile"`
+	Status  string            `json:"status"`
+	Error   string            `json:"error,omitempty"`
+	Checks  []doctorJSONCheck `json:"checks"`
+}
+
 func newDoctorCmd(gf *globalFlags) *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	cmd := &cobra.Command{
 		Use:   "doctor",
 		Short: "Report prerequisite and configuration health",
 		Args:  cobra.NoArgs,
@@ -34,6 +54,36 @@ func newDoctorCmd(gf *globalFlags) *cobra.Command {
 			report.Checks = append(report.Checks, updateAvailabilityCheck())
 
 			out := cmd.OutOrStdout()
+
+			// Machine-readable first: no styling, no TTY branch, and a
+			// non-zero exit on failure exactly like the human renderer.
+			if asJSON {
+				rep := doctorJSONReport{
+					Profile: activeProfile,
+					Status:  "ok",
+					Checks:  make([]doctorJSONCheck, 0, len(report.Checks)),
+				}
+				if report.HasFailure() {
+					rep.Status = "fail"
+				}
+				if cfgErr != nil {
+					rep.Error = cfgErr.Error()
+				}
+				for _, c := range report.Checks {
+					rep.Checks = append(rep.Checks, doctorJSONCheck{
+						Name: c.Name, Status: string(c.Status), Detail: c.Detail,
+					})
+				}
+				enc := json.NewEncoder(out)
+				enc.SetIndent("", "  ")
+				if err := enc.Encode(rep); err != nil {
+					return err
+				}
+				if report.HasFailure() {
+					return fmt.Errorf("doctor found blocking issues — see the failing check(s) in the report")
+				}
+				return nil
+			}
 
 			// Live step view on a TTY; the plain report below stays canonical.
 			if tui.Interactive(out) {
@@ -74,6 +124,8 @@ func newDoctorCmd(gf *globalFlags) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&asJSON, "json", false, "emit the doctor report as JSON")
+	return cmd
 }
 
 // updateAvailabilityCheck reads ONLY the daily update-check cache (written by
