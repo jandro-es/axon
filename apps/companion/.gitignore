@@ -5,3 +5,4 @@ Package.resolved
 Axon.app/
 dist/
 Icon.icns
+build/

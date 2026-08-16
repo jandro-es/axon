@@ -28,19 +28,30 @@ if [[ ${#ARCH_LIST[@]} -eq 0 ]]; then
   ARCH_LIST=("$HOST_ARCH")
 fi
 
+# Each arch builds into its OWN scratch path. Swift 6.2+ with the Swift Build
+# system writes every arch to the same .build/<conf>/<product>, so building two
+# arches in sequence overwrites the first and lipo silently receives the same
+# slice twice -- a "universal" binary that is nothing of the sort.
+scratch_for() {
+  if [[ ${#ARCH_LIST[@]} -gt 1 ]]; then echo "$ROOT/.build/arch-$1"; else echo "$ROOT/.build"; fi
+}
+
 for ARCH in "${ARCH_LIST[@]}"; do
-  swift build -c "$CONF" --arch "$ARCH"
+  swift build -c "$CONF" --arch "$ARCH" --scratch-path "$(scratch_for "$ARCH")"
 done
 
-APP="$ROOT/${APP_NAME}.app"
+DIST="$ROOT/${DIST_DIR:-dist}"
+APP="$DIST/${APP_NAME}.app"
 rm -rf "$APP"
+mkdir -p "$DIST"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 
 # Convert Icon.icon to Icon.icns if present (requires iconutil).
-ICON_SOURCE="$ROOT/Icon.icon"
+# Icon.icns is generated from the dashboard palette by Scripts/build_icon.sh.
+# Built on demand so a fresh clone packages a real icon without a manual step.
 ICON_TARGET="$ROOT/Icon.icns"
-if [[ -f "$ICON_SOURCE" ]]; then
-  iconutil --convert icns --output "$ICON_TARGET" "$ICON_SOURCE"
+if [[ ! -f "$ICON_TARGET" ]] && [[ -x "$ROOT/Scripts/build_icon.sh" ]]; then
+  "$ROOT/Scripts/build_icon.sh" >/dev/null || echo "icon build skipped" >&2
 fi
 
 LSUI_VALUE="false"
@@ -81,13 +92,14 @@ PLIST
 build_product_path() {
   local name="$1"
   local arch="$2"
-  local conf_dir
+  local scratch conf_dir
+  scratch="$(scratch_for "$arch")"
   # .build/{debug,release} is lowercase; .build/out/Products/{Debug,Release} is not.
   conf_dir="$(tr '[:lower:]' '[:upper:]' <<<"${CONF:0:1}")${CONF:1}"
   local candidates=(
-    ".build/${arch}-apple-macosx/$CONF/$name"
-    ".build/$CONF/$name"
-    ".build/out/Products/${conf_dir}/$name"
+    "${scratch}/${arch}-apple-macosx/$CONF/$name"
+    "${scratch}/$CONF/$name"
+    "${scratch}/out/Products/${conf_dir}/$name"
   )
   local c
   for c in "${candidates[@]}"; do
@@ -134,6 +146,14 @@ install_binary() {
     binaries+=("$src")
   done
   if [[ ${#ARCH_LIST[@]} -gt 1 ]]; then
+    # Guard against two "different" arches resolving to one file.
+    local unique
+    unique=$(printf '%s\n' "${binaries[@]}" | sort -u | wc -l | tr -d ' ')
+    if [[ "$unique" -ne ${#binaries[@]} ]]; then
+      echo "ERROR: arch builds collided on the same path; universal build would be fake" >&2
+      printf '  %s\n' "${binaries[@]}" >&2
+      exit 1
+    fi
     lipo -create "${binaries[@]}" -output "$dest"
   else
     cp "${binaries[0]}" "$dest"
@@ -162,7 +182,7 @@ if [[ ${#SWIFTPM_BUNDLES[@]} -gt 0 ]]; then
 fi
 
 # Embed frameworks if any exist in the build folder.
-FRAMEWORK_DIRS=(".build/$CONF" ".build/${ARCH_LIST[0]}-apple-macosx/$CONF")
+FRAMEWORK_DIRS=("$(scratch_for "${ARCH_LIST[0]}")/$CONF" "$(scratch_for "${ARCH_LIST[0]}")/${ARCH_LIST[0]}-apple-macosx/$CONF")
 for dir in "${FRAMEWORK_DIRS[@]}"; do
   if compgen -G "${dir}/*.framework" >/dev/null; then
     cp -R "${dir}/"*.framework "$APP/Contents/Frameworks/"
@@ -183,12 +203,13 @@ chmod -R u+w "$APP"
 xattr -cr "$APP"
 find "$APP" -name '._*' -delete
 
-ENTITLEMENTS_DIR="$ROOT/.build/entitlements"
-DEFAULT_ENTITLEMENTS="$ENTITLEMENTS_DIR/${APP_NAME}.entitlements"
-mkdir -p "$ENTITLEMENTS_DIR"
-
-APP_ENTITLEMENTS=${APP_ENTITLEMENTS:-$DEFAULT_ENTITLEMENTS}
+# The committed entitlements file is the source of truth; it documents WHY the
+# app is not sandboxed, which an auto-generated empty plist cannot.
+APP_ENTITLEMENTS=${APP_ENTITLEMENTS:-$ROOT/Companion.entitlements}
 if [[ ! -f "$APP_ENTITLEMENTS" ]]; then
+  echo "WARNING: $APP_ENTITLEMENTS missing; signing with empty entitlements" >&2
+  APP_ENTITLEMENTS="$ROOT/.build/empty.entitlements"
+  mkdir -p "$(dirname "$APP_ENTITLEMENTS")"
   cat > "$APP_ENTITLEMENTS" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -224,5 +245,7 @@ sign_frameworks
 codesign "${CODESIGN_ARGS[@]}" \
   --entitlements "$APP_ENTITLEMENTS" \
   "$APP"
+
+codesign --verify --deep --strict --verbose=1 "$APP"
 
 echo "Created $APP"

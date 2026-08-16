@@ -22,7 +22,9 @@ struct AutomationsPane: View {
                 AutomationRow(
                     automation: automation,
                     isBusy: busy == automation.name,
-                    onToggle: { enabled in toggle(automation.name, enabled: enabled) }
+                    onToggle: { enabled in
+                        Task { @MainActor in toggle(automation.name, enabled: enabled) }
+                    }
                 )
             }
             .listStyle(.inset)
@@ -68,7 +70,9 @@ struct AutomationsPane: View {
 struct AutomationRow: View {
     let automation: AutomationInfo
     let isBusy: Bool
-    let onToggle: (Bool) -> Void
+    /// @Sendable because SwiftUI hands a Binding's setter across an isolation
+    /// boundary; without it this is a data-race warning under strict concurrency.
+    let onToggle: @Sendable (Bool) -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {

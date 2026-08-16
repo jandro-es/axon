@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Rationale, including why this app is not sandboxed: ENTITLEMENTS.md -->
+    <!-- Sparkle launches separately-signed helper tools; without this the -->
+    <!-- hardened runtime refuses to load them and updates fail to install. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>
