@@ -40,11 +40,17 @@ make companion-release
 # 3. Sign the appcast entry:
 make companion-appcast
 
-# 4. Publish. The tag must be companion-v<version>, and --latest=false keeps
-#    the daemon's own release as the repo's headline:
+# 4. Publish. The tag must be companion-v<version>.
 gh release create companion-v0.1.0 \
   apps/companion/dist/Axon-0.1.0.zip \
   --title "Axon Companion 0.1.0" --notes-file <notes> --latest=false
+
+# 4a. MANDATORY — verify the daemon still owns "Latest", and restore it if not.
+#     `--latest=false` is NOT reliable: GitHub re-computes the latest release on
+#     publish and on any draft->published transition, and silently gave it to
+#     the Companion release during the 0.1.0 cut.
+gh api repos/jandro-es/axon/releases/latest --jq .tag_name   # MUST print v<daemon>
+gh release edit v<daemon-version> --latest                   # if it does not
 
 # 5. Commit the appcast — THIS is what makes the update visible:
 git add apps/companion/appcast/companion-appcast.xml && git commit && git push
@@ -53,6 +59,17 @@ git add apps/companion/appcast/companion-appcast.xml && git commit && git push
 The tag must be `companion-v<version>` — `SPARKLE_DOWNLOAD_URL_PREFIX` in
 `version.env` builds each enclosure URL from it, and a mismatched tag produces
 an appcast whose download links 404.
+
+## The "Latest" release must stay the daemon's
+
+`internal/selfupdate` resolves
+`GET /repos/jandro-es/axon/releases/latest` — so whichever release GitHub calls
+"Latest" is what **every** `axon update` and `axon version --check` in the world
+downloads. A Companion release holding that badge points every AXON user at a
+macOS app zip with no daemon binaries and no `checksums.txt`.
+
+This is not hypothetical: it happened during the 0.1.0 cut and was caught by
+resolving the endpoint rather than trusting `--latest=false`. Always run step 4a.
 
 ## Keys
 
