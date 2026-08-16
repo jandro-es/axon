@@ -145,7 +145,16 @@ struct DoctorModelTests {
 
         #expect(!text.contains("sk-ant-api03-AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHHIIIIJJJJKKKKLLLL"))
         #expect(!text.contains("oauth_tok_9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e"))
-        #expect(text.contains(DiagnosticsRedactor.placeholder))
+
+        // NOT `text.contains(placeholder)`. These fields never reach the
+        // redactor at all: /health is re-encoded from the fields Companion
+        // models, so an unknown field is dropped outright — a stronger
+        // guarantee than redacting it. Asserting a placeholder appears would
+        // require something to have leaked far enough to need redacting, and
+        // that assertion previously passed only because an over-eager rule was
+        // mangling the unrelated "anthropic-api-key" check.
+        #expect(!text.contains("leaked_key"))
+        #expect(!text.contains("leaked_token"))
     }
 
     @Test func redactorCatchesEachSecretShape() {
@@ -175,11 +184,40 @@ struct DoctorModelTests {
     @Test func ordinaryDiagnosticTextIsUntouched() {
         let text = """
             claude-cli: Claude Code CLI found
+            anthropic-api-key: no stray ANTHROPIC_API_KEY
             ollama: Ollama found
             vision: provider "apple" requires macOS 27 on-device image input
+            fix: axon config set ingestion.vision off
             version: v1.3.1-1-gec42a3a
             """
         #expect(DiagnosticsRedactor.redact(text, homeDirectory: "/Users/x") == text)
+    }
+
+    /// Regression: the check literally named "anthropic-api-key" was being
+    /// eaten by the key-value rule, turning a passing check into
+    /// `anthropic-[REDACTED] stray ANTHROPIC_API_KEY`. Found by reading a real
+    /// pasted bundle, not by a test — hence this one.
+    @Test func aCheckNamedAfterASecretIsNotRedacted() {
+        let text = "[OK] anthropic-api-key: no stray ANTHROPIC_API_KEY"
+        let redacted = DiagnosticsRedactor.redact(text, homeDirectory: "/Users/x")
+
+        #expect(redacted == text)
+        #expect(!redacted.contains(DiagnosticsRedactor.placeholder))
+    }
+
+    /// The rule must still fire on an actual credential in that shape.
+    @Test func aRealKeyValueSecretIsStillRedacted() {
+        for text in [
+            // Deliberately not provider-shaped. A realistic-looking `sk_live_…`
+            // fixture trips GitHub's secret scanner on push — a fake key that
+            // blocks a push is a fixture that costs more than it proves.
+            "api_key: EXAMPLENOTAREALKEY0000000000",
+            "OAUTH_TOKEN=abcdefghijklmnopqrstuvwxyz0123456789",
+            "password = hunter2hunter2hunter2hunter2",
+        ] {
+            let redacted = DiagnosticsRedactor.redact(text, homeDirectory: "/Users/x")
+            #expect(redacted.contains(DiagnosticsRedactor.placeholder), "missed: \(text)")
+        }
     }
 
     /// A commit hash is a 40-char hex run — exactly the shape a naive

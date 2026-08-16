@@ -41,8 +41,16 @@ public enum DiagnosticsRedactor {
     private static let patterns: [String] = [
         // Anthropic-style API keys.
         #"sk-[A-Za-z0-9_\-]{16,}"#,
-        // Anything self-describing as a token/secret/key, with its value.
-        #"(?i)\b(?:oauth[_-]?token|access[_-]?token|api[_-]?key|secret|password|bearer)\b\s*[:=]\s*\S+"#,
+        // Anything self-describing as a token/secret/key, followed by a value
+        // that actually looks like a credential.
+        //
+        // The value pattern is deliberately strict. A looser `\S+` matched the
+        // doctor check NAMED "anthropic-api-key" followed by ": no stray…" and
+        // redacted the words "api-key: no", mangling a passing check into
+        // `anthropic-[REDACTED] stray ANTHROPIC_API_KEY`. Over-eager is not the
+        // safe direction to err in: it can hide the very finding the bundle was
+        // pasted to explain.
+        #"(?i)\b(?:oauth[_-]?token|access[_-]?token|api[_-]?key|secret|password|bearer)\b\s*[:=]\s*[A-Za-z0-9_\-\.\+/]{16,}"#,
         // OAuth-ish opaque tokens with a recognisable prefix.
         #"(?i)\boauth[_A-Za-z0-9\-]*_[A-Za-z0-9]{20,}"#,
         // JWTs — three base64url segments separated by dots.
