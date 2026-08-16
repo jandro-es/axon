@@ -77,6 +77,8 @@ final class AppModel {
     private(set) var vaultPath: String?
     private(set) var dataDir: String?
 
+    private let delivery = NotificationDelivery()
+    private let notifications: NotificationRouter
     private let client: DashboardClient
     private let sse: SSEClient
     private let cli: AxonCLI?
@@ -95,8 +97,19 @@ final class AppModel {
         self.client = client
         self.cli = cli
         self.sse = SSEClient()
-        self.settings = SettingsStore(cli: cli)
+        let settings = SettingsStore(cli: cli)
+        self.settings = settings
         self.metrics = MetricsStore(source: client)
+
+        // The router reads preferences at decision time, so a toggle flipped in
+        // Settings takes effect on the next event without any rewiring.
+        let delivery = self.delivery
+        self.notifications = NotificationRouter(
+            prefs: { MainActor.assumeIsolated { settings.notifications } },
+            post: { planned in
+                Task { @MainActor in delivery.deliver(planned) }
+            }
+        )
         self.controller = DaemonController(
             reader: client,
             lifecycle: cli.map(AxonCLILifecycle.init(cli:)),
@@ -120,6 +133,7 @@ final class AppModel {
         controller.startMonitoring()
         await refreshProfile()
         await refreshBadges()
+        observeTransitions()
 
         // SSE drives two things: badge/sparkline freshness, and a fast health
         // re-probe on disconnect so a dead daemon is noticed well inside the
@@ -135,8 +149,37 @@ final class AppModel {
                     await refreshBadges()
                 case .event(let event):
                     metrics.handle(event: event)
+                    notifications.handle(event: event)
                     await handle(event)
                 }
+            }
+        }
+    }
+
+    /// Feeds daemon state changes to the notification router.
+    ///
+    /// Polled alongside the controller rather than driven by a callback: the
+    /// controller publishes its transitions, and one observer here keeps the
+    /// controller free of any knowledge that notifications exist.
+    private func observeTransitions() {
+        Task { [weak self] in
+            var seen: DaemonTransition?
+            while !Task.isCancelled {
+                guard let self else { return }
+                if let transition = controller.lastTransition, transition != seen {
+                    seen = transition
+                    // The controller knows whether the user asked for a stop;
+                    // the router must be told, or clicking Stop reports itself
+                    // as a crash.
+                    if controller.userInitiatedStop {
+                        notifications.noteUserInitiatedStop()
+                    }
+                    notifications.handle(transition: transition)
+                }
+                if controller.state.attentionReasons.contains(.updateAvailable) {
+                    notifications.handle(updateAvailable: controller.health?.latestVersion)
+                }
+                try? await Task.sleep(for: .seconds(2))
             }
         }
     }
