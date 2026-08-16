@@ -1,0 +1,159 @@
+import Foundation
+
+/// Everything that can go wrong talking to the dashboard API.
+public enum DashboardError: Error, Equatable, Sendable {
+    /// Nothing is listening, or the connection dropped. The common case: the
+    /// daemon is stopped. Callers treat this as a state, not an error to show.
+    case unreachable
+    /// The daemon answered, but not with success.
+    case badStatus(Int)
+    /// The daemon answered with something we could not decode. Distinct from
+    /// `unreachable` on purpose: this one means the *contract* broke.
+    case decoding(String)
+}
+
+/// Read-only REST client for the daemon's dashboard API (CONTRACT.md §§2-8).
+///
+/// An `actor` because it is shared by the poll loop, the metrics store and the
+/// popover; serialising its state costs nothing and removes a class of races.
+/// Every request is loopback-only and short-lived — the SSE stream is separate.
+public actor DashboardClient {
+    /// Default dashboard address. Overridden from `axon config get dashboard.port`
+    /// when the profile moves it.
+    public static let defaultBaseURL = URL(string: "http://127.0.0.1:7777")!
+
+    /// Polling reads must fail fast: a hung request would stall the icon's
+    /// ≤5 s state detection (CFR-01).
+    static let requestTimeout: TimeInterval = 3
+
+    private let baseURL: URL
+    private let session: URLSession
+
+    public init(baseURL: URL = DashboardClient.defaultBaseURL, session: URLSession = .shared) {
+        self.baseURL = baseURL
+        self.session = session
+    }
+
+    // MARK: reads
+
+    public func health() async throws -> AxonHealth {
+        try await get(AxonHealth.self, path: "/health")
+    }
+
+    public func usage() async throws -> UsageSnapshot {
+        try await get(UsageSnapshot.self, path: "/api/usage")
+    }
+
+    /// `days` maps to the daemon's `?days=` window (default 30).
+    public func tokens(days: Int = 30) async throws -> TokenSeries {
+        try await get(TokenSeries.self, path: "/api/tokens", query: ["days": String(days)])
+    }
+
+    /// `limit` is a **row count**, not a time range (CONTRACT.md §5).
+    public func runs(limit: Int = 100) async throws -> [RunRecord] {
+        try await get([RunRecord].self, path: "/api/runs", query: ["limit": String(limit)])
+    }
+
+    public func ingestion() async throws -> IngestionStats {
+        try await get(IngestionStats.self, path: "/api/ingestion")
+    }
+
+    public func vault() async throws -> VaultStats {
+        try await get(VaultStats.self, path: "/api/vault")
+    }
+
+    /// Pending review-queue items for the badge. `items` is ignored — it can be
+    /// ~100 KB and the badge needs one integer.
+    public func reviewCount() async throws -> Int? {
+        try await get(ReviewMeta.self, path: "/api/review").pending
+    }
+
+    /// Open actions for the badge, or nil when the profile disabled actions
+    /// (the daemon answers 404) — the badge hides rather than erroring.
+    public func actionsCount() async throws -> Int? {
+        do {
+            let meta = try await get(
+                ActionsMeta.self, path: "/api/actions",
+                headers: ["X-Axon-Actions": "1"]
+            )
+            return meta.openCount
+        } catch DashboardError.badStatus(404) {
+            return nil
+        }
+    }
+
+    // MARK: export (CFR-31)
+
+    /// The daemon serialises every export; Companion only builds the URL.
+    public nonisolated func exportURL(dataset: String, format: String) -> URL {
+        var components = URLComponents(url: baseURL.appending(path: "/api/export"),
+                                       resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "dataset", value: dataset),
+            URLQueryItem(name: "format", value: format),
+        ]
+        return components.url!
+    }
+
+    /// Mirrors the daemon's `Content-Disposition` filename so the save panel
+    /// suggests the same name whether or not the header survives.
+    public nonisolated func exportFilename(dataset: String, format: String, day: String) -> String {
+        "axon-\(dataset)-\(day).\(format)"
+    }
+
+    /// The daemon 403s any request whose Host is not loopback (FR-63), so a
+    /// non-loopback base URL can only ever fail. Callers check before adopting
+    /// a configured host.
+    public nonisolated static func isLoopback(_ url: URL) -> Bool {
+        switch url.host()?.lowercased() {
+        case "127.0.0.1", "localhost", "::1", "[::1]": true
+        default: false
+        }
+    }
+
+    // MARK: transport
+
+    private func get<T: Decodable>(
+        _ type: T.Type,
+        path: String,
+        query: [String: String] = [:],
+        headers: [String: String] = [:]
+    ) async throws -> T {
+        var components = URLComponents(url: baseURL.appending(path: path),
+                                       resolvingAgainstBaseURL: false)!
+        if !query.isEmpty {
+            components.queryItems = query
+                .sorted { $0.key < $1.key }
+                .map { URLQueryItem(name: $0.key, value: $0.value) }
+        }
+
+        var request = URLRequest(url: components.url!)
+        request.timeoutInterval = Self.requestTimeout
+        // Never serve a stale body for a liveness check.
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        for (key, value) in headers {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            // Any transport error means "cannot talk to the daemon". The
+            // distinction between refused, timed out and cancelled is not
+            // actionable for the user.
+            throw DashboardError.unreachable
+        }
+
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw DashboardError.badStatus(http.statusCode)
+        }
+
+        do {
+            return try AxonJSON.decode(type, from: data)
+        } catch {
+            throw DashboardError.decoding(String(describing: error))
+        }
+    }
+}
