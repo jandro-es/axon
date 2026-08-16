@@ -937,8 +937,31 @@ const TABS = [
   ['ask', 'Ask'], ['related', 'Related'], ['knowledge', 'Knowledge'], ['graph', 'Graph'], ['activity', 'Activity'],
 ]
 
+// The URL fragment is the tab: `#review` opens the Review tab on load. Keeps
+// tabs bookmarkable and gives external launchers (the macOS Companion app,
+// CFR-20) a stable deep link that needs no router dependency.
+const TAB_IDS = TABS.map(([id]) => id)
+const tabFromHash = () => {
+  const id = (typeof location === 'undefined' ? '' : location.hash).replace(/^#\/?/, '')
+  return TAB_IDS.includes(id) ? id : 'overview'
+}
+
 export default function App() {
-  const [tab, setTab] = useState('overview')
+  const [tab, setTabState] = useState(tabFromHash)
+
+  // Write the hash on every tab change so Back/Forward and copy-link work.
+  const setTab = (id) => {
+    setTabState(id)
+    if (typeof location !== 'undefined' && tabFromHash() !== id) location.hash = id
+  }
+
+  // Follow hash edits from outside React: Back/Forward, a pasted URL, or the
+  // Companion app re-focusing an already-open dashboard window.
+  useEffect(() => {
+    const onHash = () => setTabState(tabFromHash())
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
   const { data: health, error: healthErr } = useFetch('/health', 10000)
   const { data: usage, error: usageErr } = useFetch('/api/usage', 4000)
   const { data: tokens } = useFetch('/api/tokens', 8000)
