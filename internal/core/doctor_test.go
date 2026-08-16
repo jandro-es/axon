@@ -2,10 +2,15 @@ package core
 
 import (
 	"errors"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jandro-es/axon/internal/clients"
 	"github.com/jandro-es/axon/internal/config"
@@ -330,4 +335,106 @@ func TestMissingBinaryChecksCarryAnInstallCommand(t *testing.T) {
 	if got := installHint("some-unknown-tool"); got != "" {
 		t.Errorf("installHint for an unknown tool = %q, want empty", got)
 	}
+}
+
+// The dashboard port being busy is only a problem if something OTHER than
+// AXON has it. On a machine where the daemon is running — the normal, healthy
+// case — the old check warned about the very state it wanted, and offered no
+// fix because there is nothing to fix.
+func TestPortFreeCheck(t *testing.T) {
+	t.Run("a free port passes", func(t *testing.T) {
+		c := portFreeCheck("127.0.0.1", freePort(t))
+		if c.Status != StatusOK || !strings.Contains(c.Detail, "free") {
+			t.Errorf("free port = %+v, want ok", c)
+		}
+	})
+
+	t.Run("no port configured warns", func(t *testing.T) {
+		if c := portFreeCheck("127.0.0.1", 0); c.Status != StatusWarn {
+			t.Errorf("port 0 = %+v, want warn", c)
+		}
+	})
+
+	t.Run("AXON's own daemon on the port passes and names the profile", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/health" {
+				http.NotFound(w, r)
+				return
+			}
+			_, _ = w.Write([]byte(`{"status":"ok","profile":"personal","version":"1.3.4"}`))
+		}))
+		defer srv.Close()
+
+		host, port := splitHostPort(t, srv.Listener.Addr().String())
+		c := portFreeCheck(host, port)
+		if c.Status != StatusOK {
+			t.Fatalf("own daemon on port = %+v, want ok", c)
+		}
+		if !strings.Contains(c.Detail, "personal") {
+			t.Errorf("detail should name the serving profile: %q", c.Detail)
+		}
+		if c.Fix != "" {
+			t.Errorf("nothing to fix when it is our own daemon: %q", c.Fix)
+		}
+	})
+
+	t.Run("a foreign listener warns and says what to do", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "not axon", http.StatusNotFound)
+		}))
+		defer srv.Close()
+
+		host, port := splitHostPort(t, srv.Listener.Addr().String())
+		c := portFreeCheck(host, port)
+		if c.Status != StatusWarn {
+			t.Fatalf("foreign listener = %+v, want warn", c)
+		}
+		if c.Fix == "" {
+			t.Errorf("a genuine port clash is actionable and needs a Fix: %+v", c)
+		}
+	})
+
+	t.Run("a listener that accepts but never answers still warns", func(t *testing.T) {
+		// A raw TCP listener that never speaks HTTP: the probe must time out
+		// and warn rather than hang doctor.
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Skipf("cannot listen: %v", err)
+		}
+		defer func() { _ = ln.Close() }()
+
+		host, port := splitHostPort(t, ln.Addr().String())
+		start := time.Now()
+		c := portFreeCheck(host, port)
+		if c.Status != StatusWarn {
+			t.Errorf("silent listener = %+v, want warn", c)
+		}
+		if elapsed := time.Since(start); elapsed > 5*time.Second {
+			t.Errorf("probe took %v — doctor must not hang on a dead socket", elapsed)
+		}
+	})
+}
+
+func freePort(t *testing.T) int {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	_, port := splitHostPort(t, ln.Addr().String())
+	_ = ln.Close()
+	return port
+}
+
+func splitHostPort(t *testing.T, addr string) (string, int) {
+	t.Helper()
+	host, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		t.Fatalf("split %q: %v", addr, err)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		t.Fatalf("port %q: %v", portStr, err)
+	}
+	return host, port
 }

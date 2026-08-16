@@ -6,12 +6,16 @@ package core
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -659,7 +663,13 @@ func vaultWritableCheck(vaultPath string) Check {
 	return Check{Name: name, Status: StatusOK, Detail: "vault path writable: " + vaultPath}
 }
 
-// portFreeCheck confirms the dashboard port is bindable on the loopback host.
+// portFreeCheck reports whether the daemon can serve on its configured port.
+//
+// A busy port is only a problem when something OTHER than AXON holds it. On a
+// machine where the daemon is already running — the normal, healthy state —
+// warning about the port is warning about the thing the user wants, and offers
+// nothing to act on. So when the port is busy, ask what is listening: an AXON
+// daemon answers /health with its own profile, and that is a pass.
 func portFreeCheck(host string, port int) Check {
 	const name = "dashboard-port"
 	if port == 0 {
@@ -668,13 +678,62 @@ func portFreeCheck(host string, port int) Check {
 	if host == "" {
 		host = "127.0.0.1"
 	}
-	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
+
 	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("%s is in use (a daemon may already be running): %v", addr, err)}
+	if err == nil {
+		_ = ln.Close()
+		return Check{Name: name, Status: StatusOK, Detail: "dashboard port free: " + addr}
 	}
-	_ = ln.Close()
-	return Check{Name: name, Status: StatusOK, Detail: "dashboard port free: " + addr}
+
+	if profile, ok := axonServing(addr); ok {
+		detail := "AXON is already serving " + addr
+		if profile != "" {
+			detail = fmt.Sprintf("AXON is already serving %s (profile %q)", addr, profile)
+		}
+		return Check{Name: name, Status: StatusOK, Detail: detail}
+	}
+
+	return Check{
+		Name:   name,
+		Status: StatusWarn,
+		Detail: fmt.Sprintf("%s is held by something that is not AXON: %v", addr, err),
+		Fix:    fmt.Sprintf("lsof -nP -iTCP:%d -sTCP:LISTEN   # then stop it, or set dashboard.port", port),
+	}
+}
+
+// axonServing asks whatever holds addr whether it is an AXON daemon, returning
+// its profile name. Loopback-only and short-timeout: doctor must stay fast and
+// must never hang on a socket that accepts but never speaks.
+func axonServing(addr string) (string, bool) {
+	client := &http.Client{Timeout: 1500 * time.Millisecond}
+	resp, err := client.Get("http://" + addr + "/health")
+	if err != nil {
+		return "", false
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return "", false
+	}
+
+	// Cap the read: an unknown listener may answer 200 with anything at all.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	if err != nil {
+		return "", false
+	}
+	var health struct {
+		Status  string `json:"status"`
+		Profile string `json:"profile"`
+	}
+	if err := json.Unmarshal(body, &health); err != nil {
+		return "", false
+	}
+	// `status` is the field only an AXON /health carries; a JSON 200 from
+	// something else will not have it.
+	if health.Status == "" {
+		return "", false
+	}
+	return health.Profile, true
 }
 
 // residencyCheck reports the data-residency posture (NFR-01: local-first).

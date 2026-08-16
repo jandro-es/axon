@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **`doctor`'s `dashboard-port` check no longer warns about the healthy state.**
+  It reported `127.0.0.1:7777 is in use (a daemon may already be running)` on
+  every machine where the daemon *was* running — warning about exactly the thing
+  the user wants, and the only warning with nothing to act on. A busy port is
+  only a problem when something other than AXON holds it, so the check now asks:
+  an AXON daemon answers `/health`, and that is a pass naming the serving
+  profile. A foreign listener still warns, and now carries the `lsof` command to
+  find it.
+
 ## [1.3.4] — 2026-08-16
 
 **`axon doctor` now tells you how to fix things.** A patch: no schema change
