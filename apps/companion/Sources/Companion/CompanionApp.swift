@@ -165,6 +165,13 @@ final class AppModel {
         sparkline = (try? await client.tokens(days: 7))?.points ?? []
     }
 
+    /// A Doctor model bound to the same CLI and dashboard the rest of the app
+    /// uses. Built per-window rather than held, so a re-opened Doctor window
+    /// starts from a fresh run rather than a stale report.
+    func makeDoctorModel() -> DoctorModel {
+        DoctorModel(cli: cli, health: { [client] in try await client.health() })
+    }
+
     /// Vault path and data dir come from `axon profiles --json` — never parsed
     /// from YAML, and there is no `vault.path` config key (CFR-21).
     private func refreshProfile() async {

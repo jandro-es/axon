@@ -59,6 +59,29 @@ public struct AxonCLI: Sendable {
         }
     }
 
+    /// Whether this daemon's `doctor` has `--json` at all.
+    ///
+    /// Companion needs it for the Doctor window; daemons older than the seam
+    /// that added it simply do not have it, and "unknown flag: --json" is not
+    /// something a user can act on.
+    public func doctorSupportsJSON() async -> Bool {
+        await doctorHelpMentions("--json")
+    }
+
+    /// Whether this daemon supports `axon doctor --bundle` (2.0 P5).
+    ///
+    /// Probed from `--help` rather than assumed, so the richer bundle is picked
+    /// up the moment the daemon gains it, with no Companion change.
+    public func doctorSupportsBundle() async -> Bool {
+        await doctorHelpMentions("--bundle")
+    }
+
+    private func doctorHelpMentions(_ flag: String) async -> Bool {
+        guard let result = try? await runRaw(["doctor", "--help"], timeout: Self.readTimeout)
+        else { return false }
+        return result.stdoutText.contains(flag) || result.stderr.contains(flag)
+    }
+
     public func automations() async throws -> [AutomationInfo] {
         try await json([AutomationInfo].self, ["automations", "--json"])
     }

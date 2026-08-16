@@ -20,6 +20,22 @@ fail() { printf '\n\xe2\x9c\x97 Error: %s\n' "$1" >&2; exit 1; }
 case "$1" in
   status)      cat "$DIR/status-cli.json" ;;
   doctor)
+    if [[ "$2" == "--help" ]]; then
+      echo "Flags:"
+      if [[ "${AXON_FAKE_DOCTOR_NO_JSON:-}" != "1" ]]; then
+        echo "      --json   emit the doctor report as JSON"
+      fi
+      if [[ "${AXON_FAKE_DOCTOR_BUNDLE:-}" == "1" ]]; then
+        echo "      --bundle write a redacted diagnostics bundle"
+      fi
+      exit 0
+    fi
+    if [[ "${AXON_FAKE_DOCTOR_NO_JSON:-}" == "1" ]]; then
+      fail "unknown flag: --json"
+    fi
+    if [[ "${AXON_FAKE_DOCTOR_BROKEN:-}" == "1" ]]; then
+      fail "config not loaded or invalid"
+    fi
     cat "$DIR/doctor-cli.json"
     # doctor exits non-zero on a failing check while still emitting JSON.
     # Note the explicit `else`: a bare `[[ ]] && exit 1` as the last command of

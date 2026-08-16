@@ -6,7 +6,7 @@ import Foundation
 /// what proves the payload came from an AXON daemon at all. Everything else is
 /// optional so an older daemon degrades feature-by-feature (CFR-82) instead of
 /// failing to decode.
-public struct AxonHealth: Decodable, Sendable, Equatable {
+public struct AxonHealth: Codable, Sendable, Equatable {
     public let version: String
     public let status: String?
     public let profile: String?
