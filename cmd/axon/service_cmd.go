@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,15 +15,27 @@ import (
 	"github.com/jandro-es/axon/internal/ui"
 )
 
+// serviceStatusJSON is what `axon service status --json` emits. It exists so
+// GUI clients can show a "start at login" toggle without stat-ing plists or
+// shelling to launchctl themselves — the CLI owns service semantics.
+type serviceStatusJSON struct {
+	Profile   string `json:"profile"`
+	Kind      string `json:"kind"`
+	Path      string `json:"path"`
+	Installed bool   `json:"installed"`
+	Supported bool   `json:"supported"`
+}
+
 func newServiceCmd(gf *globalFlags) *cobra.Command {
+	var asJSON bool
 	cmd := &cobra.Command{
-		Use:   "service <install|uninstall|print>",
+		Use:   "service <install|uninstall|print|status>",
 		Short: "Emit/remove an OS service unit that supervises `axon start` (optional)",
 		Long: "Generate a profile-scoped OS service unit (launchd on macOS, systemd --user\n" +
 			"on Linux, Task Scheduler on Windows) so the daemon is supervised by the OS.\n" +
 			"The core never depends on these (ADR-008); this only emits/installs them.",
 		Args:      cobra.ExactArgs(1),
-		ValidArgs: []string{"install", "uninstall", "print"},
+		ValidArgs: []string{"install", "uninstall", "print", "status"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load(gf.configPath)
 			if err != nil {
@@ -55,6 +68,29 @@ func newServiceCmd(gf *globalFlags) *cobra.Command {
 			out := cmd.OutOrStdout()
 			st := ui.For(out)
 			switch args[0] {
+			case "status":
+				_, statErr := os.Stat(unit.Path)
+				status := serviceStatusJSON{
+					Profile:   name,
+					Kind:      unit.Kind,
+					Path:      unit.Path,
+					Installed: statErr == nil,
+					Supported: unit.Path != "",
+				}
+				if asJSON {
+					enc := json.NewEncoder(out)
+					enc.SetIndent("", "  ")
+					return enc.Encode(status)
+				}
+				if status.Installed {
+					fmt.Fprintf(out, "%s %s unit installed: %s\n",
+						st.Green(ui.IconOK), unit.Kind, st.Cyan(unit.Path))
+				} else {
+					fmt.Fprintf(out, "%s no %s unit installed — the daemon does not start at login\n",
+						st.Dim(ui.IconWarn), unit.Kind)
+					fmt.Fprintf(out, "  %s %s\n", st.Dim("install with:"), st.Bold("axon service install"))
+				}
+				return nil
 			case "print":
 				// The unit file content is emitted RAW so it can be piped straight to
 				// the real unit path; only the trailing how-to comment is styled.
@@ -81,10 +117,11 @@ func newServiceCmd(gf *globalFlags) *cobra.Command {
 					st.Dim("(stop first if running: "+unit.StopCmd+")"))
 				return nil
 			default:
-				return fmt.Errorf("unknown subcommand %q (use install|uninstall|print)", args[0])
+				return fmt.Errorf("unknown subcommand %q (use install|uninstall|print|status)", args[0])
 			}
 		},
 	}
+	cmd.Flags().BoolVar(&asJSON, "json", false, "emit `service status` as JSON")
 	return cmd
 }
 
