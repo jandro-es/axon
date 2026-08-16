@@ -3,8 +3,12 @@ import Testing
 
 @testable import AxonKit
 
-@Test func daemonStateSummariesAreDistinct() {
-    let states: [DaemonState] = [.unknown, .notInstalled, .stopped, .running, .attention]
+@Test func daemonStateSummariesAreDistinct() throws {
+    let health = try AxonJSON.decode(AxonHealth.self, from: Data(#"{"version":"1.3.2"}"#.utf8))
+    let states: [DaemonState] = [
+        .unknown, .notInstalled, .stopped, .starting, .stopping,
+        .runningWith(health, []), .runningWith(health, [.budgetGuard]),
+    ]
     let summaries = Set(states.map(\.summary))
     #expect(summaries.count == states.count)
 }
