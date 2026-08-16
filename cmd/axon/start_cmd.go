@@ -30,6 +30,10 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 			"dashboard.host:port. Runs until interrupted.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// Stamped before any work so /health's uptime measures the whole
+			// process lifetime, not the time since the dashboard bound.
+			daemonStartedAt := time.Now()
+
 			deps, err := loadProfileDeps(gf, true)
 			if err != nil {
 				return err
@@ -119,6 +123,11 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 							"embeddings_provider": deps.profile.Embeddings.Provider,
 							"embeddings_model":    deps.profile.Embeddings.Model,
 							"embeddings_dim":      deps.profile.Embeddings.Dim,
+							// When this daemon process began serving. Clients
+							// derive uptime from it rather than tracking their
+							// own "first seen" time, which resets on client
+							// restart and lies across a daemon restart.
+							"started_at": daemonStartedAt.UTC().Format(time.RFC3339),
 						}
 						current, _, _ := buildVersion()
 						h["version"] = current

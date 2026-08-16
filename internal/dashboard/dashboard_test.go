@@ -55,6 +55,36 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 }
 
+// The daemon supplies started_at through the Health closure so clients can show
+// uptime without guessing (apps/companion CFR-02). Verify it survives the merge
+// into the health payload as a parseable RFC3339 timestamp.
+func TestHealthCarriesStartedAt(t *testing.T) {
+	srv, _, _, _ := newTestServer(t)
+	started := time.Now().Add(-90 * time.Minute).UTC()
+	srv.cfg.Health = func(context.Context) map[string]any {
+		return map[string]any{"started_at": started.Format(time.RFC3339)}
+	}
+
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "http://127.0.0.1/health", nil))
+
+	var out map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	raw, ok := out["started_at"].(string)
+	if !ok {
+		t.Fatalf("health has no started_at: %v", out)
+	}
+	got, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		t.Fatalf("started_at %q is not RFC3339: %v", raw, err)
+	}
+	if !got.Equal(started.Truncate(time.Second)) {
+		t.Errorf("started_at = %v, want %v", got, started.Truncate(time.Second))
+	}
+}
+
 func TestUsageMatchesManagerStatus(t *testing.T) {
 	srv, dbtx, _, mgr := newTestServer(t)
 	ctx := context.Background()
