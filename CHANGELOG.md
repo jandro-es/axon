@@ -6,6 +6,56 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.3.3] — 2026-08-16
+
+**Machine-readable seams for GUI clients.** A patch by version number but
+additive in content: four new read-only surfaces, no schema change (stays v7),
+no config change, no new MCP tool, no behaviour change to any existing command.
+
+Every one of these exists because the new macOS menu bar app
+([Axon Companion](https://github.com/jandro-es/axon/releases/tag/companion-v0.1.0),
+`apps/companion/`) needed to ask the daemon something it could not answer.
+The rule was that the daemon grows the seam rather than the client working
+around it — so each is a general capability, useful to any client, not a
+Companion special case.
+
+### Added
+
+- **`axon doctor --json`.** Only the styled TTY renderer existed, so no program
+  could read the report. Emits `{profile, status, checks[{name, status, detail}]}`
+  on stdout and keeps the existing non-zero exit on a failing check. Note the
+  daemon folds remediation advice into `detail` — there is no separate field;
+  render `detail` verbatim.
+- **`axon service status [--json]`.** `service` could install, uninstall and
+  print a unit but not say whether one was installed, leaving a client to stat
+  a plist or shell to `launchctl` — duplicating semantics the CLI owns. Reports
+  `{profile, kind, path, installed, supported}`, including where the unit
+  *would* go when absent.
+- **`started_at` on `GET /health`.** Clients showing uptime had to keep their
+  own "first seen" clock, which resets on client restart and lies across a
+  daemon restart. Stamped at the top of `axon start`, so it measures the whole
+  process lifetime rather than the time the dashboard bound.
+- **Dashboard tabs are addressable.** The SPA had no routing at all — `tab` was
+  plain `useState`, so no tab could be linked to. `#review`, `#actions`,
+  `#tokens` and the rest now open that tab on load, are written on every tab
+  change, and follow `hashchange`, making Back/Forward and copy-link work. An
+  unknown fragment falls back to Overview.
+
+### Fixed
+
+- **Security advisories in the toolchain and dependencies.** Go directive
+  1.26.5 → 1.26.6, clearing five stdlib advisories (`net/url` GO-2026-6218,
+  `crypto/tls` GO-2026-6090, `net/http` GO-2026-6089, `encoding/xml`
+  GO-2026-6088, `encoding/asn1` GO-2026-5972); `golang.org/x/text` 0.38.0 →
+  0.39.0 (GO-2026-5970); and `postcss`/`nanoid` patch bumps under Vite. Both
+  ecosystems report zero vulnerabilities.
+- **`make release` and the rest of the Makefile.** A regression introduced while
+  adding the Companion build targets replaced the root Makefile wholesale,
+  removing the release cross-compile matrix, `doctor`/`setup`/`update`/`reload`/
+  `uninstall`/`install` and the quality gates. Restored, with the Companion
+  targets re-applied as their own section. `.github/workflows/release.yml` runs
+  `make release`, so this was load-bearing for tagging any release at all.
+
 ## [1.3.2] — 2026-07-12
 
 **Supervised daemon finds its tools; failed runs show why.** A service/observability
@@ -610,7 +660,14 @@ The initial feature-complete build, implemented in phases against
   `config get/set`. *(PDF ingestion, the api_key adapter and `config get/set`
   were implemented in 0.10.0.)*
 
-[Unreleased]: https://github.com/jandro-es/axon/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/jandro-es/axon/compare/v1.3.3...HEAD
+[1.3.3]: https://github.com/jandro-es/axon/releases/tag/v1.3.3
+[1.3.2]: https://github.com/jandro-es/axon/releases/tag/v1.3.2
+[1.3.1]: https://github.com/jandro-es/axon/releases/tag/v1.3.1
+[1.2.5]: https://github.com/jandro-es/axon/releases/tag/v1.2.5
+[1.2.0]: https://github.com/jandro-es/axon/releases/tag/v1.2.0
+[1.1.0]: https://github.com/jandro-es/axon/releases/tag/v1.1.0
+[1.0.0]: https://github.com/jandro-es/axon/releases/tag/v1.0.0
 [0.10.0]: https://github.com/jandro-es/axon/releases/tag/v0.10.0
 [0.9.0]: https://github.com/jandro-es/axon/releases/tag/v0.9.0
 [0.8.0]: https://github.com/jandro-es/axon/releases/tag/v0.8.0
