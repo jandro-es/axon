@@ -6,6 +6,45 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.3.4] — 2026-08-16
+
+**`axon doctor` now tells you how to fix things.** A patch: no schema change
+(stays v7), no config change, no new MCP tool, no behaviour change to any
+existing command.
+
+### Added
+
+- **Every actionable doctor check carries the command that fixes it.** `doctor`
+  said what was wrong but rarely what to do about it — "ollama not found on
+  PATH" left the reader to go and find the install command themselves. `Detail`
+  now says what is wrong and a new `Check.Fix` says what to do: rendered by the
+  CLI as a dim `↳ fix:` line under the check, and emitted as `remediation` by
+  `--json` so a GUI can offer it as a copyable command rather than making the
+  user parse prose.
+
+  Populated for every warning a user can act on: a missing `claude`, `ollama`,
+  `yt-dlp`, `tesseract`/`poppler` (with the right command per platform), an
+  unreachable or unpulled Ollama model, an Apple helper needing `axon init`, an
+  unusable vision provider, and a service unit whose PATH cannot resolve
+  `claude`.
+
+- **`path_env` on `axon service status --json`** — the PATH the installed unit
+  hands the daemon, resolved from the installing shell at install time.
+
+  This exists because of a real, reproducible bug. A GUI client is started by
+  LaunchServices with `PATH=/usr/bin:/bin:/usr/sbin:/sbin` — no Homebrew, no
+  `~/.local/bin` — so a child `axon doctor` reported `claude`, `ollama` and
+  `yt-dlp` missing on a machine whose login shell finds all three. That is worse
+  than no report: it sends the user to reinstall tools they already have. It is
+  the same failure the *daemon* hit under launchd in 1.3.2, and the fix is the
+  same PATH, now readable by anything that needs it.
+
+### Changed
+
+- The service-unit PATH parser moved from `internal/core` to `internal/service`,
+  where the units are generated, so `doctor` and `service status` share one
+  implementation instead of two regexes drifting apart.
+
 ## [1.3.3] — 2026-08-16
 
 **Machine-readable seams for GUI clients.** A patch by version number but
@@ -660,7 +699,8 @@ The initial feature-complete build, implemented in phases against
   `config get/set`. *(PDF ingestion, the api_key adapter and `config get/set`
   were implemented in 0.10.0.)*
 
-[Unreleased]: https://github.com/jandro-es/axon/compare/v1.3.3...HEAD
+[Unreleased]: https://github.com/jandro-es/axon/compare/v1.3.4...HEAD
+[1.3.4]: https://github.com/jandro-es/axon/releases/tag/v1.3.4
 [1.3.3]: https://github.com/jandro-es/axon/releases/tag/v1.3.3
 [1.3.2]: https://github.com/jandro-es/axon/releases/tag/v1.3.2
 [1.3.1]: https://github.com/jandro-es/axon/releases/tag/v1.3.1
