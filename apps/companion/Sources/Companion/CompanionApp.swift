@@ -23,6 +23,7 @@ struct CompanionApp: App {
         // frame via SwiftUI's own scene restoration, keyed by the window id.
         Window("Axon Insights", id: WindowID.insights) {
             InsightsWindow()
+                .environment(app)
                 .frame(minWidth: 640, minHeight: 460)
                 .activatesOnAppear()
         }
@@ -30,6 +31,7 @@ struct CompanionApp: App {
 
         Window("Axon Doctor", id: WindowID.doctor) {
             DoctorWindow()
+                .environment(app)
                 .frame(minWidth: 520, minHeight: 400)
                 .activatesOnAppear()
         }
@@ -37,6 +39,7 @@ struct CompanionApp: App {
 
         Window("Welcome to Axon", id: WindowID.onboarding) {
             OnboardingWindow()
+                .environment(app)
                 .frame(minWidth: 520, minHeight: 440)
                 .activatesOnAppear()
         }
@@ -68,6 +71,7 @@ private extension View {
 final class AppModel {
     let controller: DaemonController
     let settings: SettingsStore
+    let metrics: MetricsStore
     private(set) var badges = BadgeCounts()
     private(set) var sparkline: [TokenPoint] = []
     private(set) var vaultPath: String?
@@ -92,6 +96,7 @@ final class AppModel {
         self.cli = cli
         self.sse = SSEClient()
         self.settings = SettingsStore(cli: cli)
+        self.metrics = MetricsStore(source: client)
         self.controller = DaemonController(
             reader: client,
             lifecycle: cli.map(AxonCLILifecycle.init(cli:)),
@@ -129,6 +134,7 @@ final class AppModel {
                 case .connected:
                     await refreshBadges()
                 case .event(let event):
+                    metrics.handle(event: event)
                     await handle(event)
                 }
             }

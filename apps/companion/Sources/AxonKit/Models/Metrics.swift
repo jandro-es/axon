@@ -82,10 +82,19 @@ public struct TokenPoint: Decodable, Sendable, Equatable, Identifiable {
     /// deliberately excluded so charts agree with `axon status`.
     public var total: Int64 { (input ?? 0) + (output ?? 0) }
 
-    /// Display name: `automation.briefing` reads as `briefing` in a legend.
+    /// Display name for a legend.
+    ///
+    /// Mirrors the web dashboard's `shortOp` exactly (`web/src/App.jsx`), so a
+    /// legend entry means the same thing in both surfaces: `automation.` is
+    /// dropped, `ingest.` becomes `ingest:`.
     public var label: String {
-        let prefix = "automation."
-        return operation.hasPrefix(prefix) ? String(operation.dropFirst(prefix.count)) : operation
+        if operation.hasPrefix("automation.") {
+            return String(operation.dropFirst("automation.".count))
+        }
+        if operation.hasPrefix("ingest.") {
+            return "ingest:" + operation.dropFirst("ingest.".count)
+        }
+        return operation
     }
 
     /// Calendar day as a `Date` for Swift Charts' `.value(_:_:unit:)`.
@@ -272,7 +281,7 @@ public struct ActionsMeta: Decodable, Sendable, Equatable {
 
 /// The daemon's `YYYY-MM-DD` day keys. Parsed in **UTC** to match how the
 /// daemon buckets them; rendering converts to the user's calendar.
-enum DayString {
+public enum DayString {
     private static let formatter: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .iso8601)
@@ -282,6 +291,6 @@ enum DayString {
         return f
     }()
 
-    static func date(from day: String) -> Date? { formatter.date(from: day) }
-    static func string(from date: Date) -> String { formatter.string(from: date) }
+    public static func date(from day: String) -> Date? { formatter.date(from: day) }
+    public static func string(from date: Date) -> String { formatter.string(from: date) }
 }
