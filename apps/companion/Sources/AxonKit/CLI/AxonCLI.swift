@@ -63,6 +63,12 @@ public struct AxonCLI: Sendable {
         try await json([AutomationInfo].self, ["automations", "--json"])
     }
 
+    /// Whether the daemon's OS service unit is installed, straight from the
+    /// CLI — Companion never stats a plist or shells to launchctl (CFR-11).
+    public func serviceStatus() async throws -> ServiceStatus {
+        try await json(ServiceStatus.self, ["service", "status", "--json"])
+    }
+
     public func profiles() async throws -> [ProfileInfo] {
         try await json([ProfileInfo].self, ["profiles", "--json"])
     }

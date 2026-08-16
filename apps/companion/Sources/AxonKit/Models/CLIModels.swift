@@ -162,3 +162,18 @@ public struct ConfigSetResult: Decodable, Sendable, Equatable {
     public let ok: Bool?
     public let value: String?
 }
+
+/// `axon service status --json`.
+public struct ServiceStatus: Decodable, Sendable, Equatable {
+    public let profile: String?
+    /// `launchd` | `systemd` | `windows`.
+    public let kind: String?
+    /// Where the unit lives — reported even when nothing is installed, so a
+    /// caller can say where it *would* go.
+    public let path: String?
+    public let installed: Bool
+    public let supported: Bool?
+
+    /// True when this platform has no service concept at all.
+    public var isUnsupported: Bool { supported == false }
+}

@@ -37,7 +37,11 @@ case "$1" in
       *)   fail "unknown config subcommand" ;;
     esac ;;
   start|stop|update) echo "ok" ;;
-  service)     echo "service $2" ;;
+  service)
+    case "$2" in
+      status) cat "$DIR/service-status-cli.json" ;;
+      *)      echo "service $2" ;;
+    esac ;;
   boom)        fail "the daemon exploded" ;;
   *)           fail "unknown command \"$1\"" ;;
 esac

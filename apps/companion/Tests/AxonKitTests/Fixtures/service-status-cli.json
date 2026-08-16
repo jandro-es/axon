@@ -1,0 +1,7 @@
+{
+  "profile": "personal",
+  "kind": "launchd",
+  "path": "/Users/jandro/Library/LaunchAgents/com.axon.personal.plist",
+  "installed": true,
+  "supported": true
+}

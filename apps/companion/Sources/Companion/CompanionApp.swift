@@ -19,16 +19,44 @@ struct CompanionApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        // Shells until Tasks 10, 12 and 13 fill them in.
+        // Shells until Tasks 10, 12 and 13 fill them in. Each remembers its
+        // frame via SwiftUI's own scene restoration, keyed by the window id.
         Window("Axon Insights", id: WindowID.insights) {
             InsightsWindow()
+                .frame(minWidth: 640, minHeight: 460)
+                .activatesOnAppear()
         }
+        .defaultSize(width: 900, height: 700)
+
         Window("Axon Doctor", id: WindowID.doctor) {
             DoctorWindow()
+                .frame(minWidth: 520, minHeight: 400)
+                .activatesOnAppear()
         }
+        .defaultSize(width: 620, height: 560)
+
         Window("Welcome to Axon", id: WindowID.onboarding) {
             OnboardingWindow()
+                .frame(minWidth: 520, minHeight: 440)
+                .activatesOnAppear()
         }
+        .defaultSize(width: 560, height: 480)
+        .windowResizability(.contentMinSize)
+
+        Settings {
+            SettingsWindow(settings: app.settings, app: app)
+        }
+    }
+}
+
+private extension View {
+    /// Brings the app forward when a window opens.
+    ///
+    /// An LSUIElement app is not in the Dock and is never "active", so a window
+    /// it opens can appear behind whatever the user was doing — it looks like
+    /// the click did nothing.
+    func activatesOnAppear() -> some View {
+        onAppear { NSApp.activate(ignoringOtherApps: true) }
     }
 }
 
@@ -39,6 +67,7 @@ struct CompanionApp: App {
 @Observable
 final class AppModel {
     let controller: DaemonController
+    let settings: SettingsStore
     private(set) var badges = BadgeCounts()
     private(set) var sparkline: [TokenPoint] = []
     private(set) var vaultPath: String?
@@ -50,19 +79,25 @@ final class AppModel {
     private var started = false
 
     init() {
-        let binary = BinaryLocator.locate()
+        // An explicit path from Settings wins over discovery, so an install in
+        // an unusual location does not leave Companion permanently blind.
+        let explicit = UserDefaults.standard.string(
+            forKey: SettingsStore.Key.explicitBinaryPath.rawValue
+        )
+        let binary = BinaryLocator.locate(explicit: explicit)
         let client = DashboardClient()
         let cli = binary.map { AxonCLI(binary: $0) }
 
         self.client = client
         self.cli = cli
         self.sse = SSEClient()
+        self.settings = SettingsStore(cli: cli)
         self.controller = DaemonController(
             reader: client,
             lifecycle: cli.map(AxonCLILifecycle.init(cli:)),
             // Re-resolved on every poll, so installing AXON while Companion is
             // running flips the icon out of .notInstalled without a relaunch.
-            binaryPresent: { BinaryLocator.locate() != nil },
+            binaryPresent: { BinaryLocator.locate(explicit: explicit) != nil },
             usage: { try? await client.usage() }
         )
 
