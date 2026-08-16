@@ -304,3 +304,69 @@ private func makeCLI(env: [String: String] = [:]) throws -> AxonCLI {
         #expect(ContinuousClock.now - start < .seconds(5))
     }
 }
+
+// MARK: - child PATH (the Doctor-mismatch bug)
+
+@Suite struct ChildProcessPathTests {
+    /// The bug this exists to prevent: LaunchServices starts a GUI app with
+    /// `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, so a child `axon doctor` reported
+    /// claude, ollama and yt-dlp missing on a machine whose shell finds all
+    /// three — sending the user to reinstall tools they already had.
+    @Test func aMinimalGUIPathIsWidenedToWhereToolsActuallyLive() {
+        let guiPath = "/usr/bin:/bin:/usr/sbin:/sbin"
+        let resolved = ProcessCLIRunner.resolvedPath(preferring: nil, inherited: guiPath)
+        let dirs = resolved.split(separator: ":").map(String.init)
+
+        #expect(dirs.contains("/opt/homebrew/bin"), "Homebrew tools would be invisible")
+        #expect(dirs.contains("/usr/local/bin"))
+        #expect(dirs.contains { $0.hasSuffix("/.local/bin") }, "Claude Code installs here")
+        // Nothing the app inherited may be dropped.
+        for dir in guiPath.split(separator: ":").map(String.init) {
+            #expect(dirs.contains(dir), "dropped inherited \(dir)")
+        }
+    }
+
+    /// The daemon's own service unit carries a PATH resolved from the user's
+    /// real shell at install time — a better answer than any static guess, so
+    /// it goes first.
+    @Test func theUnitsPathWinsAndComesFirst() {
+        let unitPath = "/Users/x/.local/bin:/opt/homebrew/bin:/usr/bin"
+        let resolved = ProcessCLIRunner.resolvedPath(
+            preferring: unitPath, inherited: "/usr/bin:/bin"
+        )
+
+        #expect(resolved.hasPrefix("/Users/x/.local/bin:/opt/homebrew/bin:/usr/bin"))
+    }
+
+    @Test func directoriesAreNeverDuplicated() {
+        let resolved = ProcessCLIRunner.resolvedPath(
+            preferring: "/usr/local/bin:/usr/bin", inherited: "/usr/local/bin:/usr/bin"
+        )
+        let dirs = resolved.split(separator: ":").map(String.init)
+
+        #expect(dirs.count == Set(dirs).count)
+    }
+
+    @Test func anAbsentInheritedPathStillYieldsAUsableOne() {
+        let resolved = ProcessCLIRunner.resolvedPath(preferring: nil, inherited: nil)
+
+        #expect(resolved.contains("/usr/bin"))
+        #expect(resolved.contains("/opt/homebrew/bin"))
+    }
+
+    /// End to end: a runner given the widened PATH must actually hand it to the
+    /// child, or the whole exercise is decorative.
+    @Test func theChildProcessReceivesTheWidenedPath() async throws {
+        let log = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appending(path: "pathenv-\(UUID().uuidString).log")
+        let runner = ProcessCLIRunner(environment: [
+            "PATH": ProcessCLIRunner.resolvedPath(preferring: "/sentinel/bin", inherited: "/usr/bin"),
+            "AXON_ARGV_LOG": log.path,
+        ])
+        let result = try await runner.run(
+            binary: try fakeAxonURL(), arguments: ["echo-path"], timeout: .seconds(10)
+        )
+
+        #expect(result.stdoutText.contains("/sentinel/bin"))
+    }
+}

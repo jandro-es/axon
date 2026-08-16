@@ -1,8 +1,12 @@
 import AxonKit
 import SwiftUI
 
-/// The one surface most users ever see. Budget: glanceable in under 2 seconds
-/// (PRD §4), so anything that needs reading goes to Insights or the dashboard.
+/// The one surface most users ever see. Glanceable in under 2 s (PRD §4).
+///
+/// Reading order, top to bottom, is deliberate: who and how you are (header),
+/// what it is costing (budget), what wants you (badges), what it has been doing
+/// (tokens), where you want to go (destinations), and only then the controls
+/// for the daemon itself.
 struct StatusPopover: View {
     let controller: DaemonController
     let badges: BadgeCounts
@@ -12,69 +16,72 @@ struct StatusPopover: View {
 
     @Environment(\.openWindow) private var openWindow
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: Glass.tileSpacing) {
-            AxonGlassGroup {
-                VStack(alignment: .leading, spacing: Glass.tileSpacing) {
-                    StatusHeader(state: controller.state, health: controller.health)
+    /// Breathing room from the popover's own edge. The system draws no inset of
+    /// its own, so without this the content sits flush against the chrome.
+    private let edgeInset: CGFloat = 16
 
-                    // Every state renders something actionable — never a bare
-                    // "not running" with nothing to do about it.
-                    switch controller.state {
-                    case .notInstalled:
-                        SetUpPrompt { openWindow(id: WindowID.onboarding) }
-                    case .stopped, .unknown:
-                        lifecycle
-                    case .starting, .stopping, .runningWith:
-                        runningBody
-                    }
-                }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            StatusHeader(state: controller.state, health: controller.health)
+
+            switch controller.state {
+            case .notInstalled:
+                SetUpPrompt { open(WindowID.onboarding) }
+            case .stopped, .unknown:
+                StoppedBody(controller: controller)
+            case .starting, .stopping, .runningWith:
+                runningBody
             }
 
             if let error = controller.lastError {
                 ErrorNote(message: error)
             }
 
+            Divider().opacity(0.6)
+
             PopoverFooter(
-                onDoctor: { openWindow(id: WindowID.doctor) },
+                onDoctor: { open(WindowID.doctor) },
                 onQuit: { NSApplication.shared.terminate(nil) }
             )
         }
-        .padding(Glass.tileSpacing)
-        .frame(width: 300)
+        .padding(edgeInset)
+        .frame(width: 328)
+    }
+
+    private func open(_ id: String) {
+        openWindow(id: id)
+        // An LSUIElement app is never "active", so a window it opens can land
+        // behind whatever the user was looking at. Raise the app explicitly.
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @ViewBuilder
     private var runningBody: some View {
         if let usage = controller.usage {
-            BudgetGaugePair(usage: usage)
+            BudgetBars(usage: usage)
         }
 
         BadgeRow(badges: badges)
 
-        if !sparkline.isEmpty {
-            TokenSparkline(points: sparkline)
-        }
+        TokenTrendStrip(points: sparkline, dailyLimit: controller.usage?.dayLimit)
 
-        lifecycle
-
-        HStack(spacing: Glass.tileSpacing) {
-            QuickActionTile(title: "Dashboard", systemImage: "chart.bar.doc.horizontal") {
+        // Destinations first and largest: opening one of these is why the
+        // popover gets clicked.
+        HStack(spacing: 9) {
+            DestinationTile(title: "Dashboard", systemImage: "chart.bar.doc.horizontal", tint: .blue) {
                 Opener.open(.dashboard)
             }
-            QuickActionTile(
-                title: "Vault", systemImage: "book.closed",
+            DestinationTile(
+                title: "Vault", systemImage: "book.closed.fill", tint: .purple,
                 isDisabled: vaultPath == nil
             ) {
                 if let vaultPath { Opener.open(.vaultInObsidian(vaultPath: vaultPath)) }
             }
-            QuickActionTile(title: "Insights", systemImage: "chart.xyaxis.line") {
-                openWindow(id: WindowID.insights)
+            DestinationTile(title: "Insights", systemImage: "chart.xyaxis.line", tint: .teal) {
+                open(WindowID.insights)
             }
         }
-    }
 
-    private var lifecycle: some View {
         LifecycleActions(
             state: controller.state,
             canControl: controller.canControlLifecycle,
@@ -85,6 +92,28 @@ struct StatusPopover: View {
     }
 }
 
+/// What the popover shows when the daemon is down: the one thing to do about it.
+struct StoppedBody: View {
+    let controller: DaemonController
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("AXON isn't running, so nothing is being indexed or automated.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            LifecycleActions(
+                state: controller.state,
+                canControl: controller.canControlLifecycle,
+                onStart: { Task { await controller.startDaemon() } },
+                onStop: {},
+                onRestart: { Task { await controller.restartDaemon() } }
+            )
+        }
+    }
+}
+
 // MARK: - header
 
 struct StatusHeader: View {
@@ -92,34 +121,34 @@ struct StatusHeader: View {
     let health: AxonHealth?
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            StatusDot(state: state)
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                StatusDot(state: state)
 
-            Text(health?.profile ?? "AXON")
-                .font(.headline)
+                Text(health?.profile ?? "AXON")
+                    .font(.system(.title3, design: .rounded).weight(.semibold))
 
-            Spacer(minLength: 4)
+                Spacer(minLength: 4)
 
-            // The uptime pill is hidden — not zeroed — when the daemon cannot
-            // say, which is any daemon predating the started_at seam.
-            if let uptime = AxonFormat.uptime(health?.uptime(asOf: .now)) {
-                Text(uptime)
-                    .font(.caption2.monospacedDigit())
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(.quaternary, in: .capsule)
-                    .accessibilityLabel("up for \(uptime)")
+                if let uptime = AxonFormat.uptime(health?.uptime(asOf: .now)) {
+                    Label(uptime, systemImage: "clock")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .labelStyle(.titleAndIcon)
+                        .accessibilityLabel("up for \(uptime)")
+                }
             }
-        }
 
-        HStack(spacing: 4) {
-            Text(state.summary)
-            Text("·")
-            Text(AxonFormat.version(health?.version))
+            HStack(spacing: 6) {
+                Text(state.summary)
+                    .foregroundStyle(state.needsAttention ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.secondary))
+                Text("·").foregroundStyle(.tertiary)
+                Text(AxonFormat.version(health?.version))
+                    .foregroundStyle(.tertiary)
+            }
+            .font(.caption)
+            .accessibilityElement(children: .combine)
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -128,8 +157,11 @@ struct StatusDot: View {
 
     var body: some View {
         Circle()
-            .fill(color)
-            .frame(width: 7, height: 7)
+            .fill(color.gradient)
+            .frame(width: 9, height: 9)
+            // A soft halo so the dot reads as a live indicator rather than a
+            // bullet point.
+            .shadow(color: color.opacity(0.6), radius: 3)
             .accessibilityHidden(true)
     }
 
@@ -142,66 +174,20 @@ struct StatusDot: View {
     }
 }
 
-// MARK: - budget
-
-struct BudgetGaugePair: View {
-    let usage: UsageSnapshot
-
-    var body: some View {
-        HStack(spacing: 14) {
-            BudgetGauge(
-                title: "Day", fraction: usage.dayFraction,
-                used: usage.dayUsed, limit: usage.dayLimit
-            )
-            BudgetGauge(
-                title: "Week", fraction: usage.weekFraction,
-                used: usage.weekUsed, limit: usage.weekLimit
-            )
-
-            if usage.isGuardTripped {
-                GuardChip(reason: usage.guardReason)
-            }
-            Spacer(minLength: 0)
-        }
-    }
-}
-
-struct BudgetGauge: View {
-    let title: String
-    let fraction: Double
-    let used: Int64?
-    let limit: Int64?
-
-    var body: some View {
-        Gauge(value: fraction) {
-            Text(title)
-        } currentValueLabel: {
-            Text(AxonFormat.tokens(used))
-                .font(.system(size: 9).monospacedDigit())
-        }
-        .gaugeStyle(.accessoryCircularCapacity)
-        .scaleEffect(0.62)
-        .frame(width: 46, height: 46)
-        .tint(fraction > 0.9 ? .red : fraction > 0.75 ? .orange : .accentColor)
-        .accessibilityLabel(
-            "\(title) budget: \(AxonFormat.tokens(used)) of \(AxonFormat.tokens(limit)) tokens, "
-                + AxonFormat.percent(fraction)
-        )
-    }
-}
-
-/// The guard pauses **automations only** — interactive use is unaffected — so
-/// the copy says "paused automations", not "AXON is blocked".
+/// The budget guard pauses **automations only** — interactive use is
+/// unaffected — so the copy says that rather than "AXON is blocked".
 struct GuardChip: View {
     let reason: String?
 
     var body: some View {
-        Label("Automations paused", systemImage: "pause.circle.fill")
+        Label("Automations paused — \(reason ?? "budget guard tripped")", systemImage: "pause.circle.fill")
             .font(.caption2)
             .foregroundStyle(.red)
-            .labelStyle(.titleAndIcon)
-            .help(reason ?? "budget guard tripped")
-            .accessibilityLabel("Budget guard paused automations. \(reason ?? "")")
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.red.opacity(0.12), in: .rect(cornerRadius: 7))
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -218,107 +204,67 @@ struct BadgeRow: View {
     let badges: BadgeCounts
 
     var body: some View {
-        HStack(spacing: Glass.tileSpacing) {
+        HStack(spacing: 9) {
             if let review = badges.review {
-                BadgeButton(title: "Review", count: review, systemImage: "tray.full") {
-                    Opener.open(.reviewTab)
-                }
+                BadgeCard(
+                    title: "Review", count: review,
+                    systemImage: "tray.full.fill", tint: .orange
+                ) { Opener.open(.reviewTab) }
             }
-            // Absent (not zero) when the profile disabled actions — the badge
+            // Absent (not zero) when the profile disabled actions — the card
             // hides rather than showing a misleading 0.
             if let actions = badges.actions {
-                BadgeButton(title: "Actions", count: actions, systemImage: "checklist") {
-                    Opener.open(.actionsTab)
-                }
+                BadgeCard(
+                    title: "Actions", count: actions,
+                    systemImage: "checklist", tint: .indigo
+                ) { Opener.open(.actionsTab) }
             }
-            Spacer(minLength: 0)
         }
     }
 }
 
-struct BadgeButton: View {
+/// A queue that wants the user. Prominent by design: these are the two numbers
+/// that mean "there is something for you to do".
+struct BadgeCard: View {
     let title: String
     let count: Int
     let systemImage: String
+    let tint: Color
     let action: () -> Void
+
+    @State private var isHovering = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: systemImage).font(.caption2)
-                Text(title).font(.caption)
-                Text("\(count)")
-                    .font(.caption.monospacedDigit().bold())
-                    .padding(.horizontal, 5)
-                    .background(.tint.opacity(0.18), in: .capsule)
+            HStack(spacing: 9) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(tint.gradient)
+
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("\(count)")
+                        .font(.system(.title3, design: .rounded).weight(.bold).monospacedDigit())
+                        .foregroundStyle(.primary)
+                    Text(title)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 7)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .axonGlass(interactive: true, cornerRadius: 8)
-        .accessibilityLabel("\(count) \(title.lowercased()) items. Opens the dashboard.")
-    }
-}
-
-// MARK: - sparkline
-
-/// 24 h of token spend. Sits directly under the budget gauges so the popover
-/// tells one story — what you are spending — rather than two half-stories.
-struct TokenSparkline: View {
-    let points: [TokenPoint]
-
-    private var totals: [(day: String, total: Int64)] {
-        Dictionary(grouping: points, by: \.day)
-            .map { (day: $0.key, total: $0.value.reduce(0) { $0 + $1.total }) }
-            .sorted { $0.day < $1.day }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text("Tokens").font(.caption2).foregroundStyle(.secondary)
-                Spacer()
-                Text(AxonFormat.tokens(totals.reduce(0) { $0 + $1.total }))
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-            SparklineShape(values: totals.map { Double($0.total) })
-                .fill(.tint.opacity(0.75))
-                .frame(height: 22)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            "Token spend, last \(totals.count) days, "
-                + "total \(AxonFormat.tokens(totals.reduce(0) { $0 + $1.total }))"
+        .background(tint.opacity(isHovering ? 0.20 : 0.12), in: .rect(cornerRadius: Glass.cornerRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: Glass.cornerRadius)
+                .strokeBorder(tint.opacity(isHovering ? 0.5 : 0.25), lineWidth: 1)
         )
-    }
-}
-
-/// A filled area sparkline. Hand-drawn rather than a Swift Chart: the popover
-/// wants a 22pt strip with no axes, legend or hit-testing, and a Chart brings
-/// all three plus its layout cost.
-struct SparklineShape: Shape {
-    let values: [Double]
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        guard values.count > 1, let peak = values.max(), peak > 0 else {
-            path.addRect(CGRect(x: 0, y: rect.maxY - 1, width: rect.width, height: 1))
-            return path
-        }
-
-        let step = rect.width / CGFloat(values.count - 1)
-        path.move(to: CGPoint(x: 0, y: rect.maxY))
-        for (index, value) in values.enumerated() {
-            let x = CGFloat(index) * step
-            let y = rect.maxY - CGFloat(value / peak) * rect.height
-            path.addLine(to: CGPoint(x: x, y: y))
-        }
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.closeSubpath()
-        return path
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovering)
+        .accessibilityLabel("\(count) \(title.lowercased()) items. Opens the dashboard.")
     }
 }
 
@@ -328,16 +274,17 @@ struct SetUpPrompt: View {
     let onOpen: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("AXON isn't installed yet.")
-                .font(.callout)
-            Text("Companion guides you through the prerequisites — it never installs anything itself.")
+                .font(.callout.weight(.medium))
+            Text("Companion walks you through the prerequisites — it never installs anything itself.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Button("Set Up AXON…", action: onOpen)
                 .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .controlSize(.large)
+                .frame(maxWidth: .infinity)
         }
     }
 }
@@ -351,27 +298,64 @@ struct ErrorNote: View {
             .foregroundStyle(.orange)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(6)
-            .axonCard(cornerRadius: 8)
+            .padding(9)
+            .background(.orange.opacity(0.12), in: .rect(cornerRadius: 8))
     }
 }
 
+/// Doctor, Settings and Quit. Real controls rather than link-styled text —
+/// the previous row read as leftover markup.
 struct PopoverFooter: View {
     let onDoctor: () -> Void
     let onQuit: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            Button("Doctor", action: onDoctor)
-            SettingsLink { Text("Settings…") }
-            Spacer()
+        HStack(spacing: 7) {
+            FooterButton(title: "Doctor", systemImage: "stethoscope", action: onDoctor)
+
+            SettingsLink {
+                Label("Settings", systemImage: "gearshape.fill")
+                    .font(.caption)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .background(.quaternary.opacity(0.5), in: .capsule)
+            .simultaneousGesture(TapGesture().onEnded {
+                NSApp.activate(ignoringOtherApps: true)
+            })
+
+            Spacer(minLength: 0)
+
             // ⌘Q quits Companion only — never the daemon.
-            Button("Quit", action: onQuit)
+            FooterButton(title: "Quit", systemImage: "power", action: onQuit)
                 .accessibilityLabel("Quit Companion. AXON keeps running.")
         }
-        .buttonStyle(.link)
-        .font(.caption)
-        .padding(.horizontal, 2)
+    }
+}
+
+struct FooterButton: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.caption)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .background(.quaternary.opacity(isHovering ? 0.9 : 0.5), in: .capsule)
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovering)
     }
 }
 

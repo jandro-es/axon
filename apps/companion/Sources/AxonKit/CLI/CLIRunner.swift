@@ -56,11 +56,52 @@ public protocol CLIRunning: Sendable {
 /// `Process`-backed runner.
 public struct ProcessCLIRunner: CLIRunning {
     /// Extra environment for the child. Tests use it to drive the fake binary;
-    /// production passes nothing.
+    /// production uses it to hand the child a usable PATH.
     private let environment: [String: String]
 
     public init(environment: [String: String] = [:]) {
         self.environment = environment
+    }
+
+    /// Directories the user's tools plausibly live in.
+    ///
+    /// LaunchServices starts a GUI app with `PATH=/usr/bin:/bin:/usr/sbin:/sbin`
+    /// — no Homebrew, no `~/.local/bin`. A child `axon doctor` inheriting that
+    /// reports claude, ollama and yt-dlp as missing on a machine where the
+    /// user's shell finds all three, which is worse than no report: it sends
+    /// someone to reinstall tools they already have.
+    ///
+    /// This is the same failure the daemon hit under launchd and fixed in
+    /// v1.3.2 by embedding a resolved PATH in its service unit. Prefer that
+    /// unit's PATH when the CLI can report it (`service status --json`); this
+    /// list is the fallback.
+    public static var fallbackToolPaths: [String] {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return [
+            "\(home)/.local/bin",   // Claude Code's default install location
+            "/opt/homebrew/bin",    // Homebrew, Apple Silicon
+            "/opt/homebrew/sbin",
+            "/usr/local/bin",       // Homebrew (Intel) and axon's own install
+            "/usr/bin", "/bin", "/usr/sbin", "/sbin",
+        ]
+    }
+
+    /// Merges `pathEnv` with the inherited PATH, preserving order and dropping
+    /// duplicates. An empty `pathEnv` yields the fallback list.
+    public static func resolvedPath(
+        preferring pathEnv: String?,
+        inherited: String? = ProcessInfo.processInfo.environment["PATH"]
+    ) -> String {
+        var seen = Set<String>()
+        var dirs: [String] = []
+        let append = { (candidate: String) in
+            guard !candidate.isEmpty, seen.insert(candidate).inserted else { return }
+            dirs.append(candidate)
+        }
+        (pathEnv?.split(separator: ":").map(String.init) ?? []).forEach(append)
+        fallbackToolPaths.forEach(append)
+        (inherited?.split(separator: ":").map(String.init) ?? []).forEach(append)
+        return dirs.joined(separator: ":")
     }
 
     public func run(binary: URL, arguments: [String], timeout: Duration) async throws -> CLIResult {
@@ -74,7 +115,8 @@ public struct ProcessCLIRunner: CLIRunning {
         process.executableURL = binary
         process.arguments = arguments
         // Never `$SHELL -c`: no shell means no quoting bugs and no user rc
-        // files changing what runs (CONTRACT.md §10).
+        // files changing what runs (CONTRACT.md §10). The PATH is widened
+        // explicitly instead — see `resolvedPath`.
         process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
 
         let outPipe = Pipe()

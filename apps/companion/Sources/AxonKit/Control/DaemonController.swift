@@ -96,7 +96,7 @@ public final class DaemonController {
     public private(set) var usage: UsageSnapshot?
 
     private let reader: DaemonHealthReading
-    private let lifecycle: DaemonLifecycleControlling?
+    private var lifecycle: DaemonLifecycleControlling?
     private let binaryPresent: @Sendable () -> Bool
     private let usageReader: @Sendable () async -> UsageSnapshot?
     private let pollInterval: Duration
@@ -135,6 +135,13 @@ public final class DaemonController {
 
     /// Whether Start/Stop/Restart can do anything at all.
     public var canControlLifecycle: Bool { lifecycle != nil }
+
+    /// Swaps in a reconfigured lifecycle — used once the child PATH is known,
+    /// so lifecycle commands run with the same environment as everything else.
+    public func updateLifecycle(_ replacement: DaemonLifecycleControlling?) {
+        guard replacement != nil else { return }
+        lifecycle = replacement
+    }
 
     // MARK: monitoring
 

@@ -143,17 +143,21 @@ struct DoctorRow: View {
                 .font(.body)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(check.name)
                     .font(.body.monospaced())
-                // The daemon folds its remediation into `detail`, so this IS
-                // the remediation text — rendered verbatim and selectable so
-                // a suggested command can be copied straight out.
+                // What is wrong, in the daemon's own words.
                 Text(check.detail)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
+
+                // What to do about it. A command the user can run, offered as
+                // one — not buried in prose they have to parse.
+                if let fix = check.remediation {
+                    RemediationRow(command: fix)
+                }
             }
 
             Spacer(minLength: 6)
@@ -191,5 +195,56 @@ struct DoctorRow: View {
         case .warn: .orange
         case .fail: .red
         }
+    }
+}
+
+
+/// The command that fixes a check, presented as something you can act on.
+struct RemediationRow: View {
+    let command: String
+    @State private var copied = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "wrench.and.screwdriver.fill")
+                .font(.caption2)
+                .foregroundStyle(.tint)
+                .accessibilityHidden(true)
+
+            Text(command)
+                .font(.system(.caption, design: .monospaced))
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                Opener.copy(command)
+                copied = true
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    copied = false
+                }
+            } label: {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.caption2)
+            }
+            .buttonStyle(.borderless)
+            .help("Copy this command")
+
+            Button {
+                Opener.copy(command)
+                Opener.openTerminal()
+            } label: {
+                Image(systemName: "terminal")
+                    .font(.caption2)
+            }
+            .buttonStyle(.borderless)
+            .help("Copy the command and open Terminal")
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(.tint.opacity(0.10), in: .rect(cornerRadius: 6))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Fix: \(command)")
     }
 }

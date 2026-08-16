@@ -422,10 +422,11 @@ from `.notInstalled`. When the daemon is up, `/api/usage` is authoritative.
 
 - `status` ∈ `ok` | `fail`; check `status` ∈ `ok` | `warn` | `fail`.
 - `error` (optional, top level) carries a config-load error while checks still run.
-- **There is no separate `remediation` field.** The daemon folds remediation
-  into `detail` (`"… — run \`axon update\`"`, `"… — install poppler + tesseract"`).
-  CFR-60's "the daemon's own remediation text" **is** `detail`; render it
-  verbatim as selectable monospaced text. Do not attempt to split it.
+- **`remediation`** (optional) is the command that fixes the check — added in
+  axon 1.3.4. `detail` says what is wrong; `remediation` says what to do, so a
+  client can offer it as a copyable command instead of making the user parse
+  prose. Absent on daemons older than 1.3.4, and absent on passing checks;
+  render the row without a fix in both cases (CFR-82).
 - Exits **non-zero** when `status == "fail"` while still writing the full JSON
   to stdout. Companion must parse stdout **regardless of exit code** here.
 - `doctor` works with the daemon **stopped** — that is its job.
@@ -492,6 +493,30 @@ Round-trip verification must compare loosely (or re-`get`). Companion re-`get`s
 after every `set` and renders reality, never an optimistic local value.
 
 `set` only updates **existing** keys (comment-preserving, then re-validated).
+
+### `axon service status --json` → `Fixtures/service-status-cli.json`
+
+```json
+{ "profile": "personal", "kind": "launchd",
+  "path": "/Users/jandro/Library/LaunchAgents/com.axon.personal.plist",
+  "installed": true, "supported": true,
+  "path_env": "/Users/jandro/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" }
+```
+
+Added in axon 1.3.3 so a client can render a "start AXON at login" toggle
+without stat-ing a plist or shelling to `launchctl` (CFR-11). `path` is
+reported even when nothing is installed, so a caller can say where the unit
+*would* go.
+
+⚠️ **`path_env` matters more than it looks** (added 1.3.4). LaunchServices
+starts a GUI app with `PATH=/usr/bin:/bin:/usr/sbin:/sbin` — no Homebrew, no
+`~/.local/bin`. A child `axon doctor` inheriting that reports claude, ollama and
+yt-dlp missing on a machine whose shell finds all three, which is worse than no
+report: it sends the user to reinstall tools they already have. `path_env` is
+the PATH the installed unit hands the daemon, resolved from the user's real
+shell at install time, and Companion prefers it for **every** child process.
+Falls back to a static list of the usual install directories when there is no
+unit or the daemon is older.
 
 ### Resolved key paths (CFR-40/41)
 

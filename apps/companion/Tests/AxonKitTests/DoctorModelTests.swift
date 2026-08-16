@@ -74,6 +74,39 @@ struct DoctorModelTests {
         #expect(model.error?.isEmpty == false)
     }
 
+    /// The Doctor window's whole job is to be actionable. A warning the daemon
+    /// knows how to fix must arrive with that fix attached.
+    @Test func actionableChecksCarryTheirRemediation() async throws {
+        let model = try makeModel()
+        await model.run()
+
+        let report = try #require(model.report)
+        let fixable = report.checks.filter { $0.remediation != nil }
+        #expect(!fixable.isEmpty, "no check carried a remediation")
+        #expect(fixable.allSatisfy { $0.status != .ok }, "a passing check should not suggest a fix")
+
+        let claude = try #require(report.checks.first { $0.name == "claude-cli" })
+        #expect(claude.remediation?.contains("claude") == true)
+    }
+
+    /// An older daemon omits the field entirely; the row must simply show no
+    /// fix rather than failing to decode (CFR-82).
+    @Test func anOlderDaemonWithoutRemediationStillDecodes() throws {
+        let data = Data(#"{"checks":[{"name":"ollama","status":"warn","detail":"missing"}]}"#.utf8)
+        let report = try AxonJSON.decode(DoctorReport.self, from: data)
+
+        #expect(report.checks[0].remediation == nil)
+    }
+
+    /// An empty string is not a remediation — it would render an empty
+    /// "fix:" row.
+    @Test func anEmptyRemediationIsTreatedAsAbsent() throws {
+        let data = Data(#"{"checks":[{"name":"x","status":"warn","detail":"d","remediation":""}]}"#.utf8)
+        let report = try AxonJSON.decode(DoctorReport.self, from: data)
+
+        #expect(report.checks[0].remediation == nil)
+    }
+
     // MARK: diagnostics bundle (CFR-61)
 
     @Test func diagnosticsIncludeVersionsAndCheckNames() async throws {
@@ -85,6 +118,8 @@ struct DoctorModelTests {
         #expect(text.contains("macOS 26.0"))
         #expect(text.contains("claude-cli"))
         #expect(text.contains("/health"))
+        // A pasted bundle should tell the reader how to fix what it reports.
+        #expect(text.contains("fix:"))
     }
 
     /// Belt and braces: none of the sources should carry a secret, but the

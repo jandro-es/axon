@@ -3,5 +3,6 @@
   "kind": "launchd",
   "path": "/Users/jandro/Library/LaunchAgents/com.axon.personal.plist",
   "installed": true,
-  "supported": true
+  "supported": true,
+  "path_env": "/Users/jandro/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 }

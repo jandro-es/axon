@@ -5,6 +5,11 @@ import SwiftUI
 struct CompanionApp: App {
     @State private var app = AppModel()
 
+    /// Development-only: render the popover in a real window (see below).
+    private var previewsPopover: Bool {
+        ProcessInfo.processInfo.environment["AXON_COMPANION_PREVIEW"] == "1"
+    }
+
     var body: some Scene {
         MenuBarExtra {
             StatusPopover(
@@ -49,17 +54,47 @@ struct CompanionApp: App {
         Settings {
             SettingsWindow(settings: app.settings, app: app)
         }
+
+        // A plain window showing the popover's own content, so the layout can
+        // be inspected and screenshotted during development. A MenuBarExtra
+        // popover dismisses the moment anything else takes focus, which makes
+        // it impossible to review any other way. Opt-in via environment; never
+        // reachable in a normal launch.
+        Window("Popover Preview", id: "popover-preview") {
+            StatusPopover(
+                controller: app.controller,
+                badges: app.badges,
+                sparkline: app.sparkline,
+                vaultPath: app.vaultPath,
+                dataDir: app.dataDir
+            )
+            .fixedSize()
+        }
+        .defaultSize(width: 360, height: 640)
+        // Presented only when the environment asks for it; suppressed (and so
+        // unreachable) in every normal launch.
+        .defaultLaunchBehavior(previewsPopover ? .presented : .suppressed)
     }
 }
 
 private extension View {
-    /// Brings the app forward when a window opens.
+    /// Brings the app and its new window forward.
     ///
     /// An LSUIElement app is not in the Dock and is never "active", so a window
-    /// it opens can appear behind whatever the user was doing — it looks like
-    /// the click did nothing.
+    /// it opens can appear *behind* whatever the user was looking at — the
+    /// click appears to do nothing. `NSApp.activate` alone is not enough: at
+    /// `onAppear` the window is not yet key, so the raise has to happen on the
+    /// next runloop pass, and the window itself must be ordered front.
     func activatesOnAppear() -> some View {
-        onAppear { NSApp.activate(ignoringOtherApps: true) }
+        onAppear {
+            NSApp.activate(ignoringOtherApps: true)
+            DispatchQueue.main.async {
+                NSApp.activate(ignoringOtherApps: true)
+                // The newest window is the one just opened.
+                NSApp.windows.last { $0.isVisible && !$0.isMiniaturized }?
+                    .makeKeyAndOrderFront(nil)
+            }
+        }
     }
 }
 
@@ -82,7 +117,10 @@ final class AppModel {
     private let notifications: NotificationRouter
     private let client: DashboardClient
     private let sse: SSEClient
-    private let cli: AxonCLI?
+    private let binary: URL?
+    /// Rebuilt once the daemon reports its service unit's PATH, so every child
+    /// process sees the same machine the user's shell does.
+    private var cli: AxonCLI?
     private var started = false
 
     init() {
@@ -93,8 +131,11 @@ final class AppModel {
         )
         let binary = BinaryLocator.locate(explicit: explicit)
         let client = DashboardClient()
-        let cli = binary.map { AxonCLI(binary: $0) }
+        // Start with the fallback PATH so even the first call sees Homebrew and
+        // ~/.local/bin; `resolveToolPath()` upgrades it to the unit's PATH.
+        let cli = binary.map { AxonCLI(binary: $0, pathEnv: nil) }
 
+        self.binary = binary
         self.client = client
         self.cli = cli
         self.sse = SSEClient()
@@ -131,6 +172,7 @@ final class AppModel {
         guard !started else { return }
         started = true
 
+        await resolveToolPath()
         controller.startMonitoring()
         await refreshProfile()
         await refreshBadges()
@@ -207,6 +249,22 @@ final class AppModel {
     private func refreshSparkline() async {
         // A week of buckets makes a readable strip; a single day is one bar.
         sparkline = (try? await client.tokens(days: 7))?.points ?? []
+    }
+
+    /// Upgrades the child PATH to the one the daemon's own service unit uses.
+    ///
+    /// LaunchServices hands a GUI app `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, so
+    /// a child `axon doctor` reports claude, ollama and yt-dlp missing on a
+    /// machine whose shell finds all three. The installed unit already carries
+    /// a PATH resolved from the user's real shell (daemon v1.3.2+), so ask for
+    /// that rather than guessing. Falls back to the static tool paths when
+    /// there is no unit or the daemon is too old to report one.
+    private func resolveToolPath() async {
+        guard let binary else { return }
+        let unitPath = try? await cli?.serviceStatus().pathEnv
+        let resolved = ProcessCLIRunner.resolvedPath(preferring: unitPath ?? nil)
+        cli = AxonCLI(binary: binary, pathEnv: resolved)
+        controller.updateLifecycle(cli.map(AxonCLILifecycle.init(cli:)))
     }
 
     /// An onboarding model wired to real detection and the app's own start

@@ -52,6 +52,7 @@ case "$1" in
       set) cat "$DIR/config-set-cli.json" ;;
       *)   fail "unknown config subcommand" ;;
     esac ;;
+  echo-path)   printf '%s\n' "$PATH" ;;
   start|stop|update) echo "ok" ;;
   service)
     case "$2" in

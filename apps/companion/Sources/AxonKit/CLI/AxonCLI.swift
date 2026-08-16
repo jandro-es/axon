@@ -17,6 +17,24 @@ public struct AxonCLI: Sendable {
     /// Lifecycle commands touch the filesystem and launchd — allow more.
     public static let mutateTimeout: Duration = .seconds(60)
 
+    /// - Parameter pathEnv: PATH for child processes. Defaults to the widened
+    ///   fallback, because a GUI app inherits a PATH too minimal to find the
+    ///   user's tools — see `ProcessCLIRunner.resolvedPath`.
+    public init(
+        binary: URL,
+        pathEnv: String?,
+        profile: String? = nil,
+        configPath: String? = nil,
+        envPath: String? = nil
+    ) {
+        self.init(
+            runner: ProcessCLIRunner(
+                environment: ["PATH": ProcessCLIRunner.resolvedPath(preferring: pathEnv)]
+            ),
+            binary: binary, profile: profile, configPath: configPath, envPath: envPath
+        )
+    }
+
     public init(
         runner: CLIRunning = ProcessCLIRunner(),
         binary: URL,

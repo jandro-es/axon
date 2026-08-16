@@ -148,6 +148,9 @@ public final class DoctorModel {
             lines.append(String(repeating: "-", count: 40))
             for check in report.sortedBySeverity {
                 lines.append("[\(check.status.rawValue.uppercased())] \(check.name): \(check.detail)")
+                if let fix = check.remediation {
+                    lines.append("    fix: \(fix)")
+                }
             }
             if let configError = report.error {
                 lines.append("config error: \(configError)")

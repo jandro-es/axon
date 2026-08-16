@@ -173,6 +173,15 @@ public struct ServiceStatus: Decodable, Sendable, Equatable {
     public let path: String?
     public let installed: Bool
     public let supported: Bool?
+    /// The PATH the unit hands the daemon, resolved from the installing shell.
+    /// A GUI client uses it so the tools it spawns see the same machine the
+    /// user's shell does.
+    public let pathEnv: String?
+
+    enum CodingKeys: String, CodingKey {
+        case profile, kind, path, installed, supported
+        case pathEnv = "path_env"
+    }
 
     /// True when this platform has no service concept at all.
     public var isUnsupported: Bool { supported == false }

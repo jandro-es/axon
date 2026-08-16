@@ -8,30 +8,35 @@ public struct DoctorCheck: Decodable, Sendable, Equatable, Identifiable {
 
     public let name: String
     public let status: Status
-    /// The daemon's own text. **This is the remediation** — there is no
-    /// separate field; the daemon folds advice into the detail
-    /// ("… — run `axon update`"). Render it verbatim (CFR-60).
+    /// What is wrong, in the daemon's own words. Render verbatim (CFR-60).
     public let detail: String
+    /// What to do about it — a command to run. Present only when the daemon
+    /// has one to offer, which is every warning a user can act on since
+    /// axon 1.3.4. Older daemons omit it and the row simply shows no fix.
+    public let remediation: String?
 
     public var id: String { name }
 
-    public init(name: String, status: Status, detail: String) {
+    public init(name: String, status: Status, detail: String, remediation: String? = nil) {
         self.name = name
         self.status = status
         self.detail = detail
+        self.remediation = remediation
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decode(String.self, forKey: .name)
         detail = try container.decodeIfPresent(String.self, forKey: .detail) ?? ""
+        let fix = try container.decodeIfPresent(String.self, forKey: .remediation)
+        remediation = (fix?.isEmpty ?? true) ? nil : fix
         // An unrecognised status must not fail the whole report; treat it as a
         // warning so it is visible rather than silently dropped or shown green.
         let raw = try container.decodeIfPresent(String.self, forKey: .status) ?? ""
         status = Status(rawValue: raw) ?? .warn
     }
 
-    enum CodingKeys: String, CodingKey { case name, status, detail }
+    enum CodingKeys: String, CodingKey { case name, status, detail, remediation }
 }
 
 /// The full `axon doctor --json` report.
