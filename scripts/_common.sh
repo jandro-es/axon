@@ -179,6 +179,53 @@ on_err() {
 }
 enable_err_trap() { trap 'on_err "$LINENO" "$?"' ERR; }
 
+# ── launchd ─────────────────────────────────────────────────────────────────
+
+# launchd_reload PLIST LABEL — load PLIST so the daemon runs under the
+# environment the FILE describes, replacing any job already loaded under LABEL.
+#
+# This has to be bootout+bootstrap. launchd keeps the job definition it parsed
+# at load time, so anything that merely restarts the process — `launchctl
+# kickstart -k`, or `load` against an already-loaded label — re-runs it under
+# the OLD environment and silently leaves a corrected plist with no effect. That
+# is not hypothetical: it is how a machine ended up with a plist naming the
+# right PATH next to a running daemon that could not find `claude`, failing
+# every automation with `exec: "claude": executable file not found`.
+#
+# The legacy `unload`/`load` pair could do it, but its failures are invisible —
+# `unload` is routinely written with `|| true`, and a `load` onto a still-loaded
+# label exits 0 having done nothing. bootout/bootstrap report honestly, so this
+# returns non-zero when the daemon did not actually come up under the new unit.
+launchd_reload() {
+  local plist="$1" label="$2" domain
+  domain="gui/$(id -u)"
+
+  # Not-loaded is the expected state on a fresh install, not a failure; any
+  # other bootout error means the old job is still there and bootstrap would
+  # land on top of it, so surface it.
+  if launchctl print "$domain/$label" >/dev/null 2>&1; then
+    launchctl bootout "$domain/$label" >/dev/null 2>&1 || true
+    # bootout is asynchronous: the job can still be shutting down when it
+    # returns, and bootstrapping onto a dying label fails with EBUSY.
+    local i
+    for i in $(seq 1 40); do
+      launchctl print "$domain/$label" >/dev/null 2>&1 || break
+      sleep 0.25
+    done
+    if launchctl print "$domain/$label" >/dev/null 2>&1; then
+      err "launchd would not unload $label — try 'launchctl bootout $domain/$label' by hand"
+      return 1
+    fi
+  fi
+
+  local out
+  if ! out="$(launchctl bootstrap "$domain" "$plist" 2>&1)"; then
+    err "launchctl bootstrap $plist failed: ${out:-unknown error}"
+    return 1
+  fi
+  return 0
+}
+
 # ── Installation-state detection ────────────────────────────────────────────
 
 # axon_installed_version PREFIX — echo the installed binary's version, or "".

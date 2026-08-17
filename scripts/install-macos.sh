@@ -201,8 +201,13 @@ fi
 if [ "$DO_SERVICE" -eq 1 ]; then
   step "Installing launchd auto-start agent"
   "${AX[@]}" service install >/dev/null
-  launchctl unload "$PLIST" >/dev/null 2>&1 || true   # reload cleanly if it already existed
-  launchctl load -w "$PLIST" && ok "loaded $PLIST (starts at login, restarts on crash)"
+  # Reinstalling over an existing install must REPLACE the loaded job, not
+  # restart it: a job loaded from an older plist keeps that plist's environment.
+  if launchd_reload "$PLIST" "com.axon.$PROFILE"; then
+    ok "loaded $PLIST (starts at login, restarts on crash)"
+  else
+    warn "could not load $PLIST — start the daemon yourself with '${AX[*]} start'"
+  fi
   info "waiting for the dashboard on :$PORT…"
   for _ in $(seq 1 20); do curl -fsS "http://127.0.0.1:$PORT/" >/dev/null 2>&1 && break; sleep 0.5; done
   curl -fsS "http://127.0.0.1:$PORT/" >/dev/null 2>&1 \

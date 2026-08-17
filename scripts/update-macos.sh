@@ -139,8 +139,11 @@ if [ "$DO_SERVICE" -eq 1 ]; then
 
   "${AX[@]}" service install >/dev/null   # regenerate the unit in case its format changed
   if [ -f "$PLIST" ]; then
-    launchctl unload "$PLIST" >/dev/null 2>&1 || true
-    launchctl load -w "$PLIST" && ok "reloaded launchd agent (new binary is now live)"
+    if launchd_reload "$PLIST" "com.axon.$PROFILE"; then
+      ok "reloaded launchd agent (new binary and unit environment are now live)"
+    else
+      warn "the launchd agent did not reload — the daemon may still be running the previous unit"
+    fi
     info "waiting for the dashboard on :$PORT…"
     for _ in $(seq 1 20); do curl -fsS "http://127.0.0.1:$PORT/" >/dev/null 2>&1 && break; sleep 0.5; done
     curl -fsS "http://127.0.0.1:$PORT/" >/dev/null 2>&1 \
