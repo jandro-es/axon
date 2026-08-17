@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"sync"
 	"syscall"
@@ -128,6 +129,16 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 							// own "first seen" time, which resets on client
 							// restart and lies across a daemon restart.
 							"started_at": daemonStartedAt.UTC().Format(time.RFC3339),
+							// The claude binary THIS process resolves on its
+							// own PATH, or "" when it resolves none. Only the
+							// daemon can answer that: a service unit corrected
+							// on disk does not reach a launchd/systemd job that
+							// is still running the definition it was loaded
+							// with, so doctor reading the unit file cannot tell
+							// a healthy daemon from one that will fail every
+							// Claude-backed automation. Path, never PATH — one
+							// resolved location, not the environment around it.
+							"claude_path": lookPathOrEmpty("claude"),
 						}
 						current, _, _ := buildVersion()
 						h["version"] = current
@@ -186,4 +197,16 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 	cmd.Flags().BoolVar(&once, "once", false, "register schedules, run catch-up, then exit (no blocking)")
 	cmd.Flags().BoolVar(&noDashboard, "no-dashboard", false, "run the scheduler without serving the dashboard")
 	return cmd
+}
+
+// lookPathOrEmpty resolves name on this process's PATH, reporting "" rather
+// than an error when it is not there. Absence is the answer here, not a
+// failure: /health states what the daemon can reach, and "nothing" is a
+// perfectly reportable state.
+func lookPathOrEmpty(name string) string {
+	p, err := exec.LookPath(name)
+	if err != nil {
+		return ""
+	}
+	return p
 }

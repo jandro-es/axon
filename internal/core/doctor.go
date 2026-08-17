@@ -104,7 +104,16 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 	// 3b. If an OS service unit supervises the daemon, its PATH must resolve
 	// claude too — launchd/systemd default to a minimal system PATH, so a
 	// shell-visible claude can still be invisible to the supervised daemon.
-	checks = append(checks, serviceUnitCheck(activeProfile))
+	// The dashboard endpoint lets the check ask a running daemon directly
+	// rather than trusting the unit file to describe the loaded job.
+	var dashHost string
+	var dashPort int
+	if cfg != nil {
+		if p, ok := cfg.Profiles[activeProfile]; ok {
+			dashHost, dashPort = p.Dashboard.Host, p.Dashboard.Port
+		}
+	}
+	checks = append(checks, serviceUnitCheck(activeProfile, dashHost, dashPort))
 
 	// 4. Embeddings provider prerequisite (informational — local embeddings):
 	// the ollama binary, or the compiled Apple helper, per the profile's config.
@@ -172,7 +181,7 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 
 // serviceUnitCheck locates this profile's OS service unit (if the platform has
 // one) and delegates to serviceUnitPathCheck.
-func serviceUnitCheck(activeProfile string) Check {
+func serviceUnitCheck(activeProfile, dashHost string, dashPort int) Check {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return Check{Name: "service-path", Status: StatusOK, Detail: "cannot resolve home dir — service unit check skipped"}
@@ -181,16 +190,22 @@ func serviceUnitCheck(activeProfile string) Check {
 	if err != nil {
 		return Check{Name: "service-path", Status: StatusOK, Detail: "no OS service units on this platform"}
 	}
-	return serviceUnitPathCheck(unit.Kind, unit.Path, activeProfile)
+	return serviceUnitPathCheck(unit.Kind, unit.Path, activeProfile, dashHost, dashPort)
 }
 
-// serviceUnitPathCheck warns when an installed service unit carries no PATH
-// able to resolve the claude CLI. The daemon it supervises would then fail
-// every automation with `exec: "claude": executable file not found` even
-// though the user's login shell finds it, because launchd/systemd start
-// daemons with a minimal system PATH. Advisory: absent unit = daemon not
-// OS-supervised = nothing to check.
-func serviceUnitPathCheck(kind, unitPath, profile string) Check {
+// serviceUnitPathCheck warns when the daemon cannot resolve the claude CLI.
+// launchd/systemd start daemons with a minimal system PATH, so a claude the
+// user's login shell finds can still be invisible to the supervised daemon,
+// which then fails every automation with `exec: "claude": executable file not
+// found`. Advisory: absent unit = daemon not OS-supervised = nothing to check.
+//
+// The unit file on disk is the WEAKER signal, and on its own it produced a
+// false green: both supervisors keep the definition they parsed at load time,
+// so a unit corrected on disk can sit next to a loaded job still handing the
+// daemon the old PATH. When the daemon is up we therefore ask the process
+// itself — it is the only party that knows the PATH it actually got — and fall
+// back to the file only when there is nothing running to ask.
+func serviceUnitPathCheck(kind, unitPath, profile, dashHost string, dashPort int) Check {
 	const name = "service-path"
 	content, err := os.ReadFile(unitPath)
 	if err != nil {
@@ -200,6 +215,19 @@ func serviceUnitPathCheck(kind, unitPath, profile string) Check {
 		return Check{Name: name, Status: StatusWarn, Detail: fmt.Sprintf("cannot read service unit %s: %v", unitPath, err)}
 	}
 	pathEnv := service.UnitPathEnv(kind, string(content))
+
+	// Ground truth, when it is available.
+	if live, known := daemonClaudePath(dashHost, dashPort); known {
+		if live != "" {
+			return Check{Name: name, Status: StatusOK, Detail: "running daemon resolves claude (" + live + ")"}
+		}
+		detail := "the running daemon cannot resolve claude — every automation it runs will fail with `exec: \"claude\": executable file not found`"
+		if pathEnv != "" && findExecutable("claude", pathEnv) != "" {
+			detail += fmt.Sprintf("; %s already carries a PATH that would resolve it, so the loaded job is stale and needs a reload (not just a restart)", unitPath)
+		}
+		return Check{Name: name, Status: StatusWarn, Detail: detail, Fix: serviceReinstallFix(profile)}
+	}
+
 	if pathEnv == "" {
 		return Check{Name: name, Status: StatusWarn,
 			Detail: fmt.Sprintf("service unit %s sets no PATH — the supervised daemon cannot find claude outside system dirs", unitPath),
@@ -214,12 +242,22 @@ func serviceUnitPathCheck(kind, unitPath, profile string) Check {
 }
 
 // serviceReinstallFix is the command that regenerates a service unit with a
-// working PATH and restarts it — the fix for every service-path warning.
+// working PATH and reloads it — the fix for every service-path warning.
+//
+// It must RELOAD, not merely restart. Both supervisors keep the job definition
+// they parsed at load time, so a restart re-runs the daemon under the OLD
+// environment and leaves a corrected unit file on disk with no effect —
+// `launchctl kickstart -k` and a bare `systemctl --user restart` both do this.
+// Picking up an edited unit takes bootout+bootstrap on launchd and an explicit
+// daemon-reload on systemd.
 func serviceReinstallFix(profile string) string {
 	if runtime.GOOS == "darwin" {
-		return fmt.Sprintf("axon service install && launchctl kickstart -k gui/$(id -u)/com.axon.%s", profile)
+		label := "com.axon." + profile
+		return fmt.Sprintf(
+			"axon service install && launchctl bootout gui/$(id -u)/%s 2>/dev/null; launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/%s.plist",
+			label, label)
 	}
-	return fmt.Sprintf("axon service install && systemctl --user restart axon@%s", profile)
+	return fmt.Sprintf("axon service install && systemctl --user daemon-reload && systemctl --user restart axon@%s", profile)
 }
 
 // findExecutable reports the directory of pathEnv that holds an executable
@@ -702,38 +740,74 @@ func portFreeCheck(host string, port int) Check {
 	}
 }
 
+// daemonHealth is the subset of GET /health doctor reads. ClaudePath is a
+// pointer so an absent field (a daemon older than the field) stays
+// distinguishable from a present-but-empty one (a daemon that genuinely cannot
+// resolve claude) — the two call for opposite verdicts.
+type daemonHealth struct {
+	Status     string  `json:"status"`
+	Profile    string  `json:"profile"`
+	ClaudePath *string `json:"claude_path"`
+}
+
 // axonServing asks whatever holds addr whether it is an AXON daemon, returning
-// its profile name. Loopback-only and short-timeout: doctor must stay fast and
-// must never hang on a socket that accepts but never speaks.
+// its profile name.
 func axonServing(addr string) (string, bool) {
+	h, ok := fetchDaemonHealth(addr)
+	if !ok {
+		return "", false
+	}
+	return h.Profile, true
+}
+
+// daemonClaudePath reports the claude binary the daemon serving this profile's
+// dashboard resolved on its OWN PATH, and whether that answer is known at all.
+// Not-known covers every case where the file on disk remains the best evidence:
+// no port configured, daemon down, something else on the port, or a daemon too
+// old to report the field.
+func daemonClaudePath(host string, port int) (string, bool) {
+	if port == 0 {
+		return "", false
+	}
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	h, ok := fetchDaemonHealth(net.JoinHostPort(host, strconv.Itoa(port)))
+	if !ok || h.ClaudePath == nil {
+		return "", false
+	}
+	return *h.ClaudePath, true
+}
+
+// fetchDaemonHealth reads GET /health from addr and reports whether an AXON
+// daemon answered. Loopback-only and short-timeout: doctor must stay fast and
+// must never hang on a socket that accepts but never speaks.
+func fetchDaemonHealth(addr string) (daemonHealth, bool) {
+	var health daemonHealth
 	client := &http.Client{Timeout: 1500 * time.Millisecond}
 	resp, err := client.Get("http://" + addr + "/health")
 	if err != nil {
-		return "", false
+		return health, false
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return "", false
+		return health, false
 	}
 
 	// Cap the read: an unknown listener may answer 200 with anything at all.
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	if err != nil {
-		return "", false
-	}
-	var health struct {
-		Status  string `json:"status"`
-		Profile string `json:"profile"`
+		return health, false
 	}
 	if err := json.Unmarshal(body, &health); err != nil {
-		return "", false
+		return health, false
 	}
 	// `status` is the field only an AXON /health carries; a JSON 200 from
 	// something else will not have it.
 	if health.Status == "" {
-		return "", false
+		return daemonHealth{}, false
 	}
-	return health.Profile, true
+	return health, true
 }
 
 // residencyCheck reports the data-residency posture (NFR-01: local-first).

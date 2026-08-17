@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -288,7 +289,9 @@ func TestServiceUnitPathCheck(t *testing.T) {
 		{"absent unit is skipped ok", "launchd", filepath.Join(dir, "absent.plist"), StatusOK, "no OS service unit"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := serviceUnitPathCheck(tc.kind, tc.path, "personal")
+			// Port 0 = no daemon to consult, so these exercise the
+			// unit-file fallback.
+			c := serviceUnitPathCheck(tc.kind, tc.path, "personal", "127.0.0.1", 0)
 			if c.Status != tc.want || !strings.Contains(c.Detail, tc.detail) {
 				t.Errorf("serviceUnitPathCheck(%s, %s) = %+v, want status %s containing %q",
 					tc.kind, tc.path, c, tc.want, tc.detail)
@@ -302,6 +305,116 @@ func TestServiceUnitPathCheck(t *testing.T) {
 				t.Errorf("passing check should carry no Fix: %+v", c)
 			}
 		})
+	}
+}
+
+// A unit file corrected on disk does not reach a launchd/systemd job still
+// running the definition it was loaded with. Reading only the file therefore
+// passed the exact machine whose automations were failing every run with
+// `exec: "claude": executable file not found`. When the daemon is up, its own
+// answer wins.
+func TestServiceUnitPathCheckPrefersTheRunningDaemon(t *testing.T) {
+	dir := t.TempDir()
+	binDir := filepath.Join(dir, "local", "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(binDir, "claude"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A unit whose PATH *would* resolve claude on a fresh load — the file-only
+	// check reports this one green no matter what the daemon actually got.
+	goodUnit := filepath.Join(dir, "good.plist")
+	if err := os.WriteFile(goodUnit,
+		[]byte("<dict>\n  <key>PATH</key>\n  <string>"+binDir+":/usr/bin</string>\n</dict>\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	daemon := func(t *testing.T, body string) (string, int) {
+		t.Helper()
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/health" {
+				http.NotFound(w, r)
+				return
+			}
+			_, _ = w.Write([]byte(body))
+		}))
+		t.Cleanup(srv.Close)
+		return splitHostPort(t, srv.Listener.Addr().String())
+	}
+
+	t.Run("stale loaded job warns even though the unit file is correct", func(t *testing.T) {
+		host, port := daemon(t, `{"status":"ok","profile":"personal","claude_path":""}`)
+		c := serviceUnitPathCheck("launchd", goodUnit, "personal", host, port)
+		if c.Status != StatusWarn {
+			t.Fatalf("daemon that cannot resolve claude = %+v, want warn", c)
+		}
+		if !strings.Contains(c.Detail, "stale") {
+			t.Errorf("detail must explain the file/job divergence, got %q", c.Detail)
+		}
+		if c.Fix == "" {
+			t.Error("a stale loaded job is actionable and needs a Fix")
+		}
+	})
+
+	t.Run("a daemon that resolves claude passes and names what it found", func(t *testing.T) {
+		host, port := daemon(t, `{"status":"ok","profile":"personal","claude_path":"/opt/tools/claude"}`)
+		c := serviceUnitPathCheck("launchd", goodUnit, "personal", host, port)
+		if c.Status != StatusOK {
+			t.Fatalf("healthy daemon = %+v, want ok", c)
+		}
+		if !strings.Contains(c.Detail, "/opt/tools/claude") {
+			t.Errorf("detail should report the daemon's own resolution, got %q", c.Detail)
+		}
+	})
+
+	// A daemon predating the field reports nothing rather than "". Treating
+	// absent as empty would warn on every healthy older daemon.
+	t.Run("a daemon too old to report falls back to the unit file", func(t *testing.T) {
+		host, port := daemon(t, `{"status":"ok","profile":"personal"}`)
+		c := serviceUnitPathCheck("launchd", goodUnit, "personal", host, port)
+		if c.Status != StatusOK || !strings.Contains(c.Detail, "service unit PATH") {
+			t.Errorf("old daemon = %+v, want the unit-file verdict", c)
+		}
+	})
+
+	t.Run("a foreign listener on the port falls back to the unit file", func(t *testing.T) {
+		host, port := daemon(t, `{"hello":"not axon"}`)
+		c := serviceUnitPathCheck("launchd", goodUnit, "personal", host, port)
+		if c.Status != StatusOK || !strings.Contains(c.Detail, "service unit PATH") {
+			t.Errorf("foreign listener = %+v, want the unit-file verdict", c)
+		}
+	})
+}
+
+// The remedy has to RELOAD the unit, not restart the daemon. `launchctl
+// kickstart -k` and a bare `systemctl --user restart` both re-run the process
+// under the definition already loaded, so the previous fix rewrote a correct
+// unit file and changed nothing the daemon could see.
+func TestServiceReinstallFixReloadsTheUnit(t *testing.T) {
+	fix := serviceReinstallFix("personal")
+
+	if strings.Contains(fix, "kickstart") {
+		t.Errorf("kickstart restarts without re-reading the unit: %q", fix)
+	}
+	if !strings.Contains(fix, "axon service install") {
+		t.Errorf("fix must regenerate the unit first: %q", fix)
+	}
+
+	switch runtime.GOOS {
+	case "darwin":
+		for _, want := range []string{"bootout", "bootstrap", "com.axon.personal"} {
+			if !strings.Contains(fix, want) {
+				t.Errorf("launchd fix missing %q: %q", want, fix)
+			}
+		}
+	default:
+		if !strings.Contains(fix, "daemon-reload") {
+			t.Errorf("systemd reads edited units only after daemon-reload: %q", fix)
+		}
+		if !strings.Contains(fix, "restart axon@personal") {
+			t.Errorf("systemd fix must restart the unit: %q", fix)
+		}
 	}
 }
 
