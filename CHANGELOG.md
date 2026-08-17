@@ -6,6 +6,69 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.3.6] — 2026-08-17
+
+**The daemon could not find `claude`, and every check said it could.** A patch:
+no schema change (stays v7), no config change, no new MCP tool.
+
+Two automations failed overnight with `exec: "claude": executable file not
+found in $PATH` on a machine where `axon doctor` reported a clean bill of
+health, the plist named the right directory, and `claude --version` answered
+instantly in the shell. Everything you could inspect said it should work. The
+cause was a seam none of those checks looked at, and 1.3.4's fix for the same
+class of bug had been sitting on disk, correct and inert, for a day.
+
+launchd and systemd keep the job definition they parsed at load time. Correcting
+a unit file changes what the daemon *would* get on a fresh load and nothing
+about what it currently has, so a machine can carry a right plist and a wrong
+daemon indefinitely. The Claude Code native installer moving the CLI to
+`~/.local/bin` was enough to open that gap.
+
+### Fixed
+
+- **`doctor`'s `service-path` check asks the running daemon instead of reading
+  the unit file.** Reading the file made it structurally unable to see the
+  failure it exists to catch: it reported `service unit PATH resolves claude`
+  on the machine whose every automation was dying on exec. The daemon is the
+  only party that knows the PATH it actually got, so when one is up, `doctor`
+  asks it — and says so plainly when the file and the loaded job disagree:
+
+  > the running daemon cannot resolve claude — every automation it runs will
+  > fail with `exec: "claude": executable file not found`; …com.axon.personal.plist
+  > already carries a PATH that would resolve it, so the loaded job is stale and
+  > needs a reload (not just a restart)
+
+  The unit file remains the fallback when there is no daemon to ask. A daemon
+  older than the new `/health` field reports nothing rather than an empty
+  string, so it falls back too instead of warning about a healthy machine.
+
+- **The remediation for a stale unit now reloads it.** The command `doctor`
+  offered was `launchctl kickstart -k`, which restarts the process from the
+  definition already loaded — following it would rewrite an already-correct
+  plist, restart the daemon into the same broken environment, and report
+  success. Now `bootout` + `bootstrap`. The Linux path had the identical flaw: a
+  bare `systemctl --user restart` does not re-read unit files either, so it
+  gained the `daemon-reload` it always needed.
+
+- **`install-macos.sh` and `update-macos.sh` replace the loaded launchd job
+  rather than restarting it.** Both ran `launchctl unload … || true` followed by
+  `launchctl load -w`, a pair whose failures are invisible in exactly the case
+  that matters: the `|| true` swallows a failed unload, and `load` onto a
+  still-loaded label exits 0 having done nothing. That is how a corrected plist
+  came to sit beside a daemon still running the old one. They now share a
+  `launchd_reload` helper in `_common.sh` that boots the old job out, waits for
+  the label to actually go away (bootout is asynchronous — bootstrapping onto a
+  dying job fails with EBUSY), bootstraps the file, and returns non-zero with
+  launchd's own error when the daemon does not come up.
+
+### Added
+
+- **`claude_path` on `GET /health`** — the `claude` binary the daemon resolves
+  on its own PATH, or `""` when it resolves none. This is the fact no external
+  observer can determine: a service unit corrected on disk does not reach a job
+  already loaded, so the daemon's own answer is the only reliable one. It is a
+  single resolved path, never the surrounding environment.
+
 ## [1.3.5] — 2026-08-16
 
 **One check that was always wrong.** A patch: no schema change (stays v7), no
@@ -719,7 +782,8 @@ The initial feature-complete build, implemented in phases against
   `config get/set`. *(PDF ingestion, the api_key adapter and `config get/set`
   were implemented in 0.10.0.)*
 
-[Unreleased]: https://github.com/jandro-es/axon/compare/v1.3.5...HEAD
+[Unreleased]: https://github.com/jandro-es/axon/compare/v1.3.6...HEAD
+[1.3.6]: https://github.com/jandro-es/axon/releases/tag/v1.3.6
 [1.3.5]: https://github.com/jandro-es/axon/releases/tag/v1.3.5
 [1.3.4]: https://github.com/jandro-es/axon/releases/tag/v1.3.4
 [1.3.3]: https://github.com/jandro-es/axon/releases/tag/v1.3.3
