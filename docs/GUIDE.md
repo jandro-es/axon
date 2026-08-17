@@ -127,7 +127,7 @@ run `axon update`):
 
 ```bash
 make update          # rebuild, swap the binary (with the version delta), re-run
-                     # axon init (DB migrations + wiring + dashboards), restart the daemon
+                     # axon init (DB migrations + wiring + dashboards), reload the daemon
 ```
 
 It preserves your config, secrets, and SQLite DB, and lists any config settings the new version ships that you don't have yet (never applied silently).
@@ -787,15 +787,38 @@ for your platform — launchd (macOS), systemd `--user` (Linux), Task Scheduler
 (Windows):
 
 ```bash
-axon service print --env ~/.axon/.env     # preview the generated unit + install/enable commands
+axon service print --env ~/.axon/.env     # preview the generated unit + its exact lifecycle commands
 axon service install --env ~/.axon/.env   # write it to the conventional location
 # then load it, e.g. on macOS:
-launchctl load ~/Library/LaunchAgents/com.axon.personal.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.axon.personal.plist
 # or on Linux:
 systemctl --user enable --now axon-personal.service
 
 axon service uninstall   # remove the unit
 ```
+
+`axon service print` lists the exact enable / start / stop commands for your
+platform, and `axon service install` prints the reload command as well, so you
+never have to remember them. Run either from the **installed** `axon` — a unit
+records the path of the binary that generated it.
+
+> **Rewriting a unit does not change a daemon that is already running it.**
+> launchd and systemd keep the job definition they parsed at load time, so a
+> regenerated unit sits on disk with no effect — and a *restart* re-runs the
+> daemon under the old environment, which is not the same thing as a reload.
+> After any `axon service install` on a machine where the daemon is up:
+>
+> ```bash
+> # macOS — replace the loaded job, don't restart it
+> launchctl bootout gui/$(id -u)/com.axon.personal 2>/dev/null
+> launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.axon.personal.plist
+> # Linux — systemd only re-reads unit files after daemon-reload
+> systemctl --user daemon-reload && systemctl --user restart axon-personal.service
+> ```
+>
+> From a source clone, `make reload` does this for you. `axon doctor`'s
+> `service-path` check asks the *running* daemon what it can resolve, so it
+> catches the case where a correct unit file sits beside a stale loaded job.
 
 Units are profile-scoped and carry the isolated `AXON_HOME` / `CLAUDE_CONFIG_DIR`
 plus the `--config` and `--env` paths, so the supervised daemon uses the right
@@ -870,10 +893,10 @@ also come from the real environment).
 | `doctor` warns about `ANTHROPIC_API_KEY` | Unset it for subscription/enterprise — it diverts Claude Code to API billing. |
 | `doctor`/init: Ollama not reachable | `ollama serve`, then `ollama pull <model>`. Search still works lexically meanwhile. |
 | Ingest says "0 embedded" | Ollama was unreachable; vectors are pending. Run `axon reindex --embeddings` once it's up. |
-| `dashboard-port` warn in doctor | A daemon is already running on that port, or change `dashboard.port`. |
+| `dashboard-port` warn in doctor | Something that is *not* AXON holds the port — your own daemon answering there is a pass, not a warning. The check's fix line carries the `lsof` command to find the culprit; stop it, or change `dashboard.port`. |
 | Automations never run anything | Check `enabled` **and** `allowed_automations` (an allow-list gate); see `axon profiles`. |
 | `go build` fails on `embed all:dist` | Build the SPA first (`cd web && npm run build`) or use the committed placeholder. |
-| Automations fail with `exec: "claude": executable file not found in $PATH` while your shell finds it | The daemon runs under launchd/systemd, whose default PATH misses user-local installs (`~/.local/bin`, `/opt/homebrew/bin`). Re-run `axon service install` and reload the unit — generated units embed a PATH covering `claude`/`yt-dlp`/`ollama`. `doctor`'s `service-path` check catches this; the dashboard Runs list shows the error on failed rows. |
+| Automations fail with `exec: "claude": executable file not found in $PATH` while your shell finds it | The daemon runs under launchd/systemd, whose default PATH misses user-local installs (`~/.local/bin`, `/opt/homebrew/bin`) — so a `claude` your shell resolves instantly can be invisible to the daemon. Generated units embed a PATH covering `claude`/`yt-dlp`/`ollama`, so: `axon service install` **and then reload the unit** (see §13 — a restart is not a reload, and re-running the installer alone changes nothing a running daemon can see). `doctor`'s `service-path` check asks the running daemon directly and says so when a correct unit file sits beside a stale loaded job; the dashboard Runs list shows the error on failed rows. |
 | Claude Code doesn't see AXON tools | Re-run `axon init` (writes `.claude/.mcp.json`); confirm `axon` is on `PATH`. |
 | Search/automation seems stale after editing notes in Obsidian | `axon reindex` (or let `knowledge-reindex` run). The vault is the source of truth. |
 

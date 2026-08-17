@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- **`docs/GUIDE.md` no longer teaches the command that caused the bug.** §13
+  still said `launchctl load <plist>`, which exits 0 having done nothing when
+  the label is already loaded. It now uses the `bootstrap` domain form, states
+  outright that rewriting a unit does not change a daemon already running it,
+  and carries the reload sequence for both supervisors. The `exec: "claude":
+  executable file not found` and `dashboard-port` troubleshooting rows were
+  brought in line with what those checks actually do now.
+
 ## [1.3.7] — 2026-08-17
 
 **The rest of the same bug.** A patch: no schema change (stays v7), no config
