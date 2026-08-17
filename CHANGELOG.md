@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.3.7] — 2026-08-17
+
+**The rest of the same bug.** A patch: no schema change (stays v7), no config
+change, no new MCP tool.
+
+1.3.6 fixed the seam where it had actually bitten. Sweeping for the pattern
+found it in the two commands a user runs *immediately after* a unit is
+rewritten — which is the worst place for it, because that is the moment the
+advice is most likely to be followed and least likely to work.
+
 ### Fixed
 
 - **The remaining three places that restarted the daemon instead of reloading
@@ -800,7 +810,8 @@ The initial feature-complete build, implemented in phases against
   `config get/set`. *(PDF ingestion, the api_key adapter and `config get/set`
   were implemented in 0.10.0.)*
 
-[Unreleased]: https://github.com/jandro-es/axon/compare/v1.3.6...HEAD
+[Unreleased]: https://github.com/jandro-es/axon/compare/v1.3.7...HEAD
+[1.3.7]: https://github.com/jandro-es/axon/releases/tag/v1.3.7
 [1.3.6]: https://github.com/jandro-es/axon/releases/tag/v1.3.6
 [1.3.5]: https://github.com/jandro-es/axon/releases/tag/v1.3.5
 [1.3.4]: https://github.com/jandro-es/axon/releases/tag/v1.3.4
