@@ -190,7 +190,7 @@ func serviceUnitCheck(activeProfile, dashHost string, dashPort int) Check {
 	if err != nil {
 		return Check{Name: "service-path", Status: StatusOK, Detail: "no OS service units on this platform"}
 	}
-	return serviceUnitPathCheck(unit.Kind, unit.Path, activeProfile, dashHost, dashPort)
+	return serviceUnitPathCheck(unit.Kind, unit.Path, unit.ReloadCmd, dashHost, dashPort)
 }
 
 // serviceUnitPathCheck warns when the daemon cannot resolve the claude CLI.
@@ -205,7 +205,7 @@ func serviceUnitCheck(activeProfile, dashHost string, dashPort int) Check {
 // daemon the old PATH. When the daemon is up we therefore ask the process
 // itself — it is the only party that knows the PATH it actually got — and fall
 // back to the file only when there is nothing running to ask.
-func serviceUnitPathCheck(kind, unitPath, profile, dashHost string, dashPort int) Check {
+func serviceUnitPathCheck(kind, unitPath, reloadCmd, dashHost string, dashPort int) Check {
 	const name = "service-path"
 	content, err := os.ReadFile(unitPath)
 	if err != nil {
@@ -225,39 +225,37 @@ func serviceUnitPathCheck(kind, unitPath, profile, dashHost string, dashPort int
 		if pathEnv != "" && findExecutable("claude", pathEnv) != "" {
 			detail += fmt.Sprintf("; %s already carries a PATH that would resolve it, so the loaded job is stale and needs a reload (not just a restart)", unitPath)
 		}
-		return Check{Name: name, Status: StatusWarn, Detail: detail, Fix: serviceReinstallFix(profile)}
+		return Check{Name: name, Status: StatusWarn, Detail: detail, Fix: serviceReinstallFix(reloadCmd)}
 	}
 
 	if pathEnv == "" {
 		return Check{Name: name, Status: StatusWarn,
 			Detail: fmt.Sprintf("service unit %s sets no PATH — the supervised daemon cannot find claude outside system dirs", unitPath),
-			Fix:    serviceReinstallFix(profile)}
+			Fix:    serviceReinstallFix(reloadCmd)}
 	}
 	if dir := findExecutable("claude", pathEnv); dir != "" {
 		return Check{Name: name, Status: StatusOK, Detail: "service unit PATH resolves claude (" + dir + ")"}
 	}
 	return Check{Name: name, Status: StatusWarn,
 		Detail: fmt.Sprintf("service unit PATH cannot resolve claude — automations run under it will fail (unit: %s)", unitPath),
-		Fix:    serviceReinstallFix(profile)}
+		Fix:    serviceReinstallFix(reloadCmd)}
 }
 
 // serviceReinstallFix is the command that regenerates a service unit with a
 // working PATH and reloads it — the fix for every service-path warning.
 //
-// It must RELOAD, not merely restart. Both supervisors keep the job definition
-// they parsed at load time, so a restart re-runs the daemon under the OLD
-// environment and leaves a corrected unit file on disk with no effect —
-// `launchctl kickstart -k` and a bare `systemctl --user restart` both do this.
-// Picking up an edited unit takes bootout+bootstrap on launchd and an explicit
-// daemon-reload on systemd.
-func serviceReinstallFix(profile string) string {
-	if runtime.GOOS == "darwin" {
-		label := "com.axon." + profile
-		return fmt.Sprintf(
-			"axon service install && launchctl bootout gui/$(id -u)/%s 2>/dev/null; launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/%s.plist",
-			label, label)
+// The reload half comes from internal/service, which generates the unit and so
+// is the one place that should know how to get it re-read. That matters more
+// than it sounds: the fix must RELOAD, not merely restart, because both
+// supervisors keep the job definition they parsed at load time. `launchctl
+// kickstart -k` and a bare `systemctl --user restart` re-run the daemon under
+// the OLD environment, so the previous version of this function emitted a
+// command that rewrote a correct unit file and changed nothing.
+func serviceReinstallFix(reloadCmd string) string {
+	if reloadCmd == "" {
+		return "axon service install"
 	}
-	return fmt.Sprintf("axon service install && systemctl --user daemon-reload && systemctl --user restart axon@%s", profile)
+	return "axon service install && " + reloadCmd
 }
 
 // findExecutable reports the directory of pathEnv that holds an executable

@@ -122,6 +122,14 @@ func newServiceCmd(gf *globalFlags) *cobra.Command {
 				fmt.Fprintf(out, "%s wrote %s unit: %s\n", st.Green(ui.IconOK), unit.Kind, st.Cyan(unit.Path))
 				fmt.Fprintf(out, "  %s\n    %s\n    %s\n", st.Dim("enable & start with:"),
 					st.Bold(unit.EnableCmd), st.Bold(unit.StartCmd))
+				// Rewriting the unit does not reach a job already loaded from
+				// the previous one — it keeps the environment it was loaded
+				// with until something boots it out. Say so here, where the
+				// user has just rewritten it.
+				if unit.ReloadCmd != "" {
+					fmt.Fprintf(out, "  %s\n    %s\n", st.Dim("already running? it keeps the OLD unit until reloaded:"),
+						st.Bold(unit.ReloadCmd))
+				}
 				return nil
 			case "uninstall":
 				if err := os.Remove(unit.Path); err != nil && !os.IsNotExist(err) {

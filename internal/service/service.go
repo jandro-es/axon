@@ -33,9 +33,15 @@ type Unit struct {
 	Label     string // service/job name
 	Path      string // install path for the unit file
 	Content   string // the unit file contents
-	EnableCmd string // command to load/enable the unit
+	EnableCmd string // command to load/enable the unit for the first time
 	StartCmd  string // command to start it now
 	StopCmd   string // command to stop it
+	// ReloadCmd re-reads this unit file into an ALREADY-loaded job. It is not
+	// a restart: launchd and systemd both keep the definition they parsed at
+	// load time, so restarting re-runs the daemon under the old environment
+	// and leaves an edited unit with no effect. Every caller that rewrites a
+	// unit and wants the change to take must use this, not StartCmd.
+	ReloadCmd string
 }
 
 // ForOS returns the service unit appropriate for goos (defaults to the host OS
@@ -103,9 +109,10 @@ func LaunchdUnit(p Params) Unit {
 		Label:     label,
 		Path:      path,
 		Content:   b.String(),
-		EnableCmd: "launchctl load " + path,
-		StartCmd:  "launchctl start " + label,
-		StopCmd:   "launchctl unload " + path,
+		EnableCmd: "launchctl bootstrap gui/$(id -u) " + path,
+		StartCmd:  "launchctl kickstart gui/$(id -u)/" + label,
+		StopCmd:   "launchctl bootout gui/$(id -u)/" + label,
+		ReloadCmd: fmt.Sprintf("launchctl bootout gui/$(id -u)/%s 2>/dev/null; launchctl bootstrap gui/$(id -u) %s", label, path),
 	}
 }
 
@@ -138,6 +145,7 @@ func SystemdUnit(p Params) Unit {
 		EnableCmd: "systemctl --user enable " + label,
 		StartCmd:  "systemctl --user start " + label,
 		StopCmd:   "systemctl --user stop " + label,
+		ReloadCmd: "systemctl --user daemon-reload && systemctl --user restart " + label,
 	}
 }
 
@@ -164,6 +172,9 @@ func WindowsTask(p Params) Unit {
 		EnableCmd: fmt.Sprintf("schtasks /Create /TN %s /XML %s", label, path),
 		StartCmd:  "schtasks /Run /TN " + label,
 		StopCmd:   "schtasks /End /TN " + label,
+		// /Create /F overwrites the registered task definition outright, so
+		// Task Scheduler has no stale copy to keep.
+		ReloadCmd: fmt.Sprintf("schtasks /Create /F /TN %s /XML %s", label, path),
 	}
 }
 

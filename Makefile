@@ -177,15 +177,22 @@ else
 	@PREFIX=$(PREFIX) $(UPDATE_SCRIPT) $(ARGS)
 endif
 
-reload: ## restart the installed daemon so a new build takes effect
+# Reload, not restart: both supervisors keep the job definition they parsed at
+# load time, so restarting re-runs the daemon under the OLD unit environment and
+# leaves a corrected unit with no effect. launchd_reload (scripts/_common.sh)
+# does the bootout+bootstrap; systemd needs the explicit daemon-reload.
+reload: ## reload the installed daemon so a new build and unit take effect
 ifeq ($(OS),macos)
-	@p=$$(axon config get active_profile 2>/dev/null || echo personal); \
+	@bash -c 'source scripts/_common.sh; \
+	 p=$$(axon config get active_profile 2>/dev/null || echo personal); \
 	 plist="$$HOME/Library/LaunchAgents/com.axon.$$p.plist"; \
-	 if [ -f "$$plist" ]; then launchctl unload "$$plist" 2>/dev/null || true; launchctl load -w "$$plist" && printf '$(C_GREEN)✓$(C_RESET) reloaded com.axon.%s\n' "$$p"; \
-	 else printf '$(C_YELLOW)⚠$(C_RESET) no launchd agent for profile %s — run `make setup` first\n' "$$p"; fi
+	 if [ ! -f "$$plist" ]; then printf "$(C_YELLOW)⚠$(C_RESET) no launchd agent for profile %s — run \140make setup\140 first\n" "$$p"; exit 0; fi; \
+	 if launchd_reload "$$plist" "com.axon.$$p"; then printf "$(C_GREEN)✓$(C_RESET) reloaded com.axon.%s\n" "$$p"; \
+	 else printf "$(C_YELLOW)⚠$(C_RESET) could not reload com.axon.%s — it may still be running the previous unit\n" "$$p"; exit 1; fi'
 else ifeq ($(OS),linux)
 	@p=$$(axon config get active_profile 2>/dev/null || echo personal); \
-	 systemctl --user restart "axon-$$p.service" && printf '$(C_GREEN)✓$(C_RESET) restarted axon-%s\n' "$$p" \
+	 systemctl --user daemon-reload 2>/dev/null; \
+	 systemctl --user restart "axon-$$p.service" && printf '$(C_GREEN)✓$(C_RESET) reloaded axon-%s\n' "$$p" \
 	   || printf '$(C_YELLOW)⚠$(C_RESET) could not restart axon-%s — run `make setup` first\n' "$$p"
 else
 	@printf '$(C_YELLOW)⚠$(C_RESET) reload is automated on macOS/Linux only; restart your service manually\n'

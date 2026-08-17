@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **The remaining three places that restarted the daemon instead of reloading
+  it.** 1.3.6 fixed `doctor` and the install/update scripts; a sweep for the
+  same pattern found it still living in `make reload` — the command `axon
+  update` points you at when a new binary needs to take effect — and in the
+  lifecycle hints `axon service install` prints, which said `launchctl load
+  <plist>`. That command exits 0 having done nothing when the label is already
+  loaded, so the advice printed directly beneath a freshly rewritten unit was
+  advice that could not apply it.
+
+  `Unit.ReloadCmd` now carries the re-read command for each supervisor, so
+  `internal/service` — which generates the units — owns the one true answer, and
+  `doctor` stops hand-rolling `launchctl` strings for a file it did not write.
+  The launchd lifecycle commands moved to the modern `bootstrap`/`bootout`
+  domain form, and `axon service install` now says outright that a running
+  daemon keeps the old unit until reloaded.
+
 ## [1.3.6] — 2026-08-17
 
 **The daemon could not find `claude`, and every check said it could.** A patch:

@@ -58,9 +58,36 @@ func TestUnitsAreProfileScopedAndIsolated(t *testing.T) {
 			}
 		}
 		// Install path + lifecycle hints present.
-		if u.Path == "" || u.EnableCmd == "" || u.StartCmd == "" || u.StopCmd == "" {
+		if u.Path == "" || u.EnableCmd == "" || u.StartCmd == "" || u.StopCmd == "" || u.ReloadCmd == "" {
 			t.Errorf("%s unit missing path/lifecycle hints: %+v", u.Kind, u)
 		}
+	}
+}
+
+// A unit is only worth regenerating if the supervisor can be made to re-read
+// it. Both keep the definition they parsed at load time, so ReloadCmd must
+// replace the loaded job — a command that merely restarts the process runs it
+// again under the old environment and leaves the edit inert.
+func TestReloadCmdReplacesTheLoadedJob(t *testing.T) {
+	p := testParams()
+
+	launchd := LaunchdUnit(p).ReloadCmd
+	for _, want := range []string{"bootout", "bootstrap", LaunchdUnit(p).Path} {
+		if !strings.Contains(launchd, want) {
+			t.Errorf("launchd ReloadCmd missing %q: %q", want, launchd)
+		}
+	}
+	// kickstart restarts from the loaded definition without re-reading the file.
+	if strings.Contains(launchd, "kickstart") {
+		t.Errorf("launchd ReloadCmd restarts instead of reloading: %q", launchd)
+	}
+
+	systemd := SystemdUnit(p).ReloadCmd
+	if !strings.Contains(systemd, "daemon-reload") {
+		t.Errorf("systemd re-reads edited units only after daemon-reload: %q", systemd)
+	}
+	if !strings.Contains(systemd, "restart") {
+		t.Errorf("systemd ReloadCmd must restart the unit: %q", systemd)
 	}
 }
 

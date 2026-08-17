@@ -15,6 +15,7 @@ import (
 
 	"github.com/jandro-es/axon/internal/clients"
 	"github.com/jandro-es/axon/internal/config"
+	"github.com/jandro-es/axon/internal/service"
 )
 
 // withStubs swaps the package-level lookPath/lookupEnv indirections for the
@@ -253,6 +254,8 @@ func TestDoctorResearchEnabled(t *testing.T) {
 
 func TestServiceUnitPathCheck(t *testing.T) {
 	dir := t.TempDir()
+	// The reload half of every Fix, as internal/service generates it.
+	reloadCmd := service.LaunchdUnit(service.Params{Profile: "personal", HomeDir: dir}).ReloadCmd
 	binDir := filepath.Join(dir, "local", "bin")
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -291,7 +294,7 @@ func TestServiceUnitPathCheck(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Port 0 = no daemon to consult, so these exercise the
 			// unit-file fallback.
-			c := serviceUnitPathCheck(tc.kind, tc.path, "personal", "127.0.0.1", 0)
+			c := serviceUnitPathCheck(tc.kind, tc.path, reloadCmd, "127.0.0.1", 0)
 			if c.Status != tc.want || !strings.Contains(c.Detail, tc.detail) {
 				t.Errorf("serviceUnitPathCheck(%s, %s) = %+v, want status %s containing %q",
 					tc.kind, tc.path, c, tc.want, tc.detail)
@@ -315,6 +318,8 @@ func TestServiceUnitPathCheck(t *testing.T) {
 // answer wins.
 func TestServiceUnitPathCheckPrefersTheRunningDaemon(t *testing.T) {
 	dir := t.TempDir()
+	// The reload half of every Fix, as internal/service generates it.
+	reloadCmd := service.LaunchdUnit(service.Params{Profile: "personal", HomeDir: dir}).ReloadCmd
 	binDir := filepath.Join(dir, "local", "bin")
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -345,7 +350,7 @@ func TestServiceUnitPathCheckPrefersTheRunningDaemon(t *testing.T) {
 
 	t.Run("stale loaded job warns even though the unit file is correct", func(t *testing.T) {
 		host, port := daemon(t, `{"status":"ok","profile":"personal","claude_path":""}`)
-		c := serviceUnitPathCheck("launchd", goodUnit, "personal", host, port)
+		c := serviceUnitPathCheck("launchd", goodUnit, reloadCmd, host, port)
 		if c.Status != StatusWarn {
 			t.Fatalf("daemon that cannot resolve claude = %+v, want warn", c)
 		}
@@ -359,7 +364,7 @@ func TestServiceUnitPathCheckPrefersTheRunningDaemon(t *testing.T) {
 
 	t.Run("a daemon that resolves claude passes and names what it found", func(t *testing.T) {
 		host, port := daemon(t, `{"status":"ok","profile":"personal","claude_path":"/opt/tools/claude"}`)
-		c := serviceUnitPathCheck("launchd", goodUnit, "personal", host, port)
+		c := serviceUnitPathCheck("launchd", goodUnit, reloadCmd, host, port)
 		if c.Status != StatusOK {
 			t.Fatalf("healthy daemon = %+v, want ok", c)
 		}
@@ -372,7 +377,7 @@ func TestServiceUnitPathCheckPrefersTheRunningDaemon(t *testing.T) {
 	// absent as empty would warn on every healthy older daemon.
 	t.Run("a daemon too old to report falls back to the unit file", func(t *testing.T) {
 		host, port := daemon(t, `{"status":"ok","profile":"personal"}`)
-		c := serviceUnitPathCheck("launchd", goodUnit, "personal", host, port)
+		c := serviceUnitPathCheck("launchd", goodUnit, reloadCmd, host, port)
 		if c.Status != StatusOK || !strings.Contains(c.Detail, "service unit PATH") {
 			t.Errorf("old daemon = %+v, want the unit-file verdict", c)
 		}
@@ -380,7 +385,7 @@ func TestServiceUnitPathCheckPrefersTheRunningDaemon(t *testing.T) {
 
 	t.Run("a foreign listener on the port falls back to the unit file", func(t *testing.T) {
 		host, port := daemon(t, `{"hello":"not axon"}`)
-		c := serviceUnitPathCheck("launchd", goodUnit, "personal", host, port)
+		c := serviceUnitPathCheck("launchd", goodUnit, reloadCmd, host, port)
 		if c.Status != StatusOK || !strings.Contains(c.Detail, "service unit PATH") {
 			t.Errorf("foreign listener = %+v, want the unit-file verdict", c)
 		}
@@ -390,31 +395,38 @@ func TestServiceUnitPathCheckPrefersTheRunningDaemon(t *testing.T) {
 // The remedy has to RELOAD the unit, not restart the daemon. `launchctl
 // kickstart -k` and a bare `systemctl --user restart` both re-run the process
 // under the definition already loaded, so the previous fix rewrote a correct
-// unit file and changed nothing the daemon could see.
+// unit file and changed nothing the daemon could see. Asserted against the
+// command a real unit generates, since that is what the user actually receives.
 func TestServiceReinstallFixReloadsTheUnit(t *testing.T) {
-	fix := serviceReinstallFix("personal")
-
-	if strings.Contains(fix, "kickstart") {
-		t.Errorf("kickstart restarts without re-reading the unit: %q", fix)
+	unit, err := service.ForOS("", service.Params{Profile: "personal", HomeDir: t.TempDir()})
+	if err != nil {
+		t.Skipf("no service unit on %s: %v", runtime.GOOS, err)
 	}
+	fix := serviceReinstallFix(unit.ReloadCmd)
+
 	if !strings.Contains(fix, "axon service install") {
 		t.Errorf("fix must regenerate the unit first: %q", fix)
+	}
+	if strings.Contains(fix, "kickstart") {
+		t.Errorf("kickstart restarts without re-reading the unit: %q", fix)
 	}
 
 	switch runtime.GOOS {
 	case "darwin":
-		for _, want := range []string{"bootout", "bootstrap", "com.axon.personal"} {
+		for _, want := range []string{"bootout", "bootstrap"} {
 			if !strings.Contains(fix, want) {
 				t.Errorf("launchd fix missing %q: %q", want, fix)
 			}
 		}
-	default:
+	case "linux":
 		if !strings.Contains(fix, "daemon-reload") {
 			t.Errorf("systemd reads edited units only after daemon-reload: %q", fix)
 		}
-		if !strings.Contains(fix, "restart axon@personal") {
-			t.Errorf("systemd fix must restart the unit: %q", fix)
-		}
+	}
+
+	// A platform with no unit must not emit a dangling "&&".
+	if bare := serviceReinstallFix(""); bare != "axon service install" {
+		t.Errorf("empty reload command = %q, want the bare install", bare)
 	}
 }
 
