@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.3.9] — 2026-08-18
+
+**Level cards.** A patch on 1.3.8: presentation only — no Go change, no schema
+change, no config key.
+
 ### Fixed
 
 - **Cards in a row now share a height.** 1.3.8's grid let every card keep its
@@ -891,7 +896,8 @@ The initial feature-complete build, implemented in phases against
   `config get/set`. *(PDF ingestion, the api_key adapter and `config get/set`
   were implemented in 0.10.0.)*
 
-[Unreleased]: https://github.com/jandro-es/axon/compare/v1.3.8...HEAD
+[Unreleased]: https://github.com/jandro-es/axon/compare/v1.3.9...HEAD
+[1.3.9]: https://github.com/jandro-es/axon/releases/tag/v1.3.9
 [1.3.8]: https://github.com/jandro-es/axon/releases/tag/v1.3.8
 [1.3.7]: https://github.com/jandro-es/axon/releases/tag/v1.3.7
 [1.3.6]: https://github.com/jandro-es/axon/releases/tag/v1.3.6
