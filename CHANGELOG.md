@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.3.8] — 2026-08-18
+
+**The dashboard catches up with the app.** A minor release: no schema change
+(stays v7), no new config key, no new MCP tool. One additive field on `/health`.
+
+The macOS Companion shipped wearing Liquid Glass; the web dashboard was still
+the dark-only skin it was born with in June. Two surfaces onto one daemon that
+look unrelated read as two products — so the dashboard now uses the same
+material, and gained the appearance control it should always have had. Opening
+it up also made obvious how much of what the daemon already knows was never on
+screen: half of `/health`, what is actually waiting on a human, which
+automation is quietly failing, which notes nothing links to.
+
 ### Added
 
 - **The dashboard wears the same glass as the Companion, and now has a light
@@ -867,7 +880,8 @@ The initial feature-complete build, implemented in phases against
   `config get/set`. *(PDF ingestion, the api_key adapter and `config get/set`
   were implemented in 0.10.0.)*
 
-[Unreleased]: https://github.com/jandro-es/axon/compare/v1.3.7...HEAD
+[Unreleased]: https://github.com/jandro-es/axon/compare/v1.3.8...HEAD
+[1.3.8]: https://github.com/jandro-es/axon/releases/tag/v1.3.8
 [1.3.7]: https://github.com/jandro-es/axon/releases/tag/v1.3.7
 [1.3.6]: https://github.com/jandro-es/axon/releases/tag/v1.3.6
 [1.3.5]: https://github.com/jandro-es/axon/releases/tag/v1.3.5
