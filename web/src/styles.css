@@ -275,17 +275,24 @@ button.chip:hover { color: var(--ink); border-color: var(--ink-faint); }
 .nav .pip.hot { color: var(--warn); background: var(--warn-soft); }
 
 /* ── Grid + cards ────────────────────────────────────────────────────────── */
+/* Cards in a row share a height (grid's default `stretch`) — ragged card
+   bottoms were the loudest thing on the page. The space is then absorbed by
+   the card's own content rather than left as a void: `.card-body` is a column,
+   and whichever block carries `.grow-fill` (the chart well, the tile grid, the
+   feed, the graph) takes what is left. */
 .grid {
   display: grid; gap: 16px; padding: 16px 22px 40px;
   grid-template-columns: repeat(12, 1fr);
-  align-items: start;
 }
 .card {
   grid-column: span 6;
   border-radius: var(--r-lg);
   padding: 18px;
+  display: flex; flex-direction: column;
   animation: rise .38s cubic-bezier(.22,.68,.36,1) backwards;
 }
+.card-body { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.grow-fill { flex: 1 1 auto; min-height: 0; }
 .card.span-3  { grid-column: span 3; }
 .card.span-4  { grid-column: span 4; }
 .card.span-5  { grid-column: span 5; }
@@ -332,12 +339,21 @@ button.chip:hover { color: var(--ink); border-color: var(--ink-faint); }
   margin: 0 -4px;
 }
 .well.flush { padding: 6px 4px 0; }
+/* A filling well hands its own height straight to the chart inside it, so a
+   short card next to a tall one grows its plot instead of growing a gap. */
+.well.grow-fill { display: flex; flex-direction: column; }
+.well.grow-fill > * { flex: 1 1 auto; min-height: 0; }
 
 /* KPI tiles */
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(122px, 1fr)); gap: 10px; }
+/* A stretched card's spare height goes around the tile grid, not into it: the
+   rows keep a sane height and the block centres in whatever room it gets.
+   Tiles grown to 240px tall read as six empty boxes, not as numbers. */
+.tiles.grow-fill { align-content: center; grid-auto-rows: minmax(86px, max-content); }
 .tile {
   background: var(--glass-2); border: 1px solid var(--line);
   border-radius: var(--r-md); padding: 13px 14px;
+  display: flex; flex-direction: column; justify-content: center;
   transition: border-color .16s, transform .16s, background .16s;
 }
 .tile:hover { border-color: var(--line-hi); background: var(--hover); transform: translateY(-1px); }
@@ -349,6 +365,7 @@ button.chip:hover { color: var(--ink); border-color: var(--ink-faint); }
 
 /* Budget gauges */
 .gauges { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
+.gauges.grow-fill { align-content: center; }
 .gauge { position: relative; width: 132px; height: 132px; flex: 0 0 auto; }
 .gauge .readout { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
 .gauge .readout .pct { font: 600 22px/1 var(--mono); font-variant-numeric: tabular-nums; }
@@ -422,6 +439,7 @@ button.chip:hover { color: var(--ink); border-color: var(--ink-faint); }
 
 /* Activity feed */
 .feed { max-height: 470px; overflow-y: auto; margin: 0 -6px; padding: 0 6px; }
+.feed.grow-fill { max-height: none; }
 .feed .evt {
   display: flex; gap: 10px; align-items: baseline;
   padding: 7px 6px; margin: 0 -6px; border-radius: var(--r-sm);
@@ -456,8 +474,12 @@ button.chip:hover { color: var(--ink); border-color: var(--ink-faint); }
 .filters .spacer { flex: 1 1 auto; }
 .filters .input { flex: 0 1 260px; padding: 7px 11px; }
 
-/* Empty states — a direction, not a shrug. */
-.empty { padding: 30px 10px; text-align: center; color: var(--ink-faint); font-size: 13px; line-height: 1.75; }
+/* Empty states — a direction, not a shrug. Centred in whatever room they get. */
+.empty {
+  flex: 1 1 auto; display: grid; place-content: center;
+  padding: 30px 10px; text-align: center; color: var(--ink-faint);
+  font-size: 13px; line-height: 1.75;
+}
 .empty b { color: var(--ink-dim); font-weight: 600; }
 .empty code {
   font: 500 12px var(--mono); color: var(--signal-1);
@@ -569,6 +591,7 @@ kbd {
   position: relative; border-radius: var(--r-md); overflow: hidden;
   background: var(--solid); border: 1px solid var(--line);
   touch-action: none;
+  flex: 1 1 auto; min-height: 420px;
 }
 .graph-wrap svg { display: block; width: 100%; height: 100%; cursor: grab; }
 .graph-wrap svg.dragging { cursor: grabbing; }
@@ -620,7 +643,7 @@ kbd {
 .list.resolved { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 8px; }
 
 /* ── Actions — the GTD queue ─────────────────────────────────────────────── */
-.actions-scroll { max-height: 660px; overflow-y: auto; margin: 0 -6px; padding: 0 6px; }
+.actions-scroll { flex: 1 1 auto; max-height: 660px; overflow-y: auto; margin: 0 -6px; padding: 0 6px; }
 .act-group { margin-bottom: 4px; }
 .act-group:last-child { margin-bottom: 0; }
 .act-head {

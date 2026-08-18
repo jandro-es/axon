@@ -332,7 +332,7 @@ export function GraphCard({ graph, simEdges, onToggleSim, vault, span }) {
         <span className="chip">{vault ? 'click a note to open it in Obsidian' : 'scroll to zoom · drag to pan'}</span>
       </div>
 
-      <div className="graph-wrap" ref={wrapRef} style={{ height: 560 }}>
+      <div className="graph-wrap" ref={wrapRef}>
         <svg
           ref={svgRef}
           viewBox={`0 0 ${box.w} ${box.h}`}

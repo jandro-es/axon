@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cards in a row now share a height.** 1.3.8's grid let every card keep its
+  natural height, so side-by-side cards ended at different points and the page
+  read as ragged — Vault against Token Budget, Token spend against Recent
+  automations, Ingestion against Activity, and the same on Tokens, Actions,
+  Knowledge and Graph. Cards in a row now stretch to match, and the spare height
+  goes *into* the content rather than being left as a void: chart wells hand
+  their height to the plot, the Activity feed and the graph fill their card, and
+  a tile grid centres its rows instead of growing 240px-tall tiles.
+
 ## [1.3.8] — 2026-08-18
 
 **The dashboard catches up with the app.** A minor release: no schema change

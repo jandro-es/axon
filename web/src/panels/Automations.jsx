@@ -99,7 +99,7 @@ export function RunStats({ runs, span }) {
             <Tile label="Success rate" value={rate == null ? '—' : rate} unit={rate == null ? '' : '%'} sub="excludes skips" />
             <Tile label="Tokens" value={kfmt(tokens)} />
           </div>
-          <Well><div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Well fill minHeight={180}><div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
             <div style={{ width: 150, height: 150, flex: '0 0 auto' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -110,8 +110,8 @@ export function RunStats({ runs, span }) {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div style={{ flex: 1, minWidth: 260 }}>
-              <ResponsiveContainer width="100%" height={160}>
+            <div style={{ flex: 1, minWidth: 260, alignSelf: 'stretch', minHeight: 160 }}>
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={daily} margin={{ left: -16, right: 8, top: 6, bottom: 0 }}>
                   <CartesianGrid vertical={false} stroke={p.grid} />
                   <XAxis dataKey="day" tickFormatter={shortDay} fontSize={11} tickLine={false} axisLine={false} minTickGap={22} />

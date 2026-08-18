@@ -59,7 +59,7 @@ export function ActivityCard({ live, initial, span, height }) {
         <input className="input" placeholder="Filter events…" value={q} onChange={(e) => setQ(e.target.value)}
                aria-label="Filter events" />
       </div>
-      <div className="feed" style={height ? { maxHeight: height } : undefined}>
+      <div className="feed grow-fill" style={height ? { maxHeight: height } : { minHeight: 240, maxHeight: 470 }}>
         {shown.map((e, i) => (
           <div className={`evt lvl-${e.level}`} key={`${evtKey(e)}-${i}`}>
             <span className="t">{fmtTime(e.ts)}</span>

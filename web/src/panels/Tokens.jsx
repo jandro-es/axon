@@ -45,7 +45,7 @@ export function BudgetCard({ usage, span }) {
       meta={paused ? `guard paused ≥ ${u.guard_pct}%` : 'guard armed'}
       span={span}
     >
-      <div className="gauges">
+      <div className="gauges grow-fill">
         <Gauge cap="Today" pct={u.day_pct} paused={paused} />
         <Gauge cap="This week" pct={u.week_pct} paused={paused} />
         <div className="gauge-info">
@@ -88,8 +88,8 @@ export function TokenTrend({ tokens, span, title = 'Token spend', meta }) {
       {daily.length === 0 ? (
         <Empty>No Claude usage in this range. Spend lands here as automations run.</Empty>
       ) : (
-        <Well>
-          <ResponsiveContainer width="100%" height={250}>
+        <Well fill minHeight={260}>
+          <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={daily} margin={{ top: 6, right: 8, bottom: 0, left: -8 }}>
               <defs>
                 {[['gIn', p.signal2, 0.55], ['gOut', p.signal1, 0.6], ['gCr', p.signal3, 0.5], ['gCw', p.warn, 0.45]].map(([id, c, o]) => (
@@ -122,7 +122,7 @@ export function DonutCard({ title, data, span }) {
   return (
     <Card title={title} meta={kfmt(total)} span={span}>
       {data.length === 0 ? <Empty>Nothing recorded in this range.</Empty> : (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div className="grow-fill" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <div style={{ width: 168, height: 168, flex: '0 0 auto' }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -165,8 +165,8 @@ export function TokensByOpModel({ tokens, span }) {
   return (
     <Card title="Spend by automation × model" meta={`${keys.length} streams`} span={span}>
       {rows.length === 0 ? <Empty>No token spend in this range.</Empty> : (
-        <Well>
-          <ResponsiveContainer width="100%" height={260}>
+        <Well fill minHeight={280}>
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={rows} margin={{ top: 6, right: 8, bottom: 0, left: -8 }}>
               <CartesianGrid vertical={false} stroke={p.grid} />
               <XAxis dataKey="day" tickFormatter={shortDay} fontSize={11} tickLine={false} axisLine={false} minTickGap={24} />
@@ -202,7 +202,7 @@ export function TokenTotals({ tokens, span }) {
   const hit = served > 0 ? Math.round((cacheRead / served) * 100) : 0
   return (
     <Card title="Totals" meta="this range" span={span}>
-      <div className="tiles">
+      <div className="tiles grow-fill">
         <Tile label="Billed" value={kfmt(input + output)} accent sub="input + output" />
         <Tile label="Input" value={kfmt(input)} />
         <Tile label="Output" value={kfmt(output)} />

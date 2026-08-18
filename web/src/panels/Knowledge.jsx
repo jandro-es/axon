@@ -24,7 +24,7 @@ export function VaultTiles({ vault, ingestion, growth, span, loading }) {
   return (
     <Card title="Vault" meta={vault ? 'derived from Markdown' : ''} span={span}>
       {loading && !vault ? <Skeleton h="tiles" /> : (
-        <div className="tiles">
+        <div className="tiles grow-fill">
           <Tile label="Notes" value={num(v.notes)} accent sub={dNotes ? `+${num(dNotes)} in range` : undefined} />
           <Tile label="Links" value={num(v.links)} />
           <Tile label="Words" value={kfmt(v.words || 0)} sub={dWords ? `+${kfmt(dWords)} in range` : undefined} />
@@ -44,8 +44,8 @@ export function GrowthCard({ growth, span }) {
   return (
     <Card title="Vault growth" meta={rows.length ? `${rows.length} days` : ''} span={span}>
       {rows.length < 2 ? <Empty>Growth appears once your notes span more than one day in this range.</Empty> : (
-        <Well>
-          <ResponsiveContainer width="100%" height={220}>
+        <Well fill minHeight={240}>
+          <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={rows} margin={{ top: 6, right: 6, bottom: 0, left: -8 }}>
               <defs>
                 <linearGradient id="gNotes" x1="0" y1="0" x2="0" y2="1">
@@ -86,8 +86,8 @@ export function IngestTrend({ series, span }) {
       {rows.length === 0 ? (
         <Empty>Nothing ingested in this range. Add a source with <code>axon ingest &lt;url&gt;</code>.</Empty>
       ) : (
-        <Well>
-          <ResponsiveContainer width="100%" height={240}>
+        <Well fill minHeight={240}>
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={rows} margin={{ top: 6, right: 6, bottom: 0, left: -12 }}>
               <CartesianGrid vertical={false} stroke={p.grid} />
               <XAxis dataKey="day" tickFormatter={shortDay} fontSize={11} tickLine={false} axisLine={false} minTickGap={20} />
@@ -119,8 +119,8 @@ export function FoldersCard({ graph, span }) {
   return (
     <Card title="Notes by folder" meta={`${data.length} folders`} span={span}>
       {data.length === 0 ? <Empty>No notes indexed yet. Run <code>axon reindex</code> to rebuild from Markdown.</Empty> : (
-        <Well>
-          <ResponsiveContainer width="100%" height={Math.max(130, data.length * 30)}>
+        <Well fill minHeight={Math.max(150, data.length * 32)}>
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} layout="vertical" margin={{ left: 4, right: 14, top: 2, bottom: 2 }}>
               <XAxis type="number" hide allowDecimals={false} />
               <YAxis type="category" dataKey="name" width={110} fontSize={11} tickLine={false} axisLine={false} />

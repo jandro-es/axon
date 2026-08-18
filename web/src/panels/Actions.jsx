@@ -81,7 +81,7 @@ export function ActionsTab() {
   return (
     <>
       <Card title="Actions" meta={`${num(c.open || 0)} open`} span="span-8">
-        <div className="tiles">
+        <div className="tiles grow-fill">
           <Tile label="Open" value={num(c.open || 0)} accent />
           <Tile label="Overdue" value={num(c.overdue || 0)} sub={c.overdue > 0 ? 'needs a decision' : 'none'} />
           <Tile label="Today" value={num(c.today || 0)} />
@@ -90,8 +90,8 @@ export function ActionsTab() {
       </Card>
 
       <Card title="Completions" meta="last 30 days" span="span-4">
-        <Well flush>
-          <ResponsiveContainer width="100%" height={140}>
+        <Well flush fill minHeight={150}>
+          <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data.trend || []} margin={{ top: 6, right: 6, bottom: 0, left: -12 }}>
               <defs>
                 <linearGradient id="gDone" x1="0" y1="0" x2="0" y2="1">

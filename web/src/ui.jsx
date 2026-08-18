@@ -12,14 +12,25 @@ export function Card({ title, meta, span, children, className = '' }) {
           {meta != null && meta !== '' && <span className="meta">{meta}</span>}
         </div>
       )}
-      {children}
+      <div className="card-body">{children}</div>
     </section>
   )
 }
 
 // Charts never sit on glass — they get an opaque well inside the card, the
 // same rule Companion applies with `.axonCard()` (PRD §4).
-export const Well = ({ children, flush }) => <div className={`well${flush ? ' flush' : ''}`}>{children}</div>
+//
+// `fill` makes the well absorb the height a stretched card has spare and hand
+// it to the chart, so cards in a row end level without leaving a gap inside
+// the shorter one. `minHeight` is the floor the plot never shrinks past.
+export const Well = ({ children, flush, fill, minHeight }) => (
+  <div
+    className={`well${flush ? ' flush' : ''}${fill ? ' grow-fill' : ''}`}
+    style={minHeight ? { minHeight } : undefined}
+  >
+    {children}
+  </div>
+)
 
 export function Tile({ label, value, unit, accent, sub }) {
   return (
