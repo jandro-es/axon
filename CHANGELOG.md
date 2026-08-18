@@ -6,8 +6,55 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **The dashboard wears the same glass as the Companion, and now has a light
+  mode.** (ADR-037, FR-177…FR-183.) The web UI was a 2026-06 dark-only skin
+  sitting next to a menu-bar app built on Liquid Glass; two surfaces onto one
+  daemon looked like two products.
+  - **Appearance: system (default), light, dark** — persisted, resolved in one
+    place, and applied *before first paint* so a dark reload never flashes
+    white. While set to system it follows the OS live.
+  - **One material language.** Translucent layered surfaces over a tinted
+    canvas, one corner radius, the teal→violet signal accent in both themes.
+    Two rules copied verbatim from Companion's `Glass.swift`: charts never sit
+    on glass (every plot gets an opaque well), and reduced transparency
+    *replaces* glass with an opaque fill rather than dimming it. Reduced motion
+    and increased contrast are honoured too.
+  - **One time range** (24h/7d/30d/All) across every series, client-side, with
+    exports still whole-series and saying so.
+  - **`⌘K` command palette** plus `1`–`9`, `/`, `R`, `T`, `?` shortcuts — none
+    of which is the only route to anything.
+  - **Daemon status sheet**: version and available update, uptime, database,
+    embeddings provider/model/dim, the daemon's resolved `claude` path, vault,
+    guard state, and copy-diagnostics — all of it already in `/health` and none
+    of it previously shown.
+  - **A "Needs you" panel** on the Overview: pending proposals, failed runs, a
+    paused guard, inbox backlog, embed queue, available update — each row
+    deep-linking to the tab that resolves it.
+  - **The knowledge graph is a map now**: a deterministic force layout (so a
+    polled refresh doesn't reshuffle it), wheel zoom, drag pan, neighbourhood
+    highlighting, click-to-open in Obsidian, and a **Hubs & orphans** panel for
+    what a force map answers badly. Rendering is capped at the 400
+    best-connected notes of the current filter, stated in the header.
+  - **Panel upgrades**: per-automation reliability (runs, skips, mean duration,
+    tokens, success rate, last run) and runs-per-day by status; a newest-first
+    Activity feed with level/text filters and a pause that keeps the backlog
+    count; Focus/All/Someday views and a filter on Actions; note-path
+    autocomplete and walk-the-neighbourhood on Related; a cache-hit rate on
+    Tokens; toasts for errors on the live stream; skeletons on first load; and
+    empty states that name the command that fills them.
+  - Built with **no new frontend dependency** — the graph, palette, toasts and
+    icons are local, so the embedded SPA still needs no network.
+
 ### Changed
 
+- **`GET /health` carries `vault`**, the vault folder's basename (never its
+  path, absent when no vault is wired) — the same value `GET /api/actions` has
+  carried since 1.2.5. It is what lets any panel that names a note link it into
+  Obsidian.
+- **`npm run dev` honours `AXON_DASHBOARD_PORT`**, so the dev server can be
+  aimed at a scratch profile instead of the live daemon on :7777.
 - **`docs/GUIDE.md` no longer teaches the command that caused the bug.** §13
   still said `launchctl load <plist>`, which exits 0 having done nothing when
   the label is already loaded. It now uses the `bootstrap` domain form, states

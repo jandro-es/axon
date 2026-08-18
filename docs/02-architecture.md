@@ -640,6 +640,54 @@ new MCP tool. (Spec:
 `docs/superpowers/specs/2026-07-10-h2-deep-research-design.md`; FR-174, FR-175,
 FR-176.)
 
+### ADR-037 — One material language across Companion and dashboard; no new frontend dependencies *(accepted — built)*
+
+**Status:** Accepted (2026-08-18, built the same day).
+
+**Context:** The macOS Companion shipped wearing Liquid Glass; the web dashboard
+still wore its original dark-only skin. Two surfaces onto the same daemon that
+look unrelated read as two products. Separately, the SPA's dependency list —
+React + Recharts, and nothing else — is a deliberate floor (doc 02 scope
+guardrails require an ADR before a third), and the obvious ways to modernise the
+dashboard all arrive carrying one: a graph library, a component kit, an icon
+font.
+
+**Decision:** (1) **The dashboard adopts the Companion's material rules
+verbatim.** One glass definition for every raised surface; **charts never on
+glass** — each plot sits in an opaque well inside its glass frame, for the same
+reason `ChartCard` is `.axonCard()` and not `.axonGlass()`; and
+`prefers-reduced-transparency` **replaces** glass with an opaque fill rather than
+dimming it, mirroring `Glass.swift`'s treatment of the setting as accessibility,
+not preference. (2) **Three appearance states, one resolution.** system (default)
+/ light / dark, persisted in `localStorage`, resolved to a concrete value in one
+function and written to `<html data-theme>`, with an inline pre-paint bootstrap
+in `index.html` so a dark reload never flashes white. The chart palette is
+**mirrored in JS** because Recharts takes literal colours; that duplication is
+accepted and documented at both sites. (3) **No new dependency.** The
+force-directed graph is a small deterministic simulation in the panel itself
+(seeded phyllotaxis, springs, repulsion, fit-to-frame) instead of d3-force; the
+command palette, toasts, and modal plumbing are local components; icons are
+inline SVG, so the page still works with no network at all. (4) **One Go
+change:** `/health` gains `vault` — the vault folder's basename, the same value
+`GET /api/actions` has carried since 1.2.5 — so any panel naming a note can build
+an `obsidian://open` link. No new endpoint, no new mutation, no schema change.
+
+**Why:** the material rules are already written down and already tested against
+a real accessibility setting on the Swift side; copying them costs nothing and
+makes the two surfaces one product. Resolving the theme once removes the class
+of bug where CSS and JS disagree about which theme is on screen. Refusing the
+dependency keeps the offline, single-binary story intact — an embedded SPA that
+reaches for a CDN font or a 300 KB graph lib is a regression in what AXON
+promises, and a hand-rolled layout is ~60 lines we can read.
+
+**Trade-offs:** the layout is O(n²), so rendering is capped at the 400
+best-connected notes of the current filter — **stated in the card header**, never
+silent (a bigger vault needs the folder/tag filters, which is how the panel was
+always meant to be driven). The palette lives in two places (CSS tokens and a JS
+map) and must be edited in both. `backdrop-filter` costs GPU on very large
+windows; the reduced-transparency path removes it entirely, which doubles as the
+escape hatch. (FR-177…FR-183.)
+
 ### ADR-027 — Local reranking as a retrieval primitive (outside the chokepoint) *(accepted — built)*
 
 **Status:** Accepted (2026-07-05, roadmap 1.1 B2).

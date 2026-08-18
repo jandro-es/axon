@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"github.com/jandro-es/axon/internal/events"
 	"github.com/jandro-es/axon/internal/search"
 	"github.com/jandro-es/axon/internal/tokens"
+	"github.com/jandro-es/axon/internal/vault"
 )
 
 func newTestServer(t *testing.T) (*Server, *sql.DB, *events.Bus, tokens.Manager) {
@@ -82,6 +85,40 @@ func TestHealthCarriesStartedAt(t *testing.T) {
 	}
 	if !got.Equal(started.Truncate(time.Second)) {
 		t.Errorf("started_at = %v, want %v", got, started.Truncate(time.Second))
+	}
+}
+
+// The SPA builds obsidian://open deep links from every panel that names a note,
+// which needs the vault's folder name — not its path. Health carries it when a
+// vault is wired, and omits it entirely when one is not, so the client can tell
+// "no vault" from "a vault called empty string" and fall back to plain text.
+func TestHealthCarriesVaultName(t *testing.T) {
+	srv, _, _, _ := newTestServer(t)
+
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "http://127.0.0.1/health", nil))
+	var out map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := out["vault"]; ok {
+		t.Errorf("health carries a vault name with no vault wired: %v", out["vault"])
+	}
+
+	dir := filepath.Join(t.TempDir(), "Second Brain")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	srv.cfg.Vault = vault.NewFS(dir)
+
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "http://127.0.0.1/health", nil))
+	out = map[string]any{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out["vault"] != "Second Brain" {
+		t.Errorf("health vault = %v, want %q", out["vault"], "Second Brain")
 	}
 }
 

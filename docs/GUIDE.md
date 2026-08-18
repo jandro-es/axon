@@ -706,10 +706,41 @@ Views (all live over SSE, updating within seconds):
   Disable it per profile with `dashboard.related_enabled: false`.
 - **Ingestion** — sources and embedding-queue depth.
 - **Vault growth** — notes, links, words, inbox backlog.
-- **Knowledge graph** — notes + wikilinks, filterable by folder/tag.
-- **Activity feed** — the live event log.
+- **Knowledge graph** — notes + wikilinks, filterable by folder/tag. Scroll to
+  zoom, drag to pan, hover to light up a note's neighbourhood, click to open it
+  in Obsidian. Beside it, **Hubs & orphans** lists your most-linked notes and
+  every note nothing links to. Big vaults render the 400 best-connected notes of
+  the current filter — the header says so; narrow with the folder/tag filters.
+- **Actions** — your open tasks in GTD buckets, with Focus / All open / Someday
+  views and a **Done** button that ticks the checkbox in the source note.
+- **Activity feed** — the live event log, newest first, filterable by level and
+  text, and pausable while you read.
 
-Every chart's dataset exports as CSV/JSON via per-card download links.
+The Overview leads with **Needs you**: pending proposals, failed runs, a paused
+budget guard, inbox backlog, embedding queue, and any available update — each
+row jumping to the tab that resolves it.
+
+Every chart's dataset exports as CSV/JSON via per-card download links. Exports
+are always the **whole series the daemon holds**, not the range on screen.
+
+### Getting around
+
+- **Appearance** — the switch at the top right picks **system** (the default,
+  which follows macOS or your browser), **light**, or **dark**. Your choice is
+  remembered per browser. Turn on Reduce Transparency and every translucent
+  surface becomes opaque; Reduce Motion stops the animations.
+- **Range** — one control (24h / 7d / 30d / All) sets the window for every chart
+  on every tab.
+- **Keyboard** — `⌘K` (`Ctrl-K` on Linux) opens the command palette; `1`–`9`
+  jump to tabs, `/` focuses the current view's filter, `R` cycles the range, `T`
+  cycles appearance, `?` lists the shortcuts, `Esc` closes whatever is open.
+  Everything the palette does is also a click somewhere.
+- **Status** — the profile pill opens a sheet with version and available update,
+  uptime, database, embeddings model, the daemon's resolved `claude` path, and
+  vault name, plus **Copy diagnostics** for when you file an issue.
+- **Deep links** — every note name on the dashboard opens the note in Obsidian.
+  `#review`, `#actions`, `#graph` and the other tab names work as URL fragments,
+  so you can bookmark a tab (this is how the Companion app opens one).
 
 There are also **in-vault Dataview dashboards** (`.axon/dashboards/`) you can open
 inside Obsidian for inbox/projects/knowledge/link-suggestions.

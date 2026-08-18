@@ -24,10 +24,21 @@
 | **Vault growth** | notes, links, words over time; inbox backlog; review-queue size | `notes`/`links` snapshots |
 | **Knowledge graph** | interactive graph: nodes=notes, edges=wikilinks (+ optional similarity edges, toggle); filter by folder/tag; click → note metadata | `links` + `vec_chunks` neighbours |
 | **Activity feed** | live structured event log; filter by kind/level | `events` (SSE) |
-| **Actions** (T3) | stat tiles (open/overdue/today/done-7d), 30-day completion trend, and the filterable open list grouped by GTD bucket with per-row **done** buttons | `actions` table via `GET /api/actions` |
+| **Actions** (T3) | stat tiles (open/overdue/today/done-7d), 30-day completion trend, and the Focus/All/Someday list grouped by GTD bucket with per-row **done** buttons | `actions` table via `GET /api/actions` |
+| **Needs you** (ADR-037) | the Overview's lead panel: pending review proposals, failed runs in range, a paused budget guard, inbox backlog, embedding queue, available update — each row deep-linking to the tab that resolves it | composed client-side from the endpoints above |
+| **Hubs & orphans** (ADR-037) | most-linked notes and every unlinked one, beside the graph | `links` via `/api/graph` |
 
-- **Knowledge graph rendering:** D3-force or a lightweight graph lib; cap rendered nodes with filtering for big vaults; similarity edges computed from top-N vector neighbours above a threshold (cached).
-- **Data export (C):** any chart's series downloadable as CSV/JSON (FR-64).
+- **Knowledge graph rendering (ADR-037):** a small **deterministic** force layout inside the panel — seeded phyllotaxis, springs + repulsion + anisotropic gravity, fitted to the frame's aspect — deliberately **not** a graph library (the SPA's dependency floor is React + Recharts). Deterministic because `/api/graph` is polled: the same nodes and edges must produce the same picture, or the map twitches under the pointer. Wheel zoom, drag pan, hover neighbourhood highlighting, click-to-open in Obsidian. Rendering is capped at the **400 best-connected** notes of the current filter, and the cap is **stated in the card header** — never a silent truncation. Similarity edges are computed from top-N vector neighbours above a threshold (cached).
+- **Data export (C):** any chart's series downloadable as CSV/JSON (FR-64). Exports are always the **whole series the daemon holds**, never the on-screen range — every export control says so in its tooltip.
+
+### Presentation (ADR-037, FR-177…FR-183)
+
+- **Material.** One glass definition for every raised surface, shared with the macOS Companion so the two surfaces read as one product. **Charts never sit on glass** — each plot gets an opaque well inside its glass frame (translucency behind a plot makes gridlines and thin series fight whatever is behind the window). `prefers-reduced-transparency` **replaces** glass with an opaque fill rather than dimming it; `prefers-reduced-motion` drops the entrance/sheen/pulse animations; `prefers-contrast: more` firms every border.
+- **Appearance.** system (default) / light / dark, persisted in `localStorage` (`axon.theme`), resolved to a concrete value in one place and written to `<html data-theme>`, applied pre-paint by an inline bootstrap in `index.html`. The chart palette is mirrored in JS because Recharts takes literal colours.
+- **Range.** One control (24h/7d/30d/All, persisted as `axon.range`) filters every series client-side over data already fetched.
+- **Keyboard.** `⌘K`/`Ctrl-K` command palette; `1`–`9` tabs; `/` focus filter; `R` range; `T` appearance; `?` shortcuts; `Esc` closes. Suppressed while typing. Every command is also reachable by pointer.
+- **Deep links.** Any panel naming a note links it as `obsidian://open` when `/health` reports a vault name, and degrades to plain text when it does not.
+- **Dev.** `npm run dev` proxies the API/SSE to `127.0.0.1:7777`, or to `AXON_DASHBOARD_PORT` when set (so a scratch profile can be targeted instead of the live one).
 
 ## 3. Event model
 
@@ -60,7 +71,7 @@ Written as Markdown notes in `.axon/dashboards/` (and/or `MOCs/`), e.g.:
 These let the human work entirely inside Obsidian while the operational dashboard handles the system telemetry.
 
 ## 5. Health & diagnostics
-- `GET /health` → daemon, DB, Ollama, scheduler, last successful run per automation; plus the active embeddings provider/model/dim, the running `version`, and `latest_version`/`update_available` from the daily cached release check (never a live network call). Also carries `ask_enabled`/`capture_enabled`/`related_enabled` so the SPA hides disabled tabs.
+- `GET /health` → daemon, DB, Ollama, scheduler, last successful run per automation; plus the active embeddings provider/model/dim, the running `version`, and `latest_version`/`update_available` from the daily cached release check (never a live network call). Also carries `ask_enabled`/`capture_enabled`/`related_enabled`/`actions_enabled` so the SPA hides disabled tabs, and `vault` — the vault folder's **basename**, never its path (ADR-037/FR-181), absent when no vault is wired — which the SPA turns into `obsidian://open` deep links. Surfaced in the header's status sheet, with copy-diagnostics.
 - Powers `axon doctor` and a header status pill on the dashboard.
 - `GET /api/related?path=…` → `{related:[{path, similarity}]}`, the **Related** tab's data source and the documented loopback endpoint an Obsidian sidebar plugin can consume (R8/FR-150). **Zero model calls** — pure vector math over the ANN seam. Gated by `dashboard.related_enabled` (default-ON) + an `X-Axon-Related` header (CORS-preflight-forcing) on top of the loopback/Host guard.
 
@@ -68,4 +79,6 @@ These let the human work entirely inside Obsidian while the operational dashboar
 - Triggering an ingest or automation shows up in the activity feed and the relevant chart within ≤5s (FR-60/FR-62/S4).
 - Token chart breaks spend down by automation and model; budget gauge reflects `axon status` (FR-60).
 - The knowledge graph renders nodes/edges from the vault and filters by tag/folder (FR-61).
-- Dashboard binds to localhost and exposes no secrets (FR-63/NFR-05).
+- Dashboard binds to localhost and exposes no secrets (FR-63/NFR-05) — `vault` is a folder name, not a path.
+- Appearance survives a reload with no flash, follows the OS while set to *system*, and both themes are complete (FR-177).
+- With reduced transparency enabled, no surface is translucent (FR-178).

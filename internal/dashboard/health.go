@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"net/http"
+	"path/filepath"
 )
 
 // handleHealth reports daemon/DB health plus the last run status per automation.
@@ -25,6 +26,14 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	out["capture_enabled"] = s.cfg.CaptureEnabled
 	out["related_enabled"] = s.cfg.RelatedEnabled
 	out["actions_enabled"] = s.cfg.ActionsEnabled
+	// The Obsidian vault name (its folder basename, never the path) lets the
+	// SPA build `obsidian://open?vault=…&file=…` deep links from any panel that
+	// shows a note. Same value, same reasoning as GET /api/actions, which has
+	// carried it since 1.2.5; absent when no vault is wired, and every caller
+	// degrades to plain text.
+	if s.cfg.Vault != nil {
+		out["vault"] = filepath.Base(s.cfg.Vault.Root())
+	}
 
 	if s.cfg.Health != nil {
 		for k, v := range s.cfg.Health(ctx) {
