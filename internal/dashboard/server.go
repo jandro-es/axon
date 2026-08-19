@@ -121,13 +121,19 @@ func (s *Server) guardHost(next http.Handler) http.Handler {
 	})
 }
 
-// ListenAndServe binds the configured (loopback) address and serves until ctx
-// is cancelled. Every request's context derives from ctx (via BaseContext), so
-// cancelling ctx promptly unblocks in-flight SSE handlers instead of waiting out
-// the shutdown grace period.
-func (s *Server) ListenAndServe(ctx context.Context) error {
+// Listen binds the configured (loopback) address. It is separate from Serve so
+// the daemon can fail fast on a bind error — a taken port means another daemon
+// is already there — instead of discovering it inside a background goroutine.
+func (s *Server) Listen() (net.Listener, error) {
+	return net.Listen("tcp", s.addr)
+}
+
+// Serve serves ln until ctx is cancelled, closing ln on the way out. Every
+// request's context derives from ctx (via BaseContext), so cancelling ctx
+// promptly unblocks in-flight SSE handlers instead of waiting out the shutdown
+// grace period.
+func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	srv := &http.Server{
-		Addr:              s.addr,
 		Handler:           s.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		BaseContext:       func(net.Listener) context.Context { return ctx },
@@ -138,10 +144,19 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		defer cancel()
 		_ = srv.Shutdown(shutCtx)
 	}()
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 		return err
 	}
 	return nil
+}
+
+// ListenAndServe binds and serves in one call.
+func (s *Server) ListenAndServe(ctx context.Context) error {
+	ln, err := s.Listen()
+	if err != nil {
+		return err
+	}
+	return s.Serve(ctx, ln)
 }
 
 // jsonHandler wraps a data function into an HTTP handler emitting JSON.

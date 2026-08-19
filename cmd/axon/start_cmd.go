@@ -47,6 +47,12 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 			st := ui.For(out)
 			fmt.Fprintln(out, st.Header(ui.IconRocket, fmt.Sprintf("axon start — profile %q", deps.name)))
 
+			// Refuse to run as root over a user-owned vault: root-created notes
+			// come out 0600 root-owned and lock the real daemon out of them.
+			if err := checkNotRoot(deps.paths.DataDir, deps.paths.VaultPath); err != nil {
+				return err
+			}
+
 			// Refuse to double-start: a second daemon on the same profile would
 			// double-run every automation (the engine's locks are in-process).
 			if err := checkNotRunning(deps.paths.DataDir); err != nil {
@@ -149,10 +155,20 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 						return h
 					},
 				})
+				// Bind before the scheduler starts, and treat a failure as fatal.
+				// The usual cause is another daemon already holding the port —
+				// exactly the case the pidfile guard exists to prevent — and
+				// carrying on would leave a second, invisible scheduler writing
+				// the vault with no dashboard to notice it by.
+				ln, lerr := dash.Listen()
+				if lerr != nil {
+					return fmt.Errorf("dashboard: %w (another daemon may already be running; "+
+						"use --no-dashboard to run headless)", lerr)
+				}
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					if err := dash.ListenAndServe(ctx); err != nil {
+					if err := dash.Serve(ctx, ln); err != nil {
 						fmt.Fprintf(out, "%s dashboard: %v\n", st.Yellow(ui.IconWarn), err)
 					}
 				}()

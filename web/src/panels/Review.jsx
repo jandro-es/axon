@@ -38,7 +38,9 @@ export function ReviewTab({ span }) {
 
   return (
     <Card title="Review queue" meta={`${pending.length} pending`} span={span}>
-      {error && <Empty>The daemon isn’t answering. The queue reappears when it does.</Empty>}
+      {error && <Empty>{typeof error === 'string'
+        ? error
+        : 'The daemon isn’t answering. The queue reappears when it does.'}</Empty>}
       <div className="list">
         {pending.map((it) => (
           <div className="li review-item" key={it.id}>
