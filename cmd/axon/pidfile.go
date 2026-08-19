@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -69,7 +70,19 @@ func processAlive(pid int) bool {
 	if err != nil {
 		return false
 	}
-	return proc.Signal(syscall.Signal(0)) == nil
+	return signalErrMeansAlive(proc.Signal(syscall.Signal(0)))
+}
+
+// signalErrMeansAlive interprets the result of signal 0. Only "no such process"
+// means dead: EPERM means the process is running but owned by another user —
+// a daemon someone started with sudo, say. Reading that as dead is how two
+// daemons end up on one profile, and the root one then creates vault files the
+// real owner cannot read (see checkNotRoot).
+func signalErrMeansAlive(err error) bool {
+	if err == nil {
+		return true
+	}
+	return errors.Is(err, syscall.EPERM)
 }
 
 // signalStop asks the process to terminate gracefully (SIGTERM), falling back to
