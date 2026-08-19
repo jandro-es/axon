@@ -3,9 +3,12 @@ import { useEffect, useRef, useState } from 'react'
 /* ── data ─────────────────────────────────────────────────────────────────
    useFetch polls a JSON endpoint. Failures (network, non-2xx) are surfaced
    via `error` instead of being swallowed — a dead daemon must look degraded,
-   not like healthy-but-empty. The last good data is kept while errored, and
-   `loading` is true only until the first answer, so panels can show a
-   skeleton once rather than flashing one on every poll.
+   not like healthy-but-empty. `error` is `true` when the daemon could not be
+   reached at all, or the daemon's own message when it answered with a non-2xx;
+   both are truthy, so `error &&` checks read the same either way. The last good
+   data is kept while errored, and `loading` is true only until the first
+   answer, so panels can show a skeleton once rather than flashing one on every
+   poll.
 */
 export function useFetch(url, interval = 5000) {
   const [state, setState] = useState({ data: null, error: false, loading: true })
@@ -14,9 +17,26 @@ export function useFetch(url, interval = 5000) {
     setState((s) => ({ ...s, loading: s.data == null }))
     const load = () =>
       fetch(url)
-        .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+        .then(async (r) => {
+          if (!r.ok) {
+            // The daemon DID answer — it just failed. Carry what it said, so a
+            // fixable, specific problem (an unreadable vault file, say) is not
+            // reported to the user as "not answering".
+            const body = (await r.text().catch(() => '')).trim()
+            const e = new Error(body || `HTTP ${r.status}`)
+            e.fromDaemon = true
+            throw e
+          }
+          return r.json()
+        })
         .then((d) => alive && setState({ data: d, error: false, loading: false }))
-        .catch(() => alive && setState((s) => ({ data: s.data, error: true, loading: false })))
+        .catch((e) => alive && setState((s) => ({
+          data: s.data,
+          // A string means the daemon replied with this message; `true` means
+          // it could not be reached at all.
+          error: e?.fromDaemon ? e.message : true,
+          loading: false,
+        })))
     load()
     const id = setInterval(load, interval)
     return () => { alive = false; clearInterval(id) }
