@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **A daemon started with `sudo` no longer locks you out of your own vault.**
+  Root writes never fail, so a stray `sudo axon start` quietly created every new
+  note, review-queue file and Claude config entry owned by `root` and mode
+  `0600` — after which the real daemon could not read them, and the dashboard's
+  Review tab and the `heartbeat` automation both died on "permission denied".
+  Three things allowed it, all now closed:
+  - `axon start` refuses to run as root when the data dir or vault belongs to
+    another user, naming the directory and its owner.
+  - The single-instance guard no longer mistakes a daemon owned by another user
+    for a dead one. Signal 0 returns `EPERM` for a live process that is not
+    yours, and that was being read as "not running", so a second daemon started
+    alongside the first.
+  - A dashboard bind failure is now fatal instead of a warning. A taken port
+    means another daemon already holds it; carrying on left an invisible second
+    scheduler writing the vault with no dashboard to notice it by. Use
+    `--no-dashboard` to run headless deliberately.
+- **The Review tab reports what actually went wrong.** Any failure used to read
+  "The daemon isn't answering", including a `500` carrying a precise, fixable
+  message. The daemon's own text is now shown when it answers; the unreachable
+  wording is kept for when it truly is.
+
 ## [1.3.9] — 2026-08-18
 
 **Level cards.** A patch on 1.3.8: presentation only — no Go change, no schema
