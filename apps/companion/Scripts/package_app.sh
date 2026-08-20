@@ -38,6 +38,21 @@ scratch_for() {
   if [[ ${#ARCH_LIST[@]} -gt 1 ]]; then echo "$ROOT/.build/arch-$1"; else echo "$ROOT/.build"; fi
 }
 
+# Never rebuild the bundle a live process is running from: today's build
+# replaces dist/Axon.app in place, and a Companion launched from there keeps
+# running 0.1.0 code over 0.2.0 bytes — Sparkle's installer then fails with
+# its generic "error occurred while running the updater" (found live, ISSUES
+# #4's first run). dist/ is pipeline output, not an install location; use
+# `make companion-install` to put the app in /Applications.
+RUNNING_FROM_DIST=$(pgrep -f "$ROOT/dist/.*\.app/Contents/MacOS/" || true)
+if [[ -n "$RUNNING_FROM_DIST" && -z "${FORCE_PACKAGE:-}" ]]; then
+  echo "ERROR: a Companion is running from $ROOT/dist (pid $RUNNING_FROM_DIST)." >&2
+  echo "  Quit it first (it would keep running stale code over the new bundle" >&2
+  echo "  and Sparkle updates from it fail), or set FORCE_PACKAGE=1." >&2
+  echo "  Install properly with: make companion-install" >&2
+  exit 1
+fi
+
 for ARCH in "${ARCH_LIST[@]}"; do
   # The Swift Build backend is load-bearing: it is what emits the per-module
   # .swiftconstvalues that appintentsmetadataprocessor consumes (CFR-92…95).

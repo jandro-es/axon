@@ -223,6 +223,12 @@ companion-test: ## run the AxonKit test suite
 companion-release: ## Developer ID sign + notarize + staple Companion (needs credentials)
 	@apps/companion/Scripts/sign-and-notarize.sh
 
+companion-install: ## copy the packaged Companion into /Applications (the runnable home; dist/ is pipeline output)
+	@test -d apps/companion/dist/Axon.app || { echo "no packaged app — run make companion or companion-release first"; exit 1; }
+	@pgrep -f "/Applications/Axon.app/Contents/MacOS/" >/dev/null && { echo "quit the running /Applications/Axon.app first"; exit 1; } || true
+	@ditto apps/companion/dist/Axon.app /Applications/Axon.app
+	@echo "installed /Applications/Axon.app ($$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' /Applications/Axon.app/Contents/Info.plist))"
+
 companion-appcast: ## sign the Sparkle appcast for the current release zip
 	@apps/companion/Scripts/make_appcast.sh
 
