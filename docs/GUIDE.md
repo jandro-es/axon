@@ -934,6 +934,7 @@ command deliberately does *not* do — is `docs/COMMANDS.md`. The profile system
 |---------|-------------|
 | `axon config validate` fails | A field is missing/invalid; the error names it. Compare against `axon.config.example.yaml`. |
 | `doctor` warns about `ANTHROPIC_API_KEY` | Unset it for subscription/enterprise — it diverts Claude Code to API billing. |
+| `doctor`'s `apple-fm` check warns about a licence | macOS 27's `fm` CLI needs a one-time machine-wide agreement: run `sudo fm license` yourself (AXON never agrees to terms for you). Nothing in AXON needs `fm` yet — the check is advance notice for the macOS 27 tier work (docs/21). |
 | `doctor`/init: Ollama not reachable | `ollama serve`, then `ollama pull <model>`. Search still works lexically meanwhile. |
 | Ingest says "0 embedded" | Ollama was unreachable; vectors are pending. Run `axon reindex --embeddings` once it's up. |
 | `dashboard-port` warn in doctor | Something that is *not* AXON holds the port — your own daemon answering there is a pass, not a warning. The check's fix line carries the `lsof` command to find the culprit; stop it, or change `dashboard.port`. |

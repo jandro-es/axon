@@ -6,7 +6,27 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **`doctor` knows about macOS 27's `fm` CLI.** (FR-191, docs/21 M1.) A new
+  advisory `apple-fm` check (macOS only) reports the Foundation Models CLI
+  posture: needs macOS 27 / not found / **licence not agreed** (the one
+  warning, with `↳ fix: sudo fm license` — a privileged machine-wide
+  agreement AXON never runs itself) / ready, with a capped summary of
+  `fm available`. The probe is bounded and parses ANSI-stripped output with
+  licence markers checked before the exit code, because `fm`'s pre-licence
+  exit codes are inconsistent (observed on 27.0: `available` exits 0 while
+  refusing). Nothing consumes `fm` yet — this is the detection groundwork for
+  the Apple-tier work.
+
 ### Fixed
+
+- **Reserved Apple model refs fail validation instead of misrouting.**
+  (FR-192.) A tier string like `apple:pcc` or `apple-fm:x` used to parse as a
+  Claude model string and would have been sent to `claude -p` verbatim.
+  Validation now rejects the colon-suffixed forms with an error naming
+  docs/21 M2, where their meaning gets decided. Bare `apple` (the shipped
+  on-device tier) is unchanged.
 
 - **`inbox-triage` runs on the classify tier, as documented.** The starter
   config seeded `model: routine` while the example config — and the

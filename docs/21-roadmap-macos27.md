@@ -50,7 +50,20 @@ seams** — never as a new path around the guarantees. Concretely:
 
 ## Slices *(suggested order)*
 
-### M1 — Detection & doctor (S) · candidate — not scheduled
+### M1 — Detection & doctor (S) · **Status: Shipped to `main` 2026-08-20 (FR-191/FR-192)**
+
+> **Built as specced** (`docs/superpowers/specs/2026-08-20-macos27-m1-detection-design.md`),
+> with one reconciliation the roadmap draft missed: the codebase **already
+> ships an `apple` on-device generation provider** (`agent.AppleFM`, Swift
+> helper on the FoundationModels framework, chokepoint-routed, classify-only).
+> M1 therefore added the missing piece — `fm` CLI awareness: `core.DetectFM`
+> six-state matrix + advisory `apple-fm` doctor check (license-pending is the
+> one WARN, `fix: sudo fm license`) — plus FR-192: `apple:<x>`/`apple-fm:<x>`
+> tier strings are now **rejected at validation** instead of silently parsing
+> as Claude model strings and misrouting to `claude -p`. Field finding baked
+> into the probe: `fm`'s pre-license exit codes are inconsistent (`available`
+> → 0, `--help` → 1), so state detection parses ANSI-stripped output with
+> license markers checked before the exec error.
 **Build:** advisory `doctor` checks: OS ≥ 27 and Apple silicon; `fm` binary
 present and answering (`fm available`); which models are usable
 (on-device / PCC). Config surface reserved but inert on older systems —
@@ -84,7 +97,12 @@ without failing the run; non-macOS builds unaffected.
 launches it on demand like the Ollama reachability pattern, TBD at design);
 OpenAI-compat completeness unknown; PCC quotas unpublished — treat as
 best-effort rung, never a dependency.
-**Open decisions:** `fm serve` vs shelling `fm respond` per call; whether PCC
+**Open decisions:** `fm serve` vs shelling `fm respond` per call; **transport
+& naming** (post-M1 reconciliation): the shipped `apple` tier already reaches
+the on-device model through its own Swift helper — M2 must decide whether the
+`fm`-backed path *replaces* that helper or sits beside it, and whether the
+reserved ref form becomes `apple:<variant>` or `apple-fm:<...>` (both rejected
+since FR-192, so nothing misroutes meanwhile); whether PCC
 is reachable from the work profile at all (recommendation: no — its egress
 posture needs its own review; PCC is Apple-operated compute, which
 `data_residency: local-only` arguably excludes).
