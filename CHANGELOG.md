@@ -8,6 +8,22 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **Siri and Shortcuts can talk to the vault.** (FR-198 + Companion
+  CFR-92…95, docs/21 M4 — reframed: Apple's MCP-in-App-Intents is not public
+  API yet, so these are plain App Intents, the layer that bridge will attach
+  to.) The daemon gains `GET /api/search` — a guarded, read-only hybrid
+  search endpoint (`/api/related`'s exact trust boundary, `search_enabled`
+  kill-switch, zero generative spend, `search_enabled` on `/health`,
+  CONTRACT §8b). The Companion (0.2.0) ships four App Intents with Siri
+  phrases: **Search Vault**, **Ask Vault** (through the existing guarded ask
+  endpoint and the chokepoint), **Check Tasks**, and **Capture Thought**
+  (the additive inbox funnel — creates, never edits). All pure-REST; a
+  stopped daemon answers with a calm "Axon isn't running" dialog; nothing is
+  indexed into Spotlight — the vault answers on demand only. Packaging now
+  extracts `Metadata.appintents` explicitly (Swift Build backend +
+  `appintentsmetadataprocessor`), without which Siri would silently see no
+  intents.
+
 - **Apple vision for image ingestion: `ingestion.vision: apple` and
   `apple:pcc`.** (FR-196/FR-197, ADR-038 amended.) The ADR-035 vision seam's
   `apple` slot — which since 1.3 returned "requires macOS 27, not yet

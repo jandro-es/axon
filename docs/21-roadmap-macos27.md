@@ -147,7 +147,7 @@ on a 27 machine; the same config on macOS 26 keeps today's actionable error;
 Swift API — if so, this routes through a small helper in the existing
 ADR-013 compiled-Swift-helper pattern (the OCR helper's sibling).
 
-### M4 — App Intents MCP: Siri & Spotlight (M) · **Status: In progress 2026-08-20, reframed (FR-198 + CFR-92…95)**
+### M4 — App Intents MCP: Siri & Spotlight (M) · **Status: Shipped to `main` 2026-08-20, reframed (FR-198 + CFR-92…95; Companion 0.2.0)**
 
 > **Reframed at design**: Apple's MCP-in-App-Intents is **not public API**
 > (verified against the macOS 27 SDK docs on a real 27.0 machine — the App
