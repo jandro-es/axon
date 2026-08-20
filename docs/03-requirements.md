@@ -278,6 +278,16 @@ seam — the client never works around it.**
 | FR-189 | M | **A `sudo`-started daemon cannot lock the vault (unreleased).** Root writes never fail, so a stray `sudo axon start` used to leave `root`-owned, mode-`0600` notes the real daemon could not read. Three gates close it: `axon start` refuses to run as root when the data dir or vault belongs to another user (naming the directory and owner); the single-instance guard treats signal-0 `EPERM` as "alive, not yours" instead of "dead" (so a second daemon never starts beside a live one owned by someone else); and a dashboard bind failure is **fatal**, not a warning — a taken port means another daemon holds it, and carrying on left an invisible second scheduler writing the vault. `--no-dashboard` remains the deliberate headless path. |
 | FR-190 | S | **The Review tab reports the daemon's own error (unreleased).** Any failure used to render as "the daemon isn't answering", including a 500 carrying a precise, fixable message. The daemon's text is shown when it answers; the unreachable wording is reserved for when it truly is unreachable. |
 
+### macOS 27 — detection (M1) *(in progress 2026-08-20)*
+
+FR-191/FR-192 graduate docs/21 M1; spec in
+`docs/superpowers/specs/2026-08-20-macos27-m1-detection-design.md`. No new ADR.
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-191 | S | **`fm` CLI detection matrix (docs/21 M1).** An advisory, darwin-only `apple-fm` doctor check reports exactly one of: OS < 27 (informational; the shipped on-device `apple` tier is unaffected), `fm` absent on ≥ 27, **license-pending** — the one WARN, carrying `Fix: sudo fm license` (AXON never runs it: privileged, machine-wide legal agreement) — ready (capped summary of `fm available`), or unresponsive. Detection parses **ANSI-stripped output, checking license markers before the exec error** because `fm`'s exit codes are inconsistent (observed: `available` → 0 while refusing, `--help` → 1); the probe is bounded (3 s + `WaitDelay`) with all persisted output capped, and a `sw_vers` failure degrades to probing rather than blocking. Never FAIL; absent entirely off macOS. |
+| FR-192 | S | **Reserved Apple ref forms rejected (docs/21 M1).** Config validation rejects any tier model string of the form `apple:<suffix>`, `apple-fm:<suffix>`, or bare `apple-fm` with an actionable error naming docs/21 M2 — today such strings silently parse as Claude model strings and would misroute to `claude -p`. Bare `apple` (the shipped on-device tier) is unchanged; the suffix naming decision is deliberately deferred to M2. |
+
 ### Session memory *(built 2026-07-04)*
 
 FR-97…FR-99 trace to ADR-021 and the spec in
