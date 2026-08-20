@@ -43,7 +43,9 @@ func TestDetectFMStates(t *testing.T) {
 			d.lookPath = func(string) (string, error) { return "", errors.New("not found") }
 		}), FMStateAbsent},
 		{"license pending, exit 0", fmDet("darwin", "arm64", func(d *fmDetector) {
-			d.runFM = func(context.Context, string, ...string) ([]byte, []byte, error) { return []byte(fmLicenseOutput), nil, nil }
+			d.runFM = func(context.Context, string, ...string) ([]byte, []byte, error) {
+				return []byte(fmLicenseOutput), nil, nil
+			}
 		}), FMStateLicensePending},
 		// Marker beats error: fm's exit codes are inconsistent.
 		{"license pending, nonzero exit", fmDet("darwin", "arm64", func(d *fmDetector) {
@@ -63,7 +65,9 @@ func TestDetectFMStates(t *testing.T) {
 		}), FMStateReady},
 		{"ready", fmDet("darwin", "arm64", nil), FMStateReady},
 		{"unresponsive", fmDet("darwin", "arm64", func(d *fmDetector) {
-			d.runFM = func(context.Context, string, ...string) ([]byte, []byte, error) { return nil, nil, errors.New("timeout") }
+			d.runFM = func(context.Context, string, ...string) ([]byte, []byte, error) {
+				return nil, nil, errors.New("timeout")
+			}
 		}), FMStateUnresponsive},
 		// sw_vers failing must not block detection — probe anyway.
 		{"version unknown still probes", fmDet("darwin", "arm64", func(d *fmDetector) {
