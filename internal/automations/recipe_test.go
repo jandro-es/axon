@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jandro-es/axon/internal/agent"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
 )
@@ -166,6 +167,48 @@ func TestRecipeRunMissingNoteInactive(t *testing.T) {
 	}
 	if !strings.Contains(res.Summary, "absent") {
 		t.Fatalf("summary: %q", res.Summary)
+	}
+}
+
+func promptRecipe() config.Recipe {
+	def := testRecipe()
+	def.Render = ""
+	def.Prompt = "Digest {{list}} for {{today}}."
+	return def
+}
+
+func TestRecipeRunPromptRoutesTier(t *testing.T) {
+	rc, fake := newRC(t, map[string]string{"03-Resources/List.md": "- item one\n"})
+	rc.Config.Automations = map[string]config.Automation{"test-recipe": {Model: "routine"}}
+	fake.RespondFn = func(req agent.Request) (*agent.Response, error) {
+		if !strings.Contains(req.Prompt, "item one") {
+			t.Fatalf("substituted prompt not sent: %q", req.Prompt)
+		}
+		return &agent.Response{Text: "MODEL DIGEST", Model: req.Model, Usage: agent.Usage{InputTokens: 10, OutputTokens: 5}}, nil
+	}
+	if _, err := (RecipeRun{def: promptRecipe()}).Run(context.Background(), rc); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.Calls) != 1 || fake.Calls[0].Model != "sonnet" {
+		t.Fatalf("expected one routine-tier call, got %+v", fake.Calls)
+	}
+	n, err := rc.Vault.Read(context.Background(), "03-Resources/Digest.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(n.Body, "MODEL DIGEST") {
+		t.Fatalf("model output not written: %q", n.Body)
+	}
+}
+
+func TestRecipeRunPromptDefaultsRoutine(t *testing.T) {
+	rc, fake := newRC(t, map[string]string{"03-Resources/List.md": "- x\n"})
+	// No automations entry at all: tier falls back to routine.
+	if _, err := (RecipeRun{def: promptRecipe()}).Run(context.Background(), rc); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.Calls) != 1 || fake.Calls[0].Model != "sonnet" {
+		t.Fatalf("want routine default, got %+v", fake.Calls)
 	}
 }
 
