@@ -105,6 +105,7 @@ profiles:
       actions-consolidate: { enabled: true, schedule: "0 7 * * *",      model: none,      budget_tokens: 0 }
       actions-review:      { enabled: false, schedule: "0 8 * * 6",      model: none,      budget_tokens: 0 }
       action-extract:      { enabled: false, schedule: "0 6 * * *",      model: routine,   budget_tokens: 60_000 }
+      eval-drift:          { enabled: false, schedule: "0 5 * * 1",      model: none,      budget_tokens: 0 }
 
     actions:
       stale_after_days: 30

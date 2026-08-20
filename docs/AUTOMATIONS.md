@@ -172,13 +172,14 @@ review-queue nudge, never repeated nags.
 
 ## Quality gate
 
-### `eval-drift` — registry only ⚠
+### `eval-drift` — off by default
 Re-runs `axon eval` when a gated local model's Ollama digest changes (FR-143),
-so a silently-updated local model can't degrade a tier unnoticed. **Currently
-unschedulable**: it ships in the registry but has no entry in the starter
-config or the example config, and an automation with no config entry is never
-scheduled. Add an `automations.eval-drift:` entry to use it — tracked in
-`docs/ISSUES.md`.
+so a silently-updated local model can't degrade a tier unnoticed. Weekly
+digest check (Mon 05:00) — cheap, no model call unless a digest actually
+changed, and eval calls run against the concrete **local** model only (never
+Claude, zero budget spend). Does nothing unless `models.eval_min_pass` is set
+(the eval gate) and a classify/routine tier points at an `ollama:` model.
+Enable with `axon configure automations eval-drift on`.
 
 ---
 
@@ -209,6 +210,6 @@ scheduled. Add an `automations.eval-drift:` entry to use it — tracked in
 | `deep-research` | off | synthesis | `0 6 * * 1` | Seeded, cited web research |
 | `entity-pages` | off | classify | `0 9 * * 1` | People/project pages |
 | `project-pulse` | off | routine | `0 10 * * 1` | Weekly project pulse |
-| `eval-drift` | ⚠ unconfigured | — | — | Re-eval on model digest change |
+| `eval-drift` | off | none (local eval) | Mon 05:00 | Re-eval on model digest change |
 
 ¹ contradiction path spends only if given `model` + `budget_tokens > 0`.
