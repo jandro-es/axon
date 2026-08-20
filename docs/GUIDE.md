@@ -453,8 +453,10 @@ selects the provider: `off` (default), `ollama:<vision-model>` (e.g.
 note that redaction rules apply to text, not pixels: PCC vision sends the
 **unredacted image bytes** to Apple-operated compute, which is why it is a
 deliberate, explicit mode and never a fallback). Vision is a budget-exempt
-local perception call — it never touches your Claude budget — and any vision
-failure keeps the OCR/filename note rather than failing the ingest. The
+local perception call — it never touches your Claude budget — and a vision
+failure defers to whatever text OCR recovered — when OCR found nothing, the
+ingest reports the vision provider's actual error instead of writing an
+empty note. The
 original image is copied (never moved) into the vault's attachments folder.
 
 ### Ask your vault

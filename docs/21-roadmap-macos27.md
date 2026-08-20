@@ -129,7 +129,9 @@ posture needs its own review; PCC is Apple-operated compute, which
 > `models.pcc_enabled` opt-in — explicit, validation-gated, never a silent
 > fallback, and disclosed as sending unredacted image bytes off-device
 > (redaction applies to text, not pixels). Doctor's `vision` check reports
-> the fm states. The section below is the original candidate text.
+> the fm states. Vision-error semantics remain the FR-172 contract (OCR text
+> stands; no OCR text → loud CLI error), verified live against real PCC
+> context-gating. The section below is the original candidate text.
 **Build:** fill the seam H1 left ready. `internal/ingestion/vision.go` already
 reserves the slot — `ingestion.vision: "apple"` currently returns
 *"requires macOS 27 on-device image input (not yet available) — use

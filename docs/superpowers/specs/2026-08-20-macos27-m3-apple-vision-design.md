@@ -45,8 +45,11 @@ restricted context, exit 0.
 ## Out of scope
 
 fm serve multimodal; changing OllamaVision or the extractImage OCR-first
-flow; PCC fallback from a failed on-device describe (a vision error keeps
-the OCR/filename path, as today); barcode/ocr fm tools.
+flow; PCC fallback from a failed on-device describe; barcode/ocr fm tools.
+Vision-error semantics are the established FR-172 contract, verified live:
+when OCR recovered text a vision error is swallowed and the OCR text stands;
+with no OCR text the (CLI-only) ingest fails loudly with the provider's
+actual error — actionable, never a silently empty note.
 
 ## Verification
 
@@ -54,5 +57,5 @@ Unit: AppleVision (prompt shape, pcc flag only on pcc, temp cleanup, ANSI
 strip, error surface), VisionFor table, validateVision gate, visionCheck
 states. Live smoke: `ingestion.vision: apple` + `axon ingest` of a real
 image → note carries the on-device description; `apple:pcc` without opt-in →
-validation rejection; with opt-in → real context-unavailable degrade to the
-OCR/filename path, no crash.
+validation rejection; with opt-in → the real context-unavailable error surfaces
+loudly on the CLI (the FR-172 no-OCR-text arm), naming the PCC cause.

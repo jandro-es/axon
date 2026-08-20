@@ -18,8 +18,9 @@ All notable changes to this project are documented here. The format is based on
   — it validates only with `models.pcc_enabled: true` and is disclosed
   plainly: redaction applies to text, not pixels, so PCC vision sends the
   unredacted image bytes to Apple-operated compute. Vision stays a
-  budget-exempt local perception primitive; a failed describe keeps the
-  OCR/filename path; `doctor`'s `vision` check reports the fm states
+  budget-exempt local perception primitive; a failed describe defers to any
+  OCR text, or fails the CLI-only ingest loudly with the provider's actual
+  error when there is none (the established FR-172 contract); `doctor`'s `vision` check reports the fm states
   (ready / licence-pending with its fix / unavailable → OCR-only).
 
 - **Apple's macOS 27 models as chokepoint tiers: `apple:system` and
