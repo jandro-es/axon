@@ -1,9 +1,11 @@
 ---
 title: Axon 1.2–1.3 — PRD
 type: project
-status: draft
+status: archived
 tags: [axon, prd, roadmap]
 ---
+
+> **Archived 2026-08-20.** This vault planning note graduated into `docs/15`–`docs/17` and everything it scheduled has shipped (1.2, 1.2.5, 1.3 complete 2026-07-11). Kept as a historical record; any unchecked items or "draft" language are artefacts of the planning stage, not open work.
 
 # AXON 1.2 & 1.3 — Product Requirements
 

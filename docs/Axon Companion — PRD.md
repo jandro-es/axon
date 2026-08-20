@@ -1,15 +1,15 @@
 ---
 title: Axon Companion — PRD
 type: project
-status: draft
+status: shipped (companion-v0.1.0, 2026-08-16)
 created: 2026-08-16
-updated: 2026-08-16
+updated: 2026-08-20
 tags: [axon, macos, menu-bar, swiftui, prd]
 ---
 
 # Axon Companion — PRD (macOS menu bar app)
 
-> Draft for owner review; planning only. Build map in [[Axon Companion — Development Plan]]. This note **implements and expands** slice P1 of [[Axon 2.0 — PRD]] ("a signed launcher shell — menu-bar item that starts/stops the daemon and opens the dashboard") and **resolves its open question 6** (launcher scope): yes, the launcher surfaces the review-queue badge, plus glanceable telemetry, settings, onboarding, and a doctor UI. The 2026-07-03 "no native app" decision **stands**: the web dashboard remains the product UI. Companion is a control plane and a glanceable window into it — strictly optional, never required.
+> **Shipped 2026-08-16 as `companion-v0.1.0`** (signed, notarised, Sparkle appcast). This PRD is the product definition of record; the build plan it referenced was completed and deleted (the durable build artefacts are the code under `apps/companion/`, `apps/companion/CONTRACT.md`, and `apps/companion/QA.md`). Scope note: the launcher surfaces the review-queue badge, plus glanceable telemetry, settings, onboarding, and a doctor UI. The 2026-07-03 "no native app" decision **stands**: the web dashboard remains the product UI. Companion is a control plane and a glanceable window into it — strictly optional, never required.
 
 ## 1. Product principles
 

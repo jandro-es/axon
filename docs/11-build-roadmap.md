@@ -1,5 +1,12 @@
 # 11 — Build Roadmap
 
+> **Status: COMPLETE.** Every phase below (0–9) was built and shipped; v1.0.0
+> was released 2026-07-04. This document is the historical build order for the
+> original 1.0, kept because its acceptance gates define the S-criteria still
+> referenced by the Definition of Done. For what came after, see
+> `docs/14` (1.1), `docs/15` (1.2), `docs/16` (1.2.5), `docs/17` (1.3), and the
+> forward roadmaps in `docs/19`–`docs/21`.
+
 Phased so each milestone is independently runnable and demonstrable. A phase isn't "done" until its acceptance gate passes. Build in order; later phases assume earlier seams (`agent`, `embeddings`, `Vault`, event bus) exist.
 
 ## Phase 0 — Skeleton & contracts
