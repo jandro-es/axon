@@ -1,0 +1,14 @@
+{
+  "hits": [
+    {
+      "path": "03-Resources/Knowledge/sqlite-internals.md",
+      "snippet": "SQLite stores the derived index for the vault — FTS5 plus in-file vectors …",
+      "score": 0.0312
+    },
+    {
+      "path": "02-Areas/databases.md",
+      "snippet": "…notes on database engines, including SQLite's b-tree layout…",
+      "score": 0.0164
+    }
+  ]
+}

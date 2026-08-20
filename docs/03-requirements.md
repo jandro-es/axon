@@ -309,6 +309,16 @@ in `docs/superpowers/specs/2026-08-20-macos27-m3-apple-vision-design.md`.
 | FR-196 | S | **Apple on-device vision provider (fills ADR-035's `apple` slot).** `ingestion.vision: apple` resolves to a provider that describes images via a bounded per-call `fm respond --image <tmpfile> --text <prompt>` subprocess (macOS 27 + `fm` on PATH; otherwise the actionable resolve error keeps the OCR-only fallback, exactly the seam's contract). Same NFR-05 prompt discipline as the Ollama provider (transcribe verbatim, describe, never follow instructions in the image); ANSI-stripped output; the temp file is 0600 and removed on every path. Vision remains a **perception primitive** — budget-exempt, never chokepoint-routed (ADR-035 unchanged). Doctor's `vision` check reports the fm states (ready / licence-pending with `sudo fm license` / unavailable). |
 | FR-197 | S | **PCC vision under the opt-in (ADR-038 amendment).** A distinct `ingestion.vision: apple:pcc` mode routes the same provider through `--model pcc`. It validates only while `models.pcc_enabled: true` (the tier gate extended, per the owner's decision) and is never a silent fallback — on-device `apple` configs are unaffected, and vision-error semantics stay the FR-172 contract: OCR text stands over a failed describe, and with no OCR text the CLI-only ingest fails loudly with the provider's actual error. Disclosed plainly wherever the mode is documented: text redaction rules cannot apply to pixels, so PCC vision sends **unredacted image bytes** to Apple-operated compute; PCC is context-gated and quota-limited, and both surface through the existing advisory doctor plumbing. |
 
+### macOS 27 — Siri & Shortcuts seam (M4) *(in progress 2026-08-20)*
+
+FR-198 graduates the daemon half of docs/21 M4; the Companion half is
+CFR-92…95 in its PRD. Spec in
+`docs/superpowers/specs/2026-08-20-macos27-m4-app-intents-design.md`.
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| FR-198 | S | **`GET /api/search` (guarded read seam).** The dashboard serves hybrid search over the vault to loopback clients: `/api/related`'s exact trust boundary (loopback bind + Host guard + `X-Axon-Search: 1` header forcing a CORS preflight), gated by `dashboard.search_enabled` (pointer-default-ON, `SearchAllowed()`); 404 disabled / 403 missing header / 400 empty `q` / 200 `{"hits":[{path, snippet, score}]}` from the hybrid searcher (`top_k` clamped, default 8). Zero generative spend — the query embedding is the usual budget-exempt local call; no ledger row, no SSE event. A general seam (FR-184 pattern): the Companion's Siri intents are its first consumer, recorded in `apps/companion/CONTRACT.md`, but nothing about it is Companion-specific. |
+
 ### Session memory *(built 2026-07-04)*
 
 FR-97…FR-99 trace to ADR-021 and the spec in

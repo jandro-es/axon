@@ -39,7 +39,11 @@ scratch_for() {
 }
 
 for ARCH in "${ARCH_LIST[@]}"; do
-  swift build -c "$CONF" --arch "$ARCH" --scratch-path "$(scratch_for "$ARCH")"
+  # The Swift Build backend is load-bearing: it is what emits the per-module
+  # .swiftconstvalues that appintentsmetadataprocessor consumes (CFR-92…95).
+  # The legacy SwiftPM build system emits none and Siri would silently see no
+  # intents.
+  swift build -c "$CONF" --arch "$ARCH" --build-system swiftbuild --scratch-path "$(scratch_for "$ARCH")"
 done
 
 DIST="$ROOT/${DIST_DIR:-dist}"
@@ -214,6 +218,48 @@ done
 if [[ -f "$ICON_TARGET" ]]; then
   cp "$ICON_TARGET" "$APP/Contents/Resources/Icon.icns"
 fi
+
+# App Intents metadata (CFR-92…95): Siri/Shortcuts discover intents through
+# Metadata.appintents, which Xcode's build emits and a bare SwiftPM bundle
+# does not. Run the extractor explicitly; a missing bundle means Siri sees
+# nothing, so failure here fails packaging loudly.
+extract_appintents_metadata() {
+  local scratch conf_dir triple sdk_root toolchain_dir xcode_build listdir
+  scratch="$(scratch_for "${ARCH_LIST[0]}")"
+  conf_dir="$(tr '[:lower:]' '[:upper:]' <<<"${CONF:0:1}")${CONF:1}"
+  triple="${ARCH_LIST[0]}-apple-macos26.0"
+  sdk_root="$(xcrun --show-sdk-path --sdk macosx)"
+  toolchain_dir="$(dirname "$(dirname "$(dirname "$(xcrun -f swiftc)")")")"
+  xcode_build="$(xcodebuild -version 2>/dev/null | awk '/Build version/{print $3}')"
+  listdir="$scratch/appintents-lists"
+  mkdir -p "$listdir"
+
+  find "$ROOT/Sources/$EXECUTABLE_NAME" -name '*.swift' > "$listdir/sources.txt"
+  find "$scratch" -path "*${conf_dir}*" -name '*.swiftconstvalues' > "$listdir/constvals.txt"
+  if [[ ! -s "$listdir/constvals.txt" ]]; then
+    echo "ERROR: no .swiftconstvalues under $scratch — the build did not run on the Swift Build backend; App Intents metadata cannot be extracted" >&2
+    exit 1
+  fi
+
+  xcrun appintentsmetadataprocessor \
+    --output "$APP/Contents/Resources" \
+    --toolchain-dir "$toolchain_dir" \
+    --module-name "$EXECUTABLE_NAME" \
+    --sdk-root "$sdk_root" \
+    --xcode-version "${xcode_build:-unknown}" \
+    --platform-family macOS \
+    --deployment-target 26.0 \
+    --target-triple "$triple" \
+    --source-file-list "$listdir/sources.txt" \
+    --swift-const-vals-list "$listdir/constvals.txt" \
+    --force --quiet-warnings
+
+  if [[ ! -d "$APP/Contents/Resources/Metadata.appintents" ]]; then
+    echo "ERROR: appintentsmetadataprocessor produced no Metadata.appintents — Siri would silently see no intents" >&2
+    exit 1
+  fi
+}
+extract_appintents_metadata
 
 # Ensure contents are writable before stripping attributes and signing.
 chmod -R u+w "$APP"
