@@ -722,6 +722,15 @@ ladder (FR-79) — PCC is a best-effort rung, never a dependency. Cardinal rule
 local tier, and admission stays eval-gated (ADR-029/030) with `eval-drift`
 keying fm-backed tiers on the macOS version (no digest exists).
 
+**Amendment (2026-08-20, M3 — FR-196/197):** PCC may also serve the **vision
+perception primitive** when explicitly selected (`ingestion.vision:
+apple:pcc`, valid only under the same `models.pcc_enabled` opt-in; owner's
+decision, widening the original tiers-only PCC posture). Vision stays
+budget-exempt and non-chokepoint (ADR-035); the on-device `apple` vision mode
+never leaves the machine. Disclosed consequence: redaction rules apply to
+text, not pixels — PCC vision sends unredacted image bytes to Apple-operated
+compute.
+
 **Consequences:** the daemon supervises a child model server (a first — the
 Ollama server is external); the socket keeps it loopback-only by
 construction. Structured output remains `ValidateOutput`-driven (fm serve's
