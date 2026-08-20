@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="892" height="410" viewBox="0 0 892 410" font-family="ui-sans-serif, -apple-system, Segoe UI, Roboto, sans-serif">
-<rect width="892" height="410" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="892" height="490" viewBox="0 0 892 490" font-family="ui-sans-serif, -apple-system, Segoe UI, Roboto, sans-serif">
+<rect width="892" height="490" fill="#ffffff"/>
 <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1e1e1e"/></marker></defs>
 <text x="28" y="24" font-size="20" font-weight="700" fill="#1e1e1e">AXON — one MCP server, many Claude clients</text>
 <rect x="28" y="64" width="250" height="92" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
@@ -12,6 +12,10 @@
 <text x="153" y="265.8" font-size="13" fill="#1e1e1e" text-anchor="middle">AXON tools only</text>
 <text x="153" y="283.0" font-size="13" fill="#1e1e1e" text-anchor="middle">no hooks / skills / injection</text>
 <text x="153" y="300.2" font-size="13" fill="#1e1e1e" text-anchor="middle">tools-only client</text>
+<rect x="28" y="384" width="250" height="78" rx="10" fill="#d0bfff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="153" y="411.2" font-size="12" fill="#1e1e1e" text-anchor="middle">Axon Companion (macOS)</text>
+<text x="153" y="427.1" font-size="12" fill="#1e1e1e" text-anchor="middle">not an MCP client — talks to the</text>
+<text x="153" y="442.9" font-size="12" fill="#1e1e1e" text-anchor="middle">daemon over REST/SSE + CLI</text>
 <rect x="396" y="100" width="232" height="180" rx="10" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
 <text x="512" y="130.7" font-size="12" fill="#1e1e1e" text-anchor="middle">axon mcp (stdio)</text>
 <text x="512" y="146.6" font-size="12" fill="#1e1e1e" text-anchor="middle">vault_search / read / write</text>
