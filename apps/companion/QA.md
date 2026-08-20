@@ -173,3 +173,14 @@ swift build -c release — 0 warnings
 
 Go side unaffected: `go build ./...`, `go vet ./...`, `cmd/axon` and
 `internal/dashboard` tests all green.
+
+
+## 0.2.0 — Siri & Shortcuts (CFR-92…95, 2026-08-20)
+
+Verified headlessly: 224 tests in 20 suites pass; `Metadata.appintents`
+extracted into the bundle with all four intents + the App Shortcuts provider;
+`lsregister` accepts the app. **Needs a human:** the four verbs appearing in
+the Shortcuts app and answering via Siri ("Ask Axon…", "Capture in Axon…"),
+parameter follow-up dialogs, and behaviour when the daemon is stopped
+(expected: the "Axon isn't running" dialog). Ask spends real tokens — verify
+against a scratch profile first.

@@ -166,5 +166,28 @@ On a clean macOS 26 machine with nothing installed: download Companion.app → o
 3. **Free vs Pro:** 2.0 P4 gates "signed app + updates" as Pro. Does Companion ship free during 1.x/beta and become Pro-gated at 2.0, or Pro-only from the start? (Plan assumes: free while unsigned-dev, Pro at 2.0 — matching the PRD's no-rug-pull boundary since Companion is new convenience.)
 4. **Menu bar icon:** `brain` SF Symbol (plan) vs a custom template mark derived from the AXON logotype?
 
+---
+
+## 0.2.0 addendum — Siri & Shortcuts verbs (CFR-92…95, 2026-08-20)
+
+Graduates the Companion half of docs/21 M4 (spec:
+`docs/superpowers/specs/2026-08-20-macos27-m4-app-intents-design.md`). Apple's
+MCP-in-App-Intents is not public API, so these are plain App Intents — the
+layer the MCP bridge will attach to when it ships.
+
+- **CFR-92 SearchVaultIntent** — "Search the vault for …" → `GET /api/search`
+  (FR-198, CONTRACT §8b). Read-only, zero spend.
+- **CFR-93 AskVaultIntent** — grounded ask via `POST /api/ask`; refusals and
+  the `ask_enabled` kill-switch render as calm dialogs, never errors.
+- **CFR-94 CheckTasksIntent** — open-task count via `GET /api/actions`.
+- **CFR-95 CaptureThoughtIntent** — the one write: text → `POST /api/capture`
+  (additive inbox funnel; creates, never edits).
+
+All pure-REST (never CLI — an intent process inherits the minimal
+LaunchServices PATH); a down daemon answers "Axon isn't running". Packaging
+extracts `Metadata.appintents` explicitly (`appintentsmetadataprocessor` over
+the Swift Build backend's const-values — the legacy SwiftPM backend emits
+none and Siri would silently see no intents).
+
 <!-- axon:links:start -->
 <!-- axon:links:end -->
