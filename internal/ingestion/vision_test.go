@@ -48,6 +48,11 @@ func TestOllamaVisionErrorResponse(t *testing.T) {
 }
 
 func TestVisionFor(t *testing.T) {
+	// Pin the fm-absent machine: "apple" then errors actionably (the found
+	// cases are covered by TestVisionForAppleModes).
+	orig := fmLookPath
+	fmLookPath = func(string) (string, error) { return "", errors.New("not found") }
+	defer func() { fmLookPath = orig }()
 	tests := []struct {
 		mode    string
 		wantNil bool
