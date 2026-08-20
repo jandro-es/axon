@@ -688,7 +688,7 @@ map) and must be edited in both. `backdrop-filter` costs GPU on very large
 windows; the reduced-transparency path removes it entirely, which doubles as the
 escape hatch. (FR-177…FR-183.)
 
-### ADR-038 — `fm serve` as a supervised local model backend (`apple:system` / `apple:pcc`) *(accepted — in progress)*
+### ADR-038 — `fm serve` as a supervised local model backend (`apple:system` / `apple:pcc`) *(accepted — built)*
 
 **Status:** Accepted (2026-08-20). FR-193…FR-195; spec in
 `docs/superpowers/specs/2026-08-20-macos27-m2-fmserve-design.md`.

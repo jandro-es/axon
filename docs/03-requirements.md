@@ -278,7 +278,7 @@ seam — the client never works around it.**
 | FR-189 | M | **A `sudo`-started daemon cannot lock the vault (unreleased).** Root writes never fail, so a stray `sudo axon start` used to leave `root`-owned, mode-`0600` notes the real daemon could not read. Three gates close it: `axon start` refuses to run as root when the data dir or vault belongs to another user (naming the directory and owner); the single-instance guard treats signal-0 `EPERM` as "alive, not yours" instead of "dead" (so a second daemon never starts beside a live one owned by someone else); and a dashboard bind failure is **fatal**, not a warning — a taken port means another daemon holds it, and carrying on left an invisible second scheduler writing the vault. `--no-dashboard` remains the deliberate headless path. |
 | FR-190 | S | **The Review tab reports the daemon's own error (unreleased).** Any failure used to render as "the daemon isn't answering", including a 500 carrying a precise, fixable message. The daemon's text is shown when it answers; the unreachable wording is reserved for when it truly is unreachable. |
 
-### macOS 27 — detection (M1) *(in progress 2026-08-20)*
+### macOS 27 — detection (M1) *(built 2026-08-20, v1.4.0)*
 
 FR-191/FR-192 graduate docs/21 M1; spec in
 `docs/superpowers/specs/2026-08-20-macos27-m1-detection-design.md`. No new ADR.
@@ -288,7 +288,7 @@ FR-191/FR-192 graduate docs/21 M1; spec in
 | FR-191 | S | **`fm` CLI detection matrix (docs/21 M1).** An advisory, darwin-only `apple-fm` doctor check reports exactly one of: OS < 27 (informational; the shipped on-device `apple` tier is unaffected), `fm` absent on ≥ 27, **license-pending** — the one WARN, carrying `Fix: sudo fm license` (AXON never runs it: privileged, machine-wide legal agreement) — ready (capped summary of `fm available`), or unresponsive. Detection parses **ANSI-stripped output, checking license markers before the exec error** because `fm`'s exit codes are inconsistent (observed: `available` → 0 while refusing, `--help` → 1); the probe is bounded (3 s + `WaitDelay`) with all persisted output capped, and a `sw_vers` failure degrades to probing rather than blocking. Never FAIL; absent entirely off macOS. |
 | FR-192 | S | **Reserved Apple ref forms rejected (docs/21 M1).** Config validation rejects any tier model string of the form `apple:<suffix>`, `apple-fm:<suffix>`, or bare `apple-fm` with an actionable error naming docs/21 M2 — today such strings silently parse as Claude model strings and would misroute to `claude -p`. Bare `apple` (the shipped on-device tier) is unchanged; the suffix naming decision is deliberately deferred to M2. |
 
-### macOS 27 — the fm tier (M2) *(in progress 2026-08-20)*
+### macOS 27 — the fm tier (M2) *(built 2026-08-20, v1.4.0)*
 
 FR-193…FR-195 trace to **ADR-038** and graduate docs/21 M2; spec in
 `docs/superpowers/specs/2026-08-20-macos27-m2-fmserve-design.md`.
@@ -299,7 +299,7 @@ FR-193…FR-195 trace to **ADR-038** and graduate docs/21 M2; spec in
 | FR-194 | M | **`apple:system` / `apple:pcc` refs, eval-gated (ADR-038).** `ParseModelRef` resolves exactly these two `apple:` variants to the fm provider (`system`, `pcc`); other `apple:<x>` and all `apple-fm:*` forms remain rejected (FR-192 narrowed, not removed), bare `apple` unchanged. Tier rules: `apple:system` classify-only (on-device cap shared with `apple`); `apple:pcc` classify + routine with its own larger pre-flight input cap; synthesis stays Claude-only. Admission is the unchanged ADR-029/030 machinery — `axon eval --model apple:<variant>` records under the concrete ref and the promotion gate reads it — and `eval-drift`'s change cursor keys fm-backed tiers on the macOS product version (an OS update is the drift event). |
 | FR-195 | M | **PCC is opt-in, ledgered, quota-advised, best-effort (ADR-038).** `apple:pcc` validates only when `models.pcc_enabled: true` (default false; the example config carries the key only in the personal block — PCC is Apple-operated compute, at odds with a work profile's deny-by-default posture). PCC usage is ledgered under its own model string and shown in the dashboard split but never counted against Claude budget windows; budget-guard's scope is unchanged. `fm quota-usage` feeds an advisory doctor detail when PCC is enabled. Context-unavailability (observed live: PCC refuses outside Terminal-like contexts, with exit 0) and quota exhaustion are ordinary adapter errors that degrade through the fallback ladder without failing the run. |
 
-### macOS 27 — Apple vision (M3) *(in progress 2026-08-20)*
+### macOS 27 — Apple vision (M3) *(built 2026-08-20, v1.4.0)*
 
 FR-196/FR-197 trace to **ADR-038 (as amended)** and graduate docs/21 M3; spec
 in `docs/superpowers/specs/2026-08-20-macos27-m3-apple-vision-design.md`.
@@ -309,7 +309,7 @@ in `docs/superpowers/specs/2026-08-20-macos27-m3-apple-vision-design.md`.
 | FR-196 | S | **Apple on-device vision provider (fills ADR-035's `apple` slot).** `ingestion.vision: apple` resolves to a provider that describes images via a bounded per-call `fm respond --image <tmpfile> --text <prompt>` subprocess (macOS 27 + `fm` on PATH; otherwise the actionable resolve error keeps the OCR-only fallback, exactly the seam's contract). Same NFR-05 prompt discipline as the Ollama provider (transcribe verbatim, describe, never follow instructions in the image); ANSI-stripped output; the temp file is 0600 and removed on every path. Vision remains a **perception primitive** — budget-exempt, never chokepoint-routed (ADR-035 unchanged). Doctor's `vision` check reports the fm states (ready / licence-pending with `sudo fm license` / unavailable). |
 | FR-197 | S | **PCC vision under the opt-in (ADR-038 amendment).** A distinct `ingestion.vision: apple:pcc` mode routes the same provider through `--model pcc`. It validates only while `models.pcc_enabled: true` (the tier gate extended, per the owner's decision) and is never a silent fallback — on-device `apple` configs are unaffected, and vision-error semantics stay the FR-172 contract: OCR text stands over a failed describe, and with no OCR text the CLI-only ingest fails loudly with the provider's actual error. Disclosed plainly wherever the mode is documented: text redaction rules cannot apply to pixels, so PCC vision sends **unredacted image bytes** to Apple-operated compute; PCC is context-gated and quota-limited, and both surface through the existing advisory doctor plumbing. |
 
-### macOS 27 — Siri & Shortcuts seam (M4) *(in progress 2026-08-20)*
+### macOS 27 — Siri & Shortcuts seam (M4) *(built 2026-08-20, v1.4.0)*
 
 FR-198 graduates the daemon half of docs/21 M4; the Companion half is
 CFR-92…95 in its PRD. Spec in

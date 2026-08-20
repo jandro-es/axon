@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-08-20
+
+**AXON meets macOS 27.** A minor release: no schema change (stays v7), no new
+MCP tool. New config keys are additive with safe defaults (`models.pcc_enabled`
+false, `dashboard.search_enabled` absent-means-on); reserved `apple:`/
+`apple-fm:` model strings that previously misrouted now fail validation.
+Pairs with the separately-released Companion 0.2.0 (Siri & Shortcuts verbs).
+
 ### Added
 
 - **Siri and Shortcuts can talk to the vault.** (FR-198 + Companion
@@ -1019,6 +1027,7 @@ The initial feature-complete build, implemented in phases against
   were implemented in 0.10.0.)*
 
 [Unreleased]: https://github.com/jandro-es/axon/compare/v1.3.9...HEAD
+[1.4.0]: https://github.com/jandro-es/axon/releases/tag/v1.4.0
 [1.3.10]: https://github.com/jandro-es/axon/releases/tag/v1.3.10
 [1.3.9]: https://github.com/jandro-es/axon/releases/tag/v1.3.9
 [1.3.8]: https://github.com/jandro-es/axon/releases/tag/v1.3.8
