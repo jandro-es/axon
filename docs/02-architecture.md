@@ -738,6 +738,52 @@ construction. Structured output remains `ValidateOutput`-driven (fm serve's
 surface, the adapter fails visibly into the fallback ladder and doctor's
 FR-191 matrix names the state.
 
+### ADR-039 — User-defined automations as declarative config recipes *(accepted — planned)*
+
+**Status:** Accepted (2026-08-20). FR-199…FR-201; spec in
+`docs/superpowers/specs/2026-08-20-automation-recipes-design.md`. Graduates
+docs/20 C1.
+
+**Context:** Every automation today is a Go type plus a registry entry —
+users cannot define their own without a fork. The 24 shipped automations
+decompose into a small vocabulary: zero-Claude readers (note body, hybrid
+search, recently-updated list), zero-or-one one-shot model call, and a
+wikilink-safe sink (managed block rebuild, review-queue proposal). The engine
+already enforces everything that matters — change-gates, the chokepoint,
+budgets, dry-run, ledger, catalog — against a single `Automation` interface.
+
+**Decision:** (1) **Recipes are data, not programs.** A `recipes:` list in
+`config.yaml` (validated at load, `validateVision`-style cross-field pass)
+declares named inputs, a `prompt` (one one-shot chokepoint call) *or* a
+`render` (zero-model), and exactly one sink. Templating is plain
+`{{placeholder}}` substitution — no logic, no functions, no agentic runs in
+v1. (2) **Config, not vault.** The vault is a model-writable surface
+(ADR-022 `vault_write`); config.yaml is outside every model write path, so a
+model call can never author or alter an automation. Vault-portable sharing
+is explicitly deferred. (3) **Materialize into the existing registry.** Each
+valid recipe becomes an `Automation` value appended to `Registry(profile)`
+(built-in names always win; collisions surfaced loudly via
+`ValidateRecipes`), scheduled by an ordinary `automations.<name>` entry —
+so policy allow-lists, work-profile overrides, budget-guard pause, dry-run,
+`axon run`, the catalog, and the dashboard reliability table apply to
+recipes with zero engine changes. The change-gate is automatic: the cursor
+is a hash of the resolved inputs, giving FR-31 (act on new material only)
+generically. (4) **Sinks are the two safe writers.** `vault.Patch` into a
+recipe-owned `axon:` block (reserved AXON block names rejected; targets
+under `.axon/`/`.trash/` rejected), or review-queue proposals under a new
+`recipe` kind whose **accept is acknowledge-only** — a recipe can *propose*
+anything and *directly write* only managed blocks; no recipe path mutates
+human prose or performs a destructive op.
+
+**Consequences:** the registry is no longer a closed set, so surfaces that
+enumerate automations (catalog, doctor, seeds invariant) distinguish
+built-ins from recipes; count-assertion tests pin only the built-in set.
+Recipe expressiveness is deliberately narrow — anything needing a new
+reader, sink, or multi-call flow is a Go automation (or a future ADR), not a
+recipe stretch. The cardinal rules survive by construction rather than by
+review: the only model path is `runModel`, the only writers are the managed
+block Patch and the queue append.
+
 ### ADR-027 — Local reranking as a retrieval primitive (outside the chokepoint) *(accepted — built)*
 
 **Status:** Accepted (2026-07-05, roadmap 1.1 B2).
