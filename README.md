@@ -172,8 +172,8 @@ is enforced.
 | [Command reference](docs/COMMANDS.md) | Every CLI command: what it does, what it doesn't, key flags, examples. |
 | [Automations reference](docs/AUTOMATIONS.md) | All 24 automations: purpose, schedule, cost tier, and explicit non-goals. |
 | [Profiles](docs/PROFILES.md) | Personal vs work: auth, budgets, egress, redaction, memory — and where each difference is enforced. |
-| [Architecture](docs/02-architecture.md) | System design, module boundaries, data flow, ADR-001…037. |
-| [Requirements](docs/03-requirements.md) | The numbered contract: FR-01…190, NFR-01…14. |
+| [Architecture](docs/02-architecture.md) | System design, module boundaries, data flow, ADR-001…038. |
+| [Requirements](docs/03-requirements.md) | The numbered contract: FR-01…198, NFR-01…14. |
 | [Data model & config](docs/04-data-model-and-config.md) | Vault layout, DB schema, frontmatter, full config reference. |
 | [Knowledge ingestion](docs/05-component-knowledge-ingestion.md) | URL/PDF/capture/feeds → Markdown → chunk → embed → index. |
 | [Automation engine](docs/06-component-automation-engine.md) | Scheduler, the standard automation set, agentic runs. |
