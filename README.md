@@ -7,21 +7,24 @@
 
 **AXON turns an Obsidian vault into a second brain that maintains itself.** It
 is a single Go binary that runs beside your vault: it captures and ingests
-knowledge, keeps the vault organised, remembers what you decide, and accounts
-for every token it spends — with **Claude** (through your subscription or
-enterprise login) as the brain, and local models for the cheap work. Your
-vault stays plain Markdown; everything else is derived and disposable.
+knowledge, keeps the vault organised, remembers what you decide, tracks what
+you have to do, and accounts for every token it spends — with **Claude**
+(through your subscription or enterprise login, not an API key) as the brain,
+and local models for the cheap work. Your vault stays plain Markdown;
+everything else is derived and disposable.
 
-> 📖 **New here? Start with the [Setup & Usage Guide](docs/GUIDE.md)** — a
-> complete walkthrough from a clean machine to a running system.
+> 📖 **New here?** [INSTALL.md](INSTALL.md) gets you from a clean machine to a
+> running system in about 15 minutes, step by step — no terminal experience
+> assumed. The [Setup & Usage Guide](docs/GUIDE.md) is the complete manual.
 
 ## What it does
 
 **Knowledge flows in from everywhere.**
 - Drop a URL, article, PDF, image/screenshot, or a YouTube/podcast link:
   `axon ingest` turns it into a clean, linked, redacted Markdown note — chunked,
-  embedded (local Ollama), and indexed. Images are read locally (OCR + on-device
-  vision); media becomes a transcript note from its captions.
+  embedded (local Ollama or Apple on-device), and indexed. Images are read
+  locally (OCR + on-device vision); media becomes a transcript note from its
+  captions.
 - Paste a URL into an inbox note or drop a file into `00-Inbox/` — the
   **capture** automation ingests it for you. The inbox is a funnel.
 - Subscribe to RSS/Atom feeds (`axon subscribe`) and standing sources flow
@@ -29,26 +32,40 @@ vault stays plain Markdown; everything else is derived and disposable.
 - **Hybrid search** (FTS5 lexical + vector semantic) over all of it, from the
   CLI or any Claude client.
 - **Ask your vault**: `axon ask` answers questions from your notes only —
-  grounded or silent, with `[[wikilink]]` citations enforced in code.
+  grounded or silent, with `[[wikilink]]` citations enforced in code, and a
+  conflict flag when your sources disagree.
 - **Related notes**: `axon related <note>` (also a `vault_related` MCP tool and a
   dashboard panel) surfaces the notes most similar to one you're looking at —
   pure vector math, zero model calls.
+- **Deep research** (opt-in): tag a question `#deep` with seed URLs and the
+  `deep-research` automation fetches them through the egress-policied pipeline
+  and writes one cited report — bounded by fetch and token budgets.
 
-**The vault maintains itself.** Twenty-three scheduled automations — inbox triage,
-daily log, note compaction, link suggestions, a morning **briefing**, a weekly
-**resurfacer** that reconnects dormant notes to what you're working on now, a
-weekly knowledge digest, memory distillation, **entity pages**, a weekly
-**project pulse**, standing **research questions**, and more. They run on *new
-material* (content-hash gated), never on a clock for its own sake, and
-everything they propose lands in a review queue you resolve with one click on
-the dashboard's **Review** tab. Turn any of them off; a system with all
-automations off still runs and is useful.
+**The vault maintains itself.** Twenty-four scheduled automations — inbox
+triage, daily log, note compaction, link suggestions, a morning **briefing**, a
+weekly **resurfacer** that reconnects dormant notes to what you're working on
+now, a weekly knowledge digest, memory distillation, **entity pages**, a weekly
+**project pulse**, standing **research questions**, near-duplicate **merge
+proposals**, and more. They run on *new material* (content-hash gated), never
+on a clock for its own sake, and everything they propose lands in a review
+queue you resolve with one click on the dashboard's **Review** tab. Turn any of
+them off; a system with all automations off still runs and is useful. Each is
+documented — including what it deliberately does *not* do — in
+[docs/AUTOMATIONS.md](docs/AUTOMATIONS.md).
 
-**It knows you, and remembers.** An identity layer (`USER` / `SOUL` /
+**It tracks what you have to do.** Every `- [ ]` checkbox in the vault is
+indexed into one trusted GTD list — `axon actions` on the CLI, a consolidated
+`01-Projects/Actions.md` note, and the dashboard's **Actions** tab, where
+completing a task performs the one surgical, hash-addressed checkbox edit AXON
+is allowed to make in your prose.
+
+**It knows you, and remembers — in time.** An identity layer (`USER` / `SOUL` /
 `MEMORY`) is injected into every Claude Code session, and AXON captures what
-your sessions *decide*: finished sessions are distilled into durable
-decisions, lessons, and preferences — privately (paths only, redacted before
-any model sees text, never in logs or exports).
+your sessions *decide*: finished sessions are distilled into durable decisions,
+lessons, and preferences. Memory is **temporal** — facts carry validity
+intervals, a superseded fact is struck through with its successor, never
+deleted — and it happens privately (paths only, redacted before any model sees
+text, never in logs or exports).
 
 **Every token is measured.** One chokepoint authorizes, budgets, and ledgers
 every generative call — Claude via `claude -p` on your login by default, an
@@ -59,9 +76,13 @@ own summary through wikilink-safe tools) are bounded by turn caps and a
 streaming kill-switch.
 
 **Everything is visible.** A real-time dashboard (React SPA embedded in the
-binary, SSE) streams every run, token, ingest, and error — plus the token
-ledger, vault-growth charts, a knowledge graph, and the Review tab. Every
-chart exports as CSV/JSON.
+binary, SSE) streams every run, token, ingest, and error — light, dark, and
+system appearance, a `⌘K` command palette, an interactive knowledge-graph map
+with a hubs-and-orphans panel, a **Needs you** summary of everything waiting on
+a human, per-automation reliability, the token ledger, and the Review tab.
+Every chart exports as CSV/JSON. On a Mac, the optional **Axon Companion**
+menu-bar app (`companion-v0.1.0`) puts daemon state, budgets, and controls one
+click away — same daemon, same material language.
 
 ## Safety guarantees (enforced in code, not by prompting)
 
@@ -76,79 +97,22 @@ chart exports as CSV/JSON.
 
 ## Install
 
-### 1. Prepare the machine (skip anything you have)
-
-AXON needs the `claude` CLI (the brain) and **Ollama** (local embeddings;
-optional local models). On a fresh machine:
-
-```bash
-# macOS (Homebrew: https://brew.sh)
-brew install ollama
-ollama pull nomic-embed-text                # default embedding model
-npm install -g @anthropic-ai/claude-code    # or the installer at claude.com/claude-code
-claude login                                # your Claude subscription / enterprise SSO
-
-# Linux: curl -fsSL https://ollama.com/install.sh | sh   (then the same three steps)
-```
-
-For headless automations, mint a long-lived token once: `claude setup-token`
-(goes into `~/.axon/.env`).
-
-**Ollama not allowed on your machine?** On Apple silicon, AXON can use
-**Apple's on-device Foundation Models** instead — for embeddings
-(`axon configure embeddings apple`) and the classify tier
-(`axon configure models classify apple`, macOS 26+). No server, no downloads;
-see the [Guide §4 "Providers"](docs/GUIDE.md#4-configuration). And without
-either, everything still works — search is lexical-only until vectors
-back-fill.
-
-### 2. Install AXON — one line, no toolchain
+**[INSTALL.md](INSTALL.md) is the step-by-step path** — written so that
+someone who has never opened a terminal can follow it, with an expected result
+shown after every step. The short version for developers:
 
 ```bash
+# Prerequisites: the claude CLI (logged in) and Ollama (embeddings)
 curl -fsSL https://raw.githubusercontent.com/jandro-es/axon/main/install.sh | bash
-```
-
-This downloads the latest release binary (SHA-256 verified) and hands over to
-the interactive **`axon setup`**: vault path, profile, embeddings provider —
-then it provisions everything (data dir, DB, vault scaffold, `.claude/`
-wiring, dashboards, auto-start service). Idempotent; re-run any time.
-
-**From source instead** (needs Go 1.26+, Node, make):
-
-```bash
-git clone https://github.com/jandro-es/axon.git && cd axon
-make doctor && make setup
-```
-
-### 3. Verify, run, keep current
-
-```bash
 axon doctor      # prerequisites, with the exact fix for anything missing
 axon start       # scheduler + dashboard → http://127.0.0.1:7777
-axon status      # remaining day/week token budget
-axon update      # later: checksum-verified self-update (source installs: make update)
-axon uninstall   # remove daemon + binary; --purge also removes ~/.axon. Vault untouched.
 ```
 
-### 4. Optional: the macOS menu bar app
-
-**Axon Companion** puts daemon state, budgets and controls in the macOS menu
-bar. It is strictly optional — AXON is fully functional without it, and every
-feature it offers has a CLI or dashboard equivalent.
-
-1. Download `Axon-<version>.zip` from the
-   [latest release](https://github.com/jandro-es/axon/releases/latest).
-2. Unzip and drag **Axon.app** to `/Applications`.
-3. Open it. The app is Developer ID-signed and notarised, so Gatekeeper lets it
-   run on first launch with no right-click dance.
-
-Requires macOS 26 or later. See the Guide's
-[Companion chapter](docs/GUIDE.md#20-the-macos-menu-bar-app-companion).
-
-Full details — flags, Windows, moving your vault, troubleshooting — in
-[INSTALL.md](INSTALL.md) and the [Guide](docs/GUIDE.md). Daily commands live
-in the Guide's [command reference](docs/GUIDE.md#15-command-reference); the
-short list is `ask`, `ingest`, `search`, `subscribe`, `run`, `status`, `configure`.
+On a Mac, add the optional **[Companion](docs/18-component-companion.md)**
+menu-bar app from the [latest release](https://github.com/jandro-es/axon/releases/latest)
+(signed and notarised — it opens normally). Daily commands are documented in
+[docs/COMMANDS.md](docs/COMMANDS.md); the short list is `ask`, `ingest`,
+`search`, `actions`, `subscribe`, `run`, `status`, `configure`.
 
 ## Architecture
 
@@ -183,7 +147,9 @@ multi-client wiring.*
 Run a `personal` profile (Claude Max) and a `work` profile (Enterprise SSO) as
 separate installs — separate data, secrets, accounts, budgets, and egress
 policies. The work profile is deny-by-default on ingestion and can disable
-memory injection entirely. `axon profiles` shows the isolation surface.
+memory injection entirely. `axon profiles` shows the isolation surface, and
+[docs/PROFILES.md](docs/PROFILES.md) documents every difference and where each
+is enforced.
 
 ## Principles
 
@@ -202,21 +168,29 @@ memory injection entirely. `axon profiles` shows the isolation surface.
 | Document | Purpose |
 |----------|---------|
 | [**Setup & Usage Guide**](docs/GUIDE.md) | **Start here.** End-to-end: install, configure, run, and use every feature. |
-| [Installation](INSTALL.md) | Machine prep, release + source installs, update/uninstall, Windows. |
-| [Architecture](docs/02-architecture.md) | System design, module boundaries, data flow, ADR-001…032. |
-| [Requirements](docs/03-requirements.md) | The numbered contract: FR-01…156, NFR-01…14. |
+| [Installation](INSTALL.md) | Step-by-step install for everyone; developer fast path; update/uninstall; Windows. |
+| [Command reference](docs/COMMANDS.md) | Every CLI command: what it does, what it doesn't, key flags, examples. |
+| [Automations reference](docs/AUTOMATIONS.md) | All 24 automations: purpose, schedule, cost tier, and explicit non-goals. |
+| [Profiles](docs/PROFILES.md) | Personal vs work: auth, budgets, egress, redaction, memory — and where each difference is enforced. |
+| [Architecture](docs/02-architecture.md) | System design, module boundaries, data flow, ADR-001…037. |
+| [Requirements](docs/03-requirements.md) | The numbered contract: FR-01…190, NFR-01…14. |
 | [Data model & config](docs/04-data-model-and-config.md) | Vault layout, DB schema, frontmatter, full config reference. |
 | [Knowledge ingestion](docs/05-component-knowledge-ingestion.md) | URL/PDF/capture/feeds → Markdown → chunk → embed → index. |
-| [Automation engine](docs/06-component-automation-engine.md) | Scheduler, the twenty-four standard automations, agentic runs. |
+| [Automation engine](docs/06-component-automation-engine.md) | Scheduler, the standard automation set, agentic runs. |
 | [Context & token manager](docs/07-component-context-token-manager.md) | Counting, budgets, local routing, compaction, frugality. |
 | [Agent bridge & MCP](docs/08-component-agent-bridge-mcp.md) | MCP tools, hooks, agentic allowlists, wikilink safety. |
 | [Dashboard & observability](docs/09-component-dashboard-observability.md) | Live charts, the Review tab, the knowledge graph. |
 | [Personal memory & onboarding](docs/12-component-personal-memory-and-onboarding.md) | The identity layer, session memory, `axon onboard`. |
 | [Multi-client (Claude Desktop)](docs/13-component-multi-client-claude-desktop.md) | One MCP server, many Claude clients. |
+| [Companion (macOS)](docs/18-component-companion.md) | The menu-bar app: contract, build, QA state. |
 | [1.1 roadmap](docs/14-roadmap-1.1.md) | Shipped in 1.1: ask-your-vault, ANN + reranker retrieval, memory/entity/pulse intelligence, capture + OCR reach. |
 | [1.2 roadmap](docs/15-roadmap-1.2.md) | Shipped in 1.2 ("remember & reason, cheaply"): temporal memory, contradiction-aware ask, eval-gated local tier + verification cascade, related-notes surface, resurfacing scheduling, near-duplicate merge proposals. |
 | [1.2.5 roadmap](docs/16-roadmap-1.2.5.md) | Shipped in 1.2.5 ("act on it"): GTD actions — one trusted list, the dashboard Actions tab, the hash-addressed complete mutation. |
 | [1.3 roadmap](docs/17-roadmap-1.3.md) | Shipped in 1.3 ("perceive & research"): multimodal ingestion (images via OCR + local vision; YouTube/podcast captions) and bounded, budgeted, cited deep-research. |
+| [Second-brain roadmap](docs/19-roadmap-second-brain.md) | Forward: candidate directions for AXON as a second brain. |
+| [AI-OS roadmap](docs/20-roadmap-ai-os.md) | Forward: candidate directions for AXON as an AI operating system. |
+| [macOS 27 plan](docs/21-roadmap-macos27.md) | Making the most of Apple's on-device models, the `fm` CLI, and OS-level MCP. |
+| [Known issues](docs/ISSUES.md) | The triaged, living list of what needs fixing. |
 
 Deeper design notes (vision, research, installer internals) live in
 [docs/](docs/); build conventions are in [`CLAUDE.md`](CLAUDE.md).

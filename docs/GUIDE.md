@@ -602,6 +602,13 @@ The standard automations (each toggleable in config, gated by `allowed_automatio
 | `project-pulse` | yes | Weekly: reads `01-Projects/` + USER goals into an `axon:pulse` block (progress, stalls, next actions); nudges stale projects to the review queue. Off by default. |
 | `eval-drift` | no† | Re-runs `axon eval` for a gated local tier when its Ollama model digest changes, keeping promotion evidence-based. Off by default. †Local (budget-exempt) eval calls only. |
 | `merge-proposals` | no | Weekly near-duplicate sweep (mean-vector cosine ≥ 0.92): proposes note merges to the review queue. Accepting runs the wikilink-safe `vault.Merge` — the survivor keeps its prose and gains the loser's content, inbound links retarget, and the loser is archived to `.trash/merged/`, never deleted. Off by default. |
+| `actions-consolidate` | no | Daily zero-model render of every open GTD task in the vault into `01-Projects/Actions.md` (overdue / today / this week / next / waiting / someday) as wikilinked references — never duplicate checkboxes. |
+| `actions-review` | no | Weekly sweep for open, undated actions in notes untouched for `actions.stale_after_days` (30): proposes each to the review queue once; accepting tags it `#someday`. Off by default. |
+| `action-extract` | yes | Extracts implicit commitments ("I'll send the deck Friday") from recent notes to the review queue; accepting writes a real checkbox into the source note's `axon:tasks` block, which the actions index parses. Off by default — the only token spender in the actions feature. |
+| `deep-research` | yes | Weekly: a `#deep`-tagged question with seed URLs in `03-Resources/Research Questions.md` has its sources fetched through the normal ingestion pipeline (egress policy, redaction, dedup), then one closed-book synthesis call writes a cited report under `03-Resources/Research/`. Bounded by `research.max_fetches`/`research.budget_tokens`; denied hosts are never fetched. Off by default, personal-profile only. |
+
+The complete per-automation reference — including what each automation
+deliberately does *not* do — is `docs/AUTOMATIONS.md`.
 
 **Agentic runs.** `knowledge-digest` and `compaction` run *agentically* by
 default: Claude runs headlessly with a small allowlist of AXON's own MCP tools
@@ -889,6 +896,7 @@ the vault is the source of truth, a full restore is: copy the vault back and run
 | `axon search <query> [--top-k N] [--json]` | Hybrid lexical + semantic search. |
 | `axon ask "<question>" [--top-k N] [--json]` | Grounded-or-silent RAG answer with `[[wikilink]]` citations; refuses (zero tokens) when retrieval finds nothing relevant. Flags source conflicts when your notes disagree. |
 | `axon related <note> [--top-k N] [--json]` | Most-similar notes to a given note by embedding similarity — pure vector math, **no model call**. |
+| `axon actions [--status S] [--project P] [--context C] [--all] [--json]` | List/filter every GTD task indexed from the vault (overdue/today/week buckets); archived notes only with `--all`. No model call. |
 | `axon eval [--family F] [--model M] [--json]` | Run the local-model eval harness (golden sets graded pass/fail) to vet an `(provider, model)` pair before promoting a local tier. |
 | `axon subscribe <url> [--allow] \| list \| remove <url>` | Manage RSS/Atom feed subscriptions (verified add, seen-state, re-baselining remove). |
 | `axon configure [section …]` | Interactive menu (or scripted subcommands) for common settings: embeddings provider, model tiers, limits, automation toggles. |
@@ -902,7 +910,7 @@ the vault is the source of truth, a full restore is: copy the vault back and run
 | `axon onboard [--from file] [--non-interactive]` | Build the personal identity layer (USER/SOUL/MEMORY, §18). No model call, idempotent. |
 | `axon mcp` | MCP server over stdio (launched by Claude Code). |
 | `axon hook <event>` | Hook handler (invoked from `.claude/settings.json`). |
-| `axon service <install\|uninstall\|print>` | OS service unit management. |
+| `axon service <install\|uninstall\|print\|status>` | OS service unit management; `status [--json]` reports whether a unit is installed, where, and the PATH it hands the daemon. |
 | `axon export [--out dir]` | Portable snapshot bundle. |
 | `axon profiles [--json]` | Show profiles' isolated paths/policy (no secrets). |
 | `axon version [--short]` | Print the version, commit, build date, and Go/OS/arch (`axon --version` also works). |
@@ -913,6 +921,10 @@ the vault is the source of truth, a full restore is: copy the vault back and run
 Global flags: `--config <path>` (default `~/.axon/config.yaml`), `--profile <name>`,
 `--env <path>` (default `.env`, resolved from the current directory; secrets may
 also come from the real environment).
+
+The full per-command reference — every flag, an example each, and what each
+command deliberately does *not* do — is `docs/COMMANDS.md`. The profile system
+(personal vs work) is covered in depth in `docs/PROFILES.md`.
 
 ---
 

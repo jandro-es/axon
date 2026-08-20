@@ -1,0 +1,214 @@
+# The 24 automations
+
+AXON ships 24 automations. Five rules govern all of them:
+
+1. **They run on new material, not on the clock for its own sake.** Every
+   automation has a change gate (content hashes, cursors, "anything new since
+   last run?") and skips cleanly when nothing changed — a skipped run costs
+   zero tokens.
+2. **Every model call goes through the token chokepoint** (pre-flight
+   estimate, budget check, post-hoc ledger). Eight automations are
+   **zero-model** and never spend a token at all.
+3. **Every vault write is wikilink-safe** and lands in `axon:*` managed blocks
+   — human prose is never edited, and nothing is ever deleted.
+4. **`budget-guard` pauses everything non-essential** when spend crosses the
+   guard threshold; only `budget-guard` and `heartbeat` are essential and keep
+   running.
+5. **An automation with no entry under `automations:` in your config is never
+   scheduled.** Toggle with `axon configure automations <name> on|off`; run
+   one manually with `axon run <name> [--dry-run]`.
+
+Work profiles add a hard gate on top: `policy.allowed_automations` is a strict
+allow-list checked *in addition to* `enabled` (see `docs/PROFILES.md`).
+
+---
+
+## Always-on infrastructure
+
+### `budget-guard` — on, essential, zero-model, every 15 min
+Watches the token ledger; past `guard_pause_at_pct` of a budget window it
+pauses every non-essential automation, and resumes them when the window rolls
+over. **Does not** block interactive commands (`axon ask`, MCP tools) — by
+deliberate choice it governs automations only.
+
+### `heartbeat` — on, essential, classify tier, 09:00/13:00/17:00
+Situational awareness: inbox backlog, open/overdue task counts, budget
+headroom, guard state — one line to the daily note and the dashboard. **Does
+not** synthesise unless there's something noteworthy; the narrative is opt-in
+(`automations.heartbeat.model`).
+
+### `knowledge-reindex` — on, zero-model, daily 02:00
+Rebuilds the notes mirror, link graph and embeddings from the vault — the
+nightly proof that SQLite is disposable. **Does not** modify the vault at all.
+
+### `context-export` — on, zero-model, weekly Sun 04:00
+Portable snapshot bundle (manifest + Markdown + JSON) into `.axon/exports/`.
+Your exit strategy, exercised weekly.
+
+---
+
+## Capture & triage
+
+### `capture` — on, zero-model, every 5 min
+The inbox funnel (FR-26): own-line URLs and dropped files in `00-Inbox` are
+ingested through the pipeline; originals are **archived, never deleted**.
+Makes no model call of its own — enrichment only happens when
+`capture.enrich: claude`, and then through the chokepoint on the routine tier.
+
+### `inbox-triage` — on, routine tier, every 30 min
+Classifies new inbox items and proposes filing destinations to the **review
+queue**. **Does not** move anything itself — every move is your accept.
+
+### `subscriptions` — on, routine tier, hourly
+Polls RSS/Atom feeds added with `axon subscribe` (conditional GETs, per-tick
+caps) and ingests new items. Subscribe-from-now: **does not** backfill a
+feed's history.
+
+---
+
+## Daily rhythm
+
+### `briefing` — on, routine tier, daily 06:00
+Morning `axon:briefing` block: what changed, what's due, what needs you. The
+narrative degrades gracefully under budget pressure rather than deferring.
+
+### `daily-log` — on, routine tier, daily 21:30
+Synthesises the day's activity into a summary block in the daily note.
+
+### `memory-distill` — on, synthesis tier, daily 05:00
+Maintains the durable personal-memory note: distils new material into dated
+facts, detects contradictions with existing memory and routes them to the
+review queue as supersede proposals. **Does not** overwrite old facts —
+superseded entries are struck through with their dates, never deleted.
+
+### `session-distill` — on, classify tier, every 2 h at :15
+Turns idle Claude sessions in the vault into durable MEMORY entries — one
+call per session, each session tried once ever. Gated by
+`memory.capture_sessions`; redaction applies before the model sees anything.
+
+---
+
+## Knowledge upkeep
+
+### `link-suggester` — on, daily 01:00
+Proposes Zettelkasten links between semantically close notes into the review
+queue. Candidate generation is **pure vector similarity — no model call**;
+proposal memory ensures a dismissed pair is never re-proposed.
+
+### `knowledge-digest` — on, synthesis tier, weekly Mon 08:00
+Weekly synthesis of newly ingested sources with MOC (map-of-content)
+proposals. Agentic by default (read-only tools + managed-block writes, 8
+turns), degrading to a one-shot call.
+
+### `compaction` — on, synthesis tier, weekly Sun 03:00
+Distils oversized notes into `axon:summary` blocks. Archive-first: the
+original content is preserved before any write, and the human region is never
+touched. Agentic by default (4 turns).
+
+### `resurfacer` — on, zero-model, weekly Mon 07:00
+Spaced-repetition resurfacing of dormant notes related to what you're working
+on, on a fixed interval ladder that lengthens as you accept. The
+contradiction-detection path is **dormant unless you give it budget**
+(`model` + `budget_tokens > 0`) — with the default `model: none` it spends
+nothing.
+
+### `merge-proposals` — off, zero-model, weekly Mon 11:00
+Near-duplicate sweep by vector cosine (≥ `merge.threshold`, default 0.92) into
+the review queue. Accepting merges wikilink-safely: every inbound link is
+retargeted, and the losing note is **archived to `.trash/merged/` — never
+deleted**.
+
+---
+
+## GTD actions
+
+### `actions-consolidate` — on, zero-model, daily 07:00
+Renders every open task in the vault into `01-Projects/Actions.md` as a GTD
+board (overdue / today / this week / next / waiting / someday). Writes
+**references, not checkboxes** — the source note's checkbox stays the single
+source of truth.
+
+### `actions-review` — off, zero-model, weekly Sat 08:00
+Sweeps open, undated actions in notes untouched for
+`actions.stale_after_days` (30) into the review queue. Accepting tags the
+action `#someday` in its source note; **does not** complete, delete or move
+anything.
+
+### `action-extract` — off, routine tier, daily 06:00
+Reads recent notes for implicit commitments ("I'll send the deck Friday") and
+proposes them to the review queue; accepting writes a real checkbox into the
+source note's `axon:tasks` block. The only token spender in the actions
+family. **Does not** write anything without your accept.
+
+---
+
+## Research & structure (all off by default)
+
+### `research-questions` — off, synthesis tier, weekly Mon 08:30
+Answers standing questions in `03-Resources/Research Questions.md` from the
+vault (grounded-or-silent) into an `axon:answers` block. **Vault-only — does
+not** fetch anything from the web.
+
+### `deep-research` — off, synthesis tier, weekly Mon 06:00
+For `#deep`-tagged questions with seed URLs: fetches the seeds through the
+normal ingestion pipeline (egress policy, redaction, dedup), then one
+closed-book synthesis call writes a cited report under
+`03-Resources/Research/`. Bounded by `research.max_fetches` and
+`research.budget_tokens`; **personal-profile-only**, and a denied host is
+**never fetched**. No web tools reach the model — it only sees what the
+pipeline ingested.
+
+### `entity-pages` — off, classify tier, weekly Mon 09:00
+Extracts people/projects mentioned in ≥ 2 notes into auto-maintained
+`Entities/` pages with mention links. Maintains its pages directly — but only
+its own managed blocks.
+
+### `project-pulse` — off, routine tier, weekly Mon 10:00
+Weekly per-project pulse (last touched, stale ≥ 21 d, linked goal) plus one
+narrative into `01-Projects/Project Pulse.md`; stale projects get **one**
+review-queue nudge, never repeated nags.
+
+---
+
+## Quality gate
+
+### `eval-drift` — registry only ⚠
+Re-runs `axon eval` when a gated local model's Ollama digest changes (FR-143),
+so a silently-updated local model can't degrade a tier unnoticed. **Currently
+unschedulable**: it ships in the registry but has no entry in the starter
+config or the example config, and an automation with no config entry is never
+scheduled. Add an `automations.eval-drift:` entry to use it — tracked in
+`docs/ISSUES.md`.
+
+---
+
+## Summary
+
+| Automation | Default | Model | Schedule | One line |
+|---|---|---|---|---|
+| `budget-guard` | on (essential) | none | `*/15 * * * *` | Pause non-essentials near budget |
+| `heartbeat` | on (essential) | classify | `0 9,13,17 * * *` | Situational awareness line |
+| `knowledge-reindex` | on | none | `0 2 * * *` | Rebuild index from vault |
+| `context-export` | on | none | `0 4 * * 0` | Weekly portable snapshot |
+| `capture` | on | none | `*/5 * * * *` | Inbox URL/file funnel |
+| `inbox-triage` | on | routine | `*/30 * * * *` | Classify inbox → review queue |
+| `subscriptions` | on | routine | `0 * * * *` | Poll feeds, ingest new items |
+| `briefing` | on | routine | `0 6 * * *` | Morning briefing block |
+| `daily-log` | on | routine | `30 21 * * *` | Evening day summary |
+| `memory-distill` | on | synthesis | `0 5 * * *` | Durable memory upkeep |
+| `session-distill` | on | classify | `15 */2 * * *` | Sessions → memory entries |
+| `link-suggester` | on | (no call) | `0 1 * * *` | Propose links by similarity |
+| `knowledge-digest` | on | synthesis | `0 8 * * 1` | Weekly source digest + MOCs |
+| `compaction` | on | synthesis | `0 3 * * 0` | Distil oversized notes |
+| `resurfacer` | on | none¹ | `0 7 * * 1` | Spaced-rep resurfacing |
+| `merge-proposals` | off | none | `0 11 * * 1` | Near-duplicate proposals |
+| `actions-consolidate` | on | none | `0 7 * * *` | Render GTD board |
+| `actions-review` | off | none | `0 8 * * 6` | Stale actions → #someday |
+| `action-extract` | off | routine | `0 6 * * *` | Implicit commitments → tasks |
+| `research-questions` | off | synthesis | `30 8 * * 1` | Answer standing questions |
+| `deep-research` | off | synthesis | `0 6 * * 1` | Seeded, cited web research |
+| `entity-pages` | off | classify | `0 9 * * 1` | People/project pages |
+| `project-pulse` | off | routine | `0 10 * * 1` | Weekly project pulse |
+| `eval-drift` | ⚠ unconfigured | — | — | Re-eval on model digest change |
+
+¹ contradiction path spends only if given `model` + `budget_tokens > 0`.

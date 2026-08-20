@@ -1,9 +1,11 @@
 ---
 title: Axon 1.2–1.3 — Development Plan
 type: project
-status: draft
+status: archived
 tags: [axon, plan, roadmap]
 ---
+
+> **Archived 2026-08-20.** This vault planning note graduated into `docs/15`–`docs/17` and everything it scheduled has shipped (1.2, 1.2.5, 1.3 complete 2026-07-11). Kept as a historical record; any unchecked items or "draft" language are artefacts of the planning stage, not open work.
 
 # AXON 1.2 & 1.3 — Development Plan
 
@@ -69,7 +71,7 @@ Expected new ADRs (provisional): R1 memory representation & fact index; R5 eval-
 
 ## Out of scope (both releases)
 
-Hosted/multi-user anything; native app; agent-driven `vault_move`; recording of any kind; cloud STT or cloud vision as a default path; bi-temporal Graphiti-style memory modelling (intervals + supersedence only). Also removed from 1.3 on 2026-07-10 (not currently scheduled): channel delivery & capture-back, the meeting & voice pipeline, calendar & email read-only context, continuous-capture import, and Obsidian CLI / Bases integration.
+Hosted/multi-user anything; native app *(superseded 2026-08-16: the Companion macOS menu-bar app shipped as `companion-v0.1.0` — see `docs/Axon Companion — PRD.md`)*; agent-driven `vault_move`; recording of any kind; cloud STT or cloud vision as a default path; bi-temporal Graphiti-style memory modelling (intervals + supersedence only). Also removed from 1.3 on 2026-07-10 (not currently scheduled): channel delivery & capture-back, the meeting & voice pipeline, calendar & email read-only context, continuous-capture import, and Obsidian CLI / Bases integration.
 
 ## Next actions
 
