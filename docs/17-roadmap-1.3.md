@@ -88,7 +88,7 @@ tests, never by asking the model nicely.
 > writer wikilink-safe. Config: `ingestion.vision`/`media_hosts`/`caption_langs`;
 > advisory `vision`+`media` doctor checks. **No new automation, MCP tool, or
 > migration.** Spec: `docs/superpowers/specs/2026-07-10-h1-multimodal-ingestion-design.md`;
-> plan: `docs/superpowers/plans/2026-07-10-h1-multimodal-ingestion.md`. Gate met
+> plan: executed and deleted (see `docs/superpowers/README.md`). Gate met
 > (live-smoked on macOS with real Ollama-vision + `yt-dlp`; the real-network
 > caption *download* is externally blocked here and covered by unit tests).
 
@@ -136,7 +136,7 @@ nothing crashes.
 > `deep-research` automation seed; advisory `research` doctor check. **No new DB
 > table, migration, or MCP tool.** Spec:
 > `docs/superpowers/specs/2026-07-10-h2-deep-research-design.md`; plan:
-> `docs/superpowers/plans/2026-07-10-h2-deep-research.md`. Gate met (live-smoked
+> executed and deleted (see `docs/superpowers/README.md`). Gate met (live-smoked
 > on macOS: doctor + dry-run planning + a real allow-listed Wikipedia fetch → an
 > Ollama-embedded Knowledge note + the SSRF/egress deny path; the paid synthesis
 > call is unit-covered and rides the proven `runModel` chokepoint wiring).
