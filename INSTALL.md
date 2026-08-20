@@ -57,9 +57,16 @@ it will do and asks for your Mac password once).
 brew install ollama
 ```
 
-**You should see:** several lines of progress ending without errors. Then
-download the model AXON uses to index the meaning of notes (~270 MB, done
-once):
+**You should see:** several lines of progress ending without errors. Now start
+Ollama's background service (this also makes it start automatically after a
+reboot):
+
+```
+brew services start ollama
+```
+
+**You should see:** `Successfully started ollama`. Then download the model AXON
+uses to index the meaning of notes (~270 MB, done once):
 
 ```
 ollama pull nomic-embed-text
