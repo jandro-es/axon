@@ -33,7 +33,7 @@ const (
 // Item is one review-queue entry.
 type Item struct {
 	ID      string   `json:"id"`
-	Kind    string   `json:"kind"` // link | pair | triage | resurface | contradicts | merge | reconcile | info
+	Kind    string   `json:"kind"` // link | pair | triage | resurface | contradicts | merge | reconcile | stalled | action | recipe | info
 	Section string   `json:"section"`
 	Line    string   `json:"line"`
 	Checked bool     `json:"checked"`
@@ -56,6 +56,7 @@ var (
 	reconcileRe   = regexp.MustCompile(`^reconcile: "(.+)" supersedes "(.+)"$`)
 	stalledRe     = regexp.MustCompile(`^stalled action "(.+)" in \[\[([^\]]+)\]\] \(\d+d\)`)
 	actionRe      = regexp.MustCompile(`^action "(.+)" from \[\[([^\]]+)\]\]`)
+	recipeRe      = regexp.MustCompile(`^recipe "(.+)" \(from ([a-z0-9-]+)\)`)
 )
 
 // Load parses the queue file. A missing file is an empty queue.
@@ -128,6 +129,9 @@ func Load(ctx context.Context, v *vault.FS) ([]Item, error) {
 		case actionRe.MatchString(body):
 			am := actionRe.FindStringSubmatch(body)
 			it.Kind, it.Target, it.Note = "action", am[1], am[2] // Target=text, Note=note path
+		case recipeRe.MatchString(body):
+			rm := recipeRe.FindStringSubmatch(body)
+			it.Kind, it.Target, it.Note = "recipe", rm[1], rm[2] // Target=text, Note=recipe name
 		}
 		// The ID hashes the normalized body (checkbox + resolution suffix
 		// stripped) so an item keeps its identity across resolution — a
@@ -178,6 +182,10 @@ func Accept(ctx context.Context, v *vault.FS, id string) (Item, error) {
 			return Item{}, err
 		}
 		suffix = "✓ added to [[" + it.Note + "]]"
+	case "recipe":
+		// Acknowledge-only (ADR-039): a recipe proposal never mutates on
+		// accept — the resolution itself is the outcome.
+		suffix = "✓ noted"
 	default:
 		return Item{}, fmt.Errorf("item %s (%s) is not actionable — dismiss it instead", id, it.Kind)
 	}
