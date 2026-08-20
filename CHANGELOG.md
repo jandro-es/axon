@@ -6,8 +6,24 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.3.10] — 2026-08-20
+
+**The sudo lockout, and an automation that could never run.** A patch: no
+schema change (stays v7), no new MCP tool. Two config seeds added
+(disabled-by-default automations — existing configs are unaffected; re-run
+`axon setup`/copy the example block to pick them up).
+
 ### Fixed
 
+- **`eval-drift` can now actually be scheduled.** It shipped in 1.1 (FR-143)
+  in the automation registry and catalog — but with no entry in the starter
+  config or the example config, and an automation with no config entry is
+  never scheduled, so on every install to date it could not run at all. Both
+  sources now seed it (`enabled: false`, weekly Monday 05:00, `model: none` —
+  its eval calls run against the concrete local model only and spend no
+  Claude tokens). A new invariant test asserts every registered automation is
+  seeded in both config sources, which also caught and fixed
+  `merge-proposals` missing from the example yaml's personal profile.
 - **A daemon started with `sudo` no longer locks you out of your own vault.**
   Root writes never fail, so a stray `sudo axon start` quietly created every new
   note, review-queue file and Claude config entry owned by `root` and mode
@@ -920,6 +936,7 @@ The initial feature-complete build, implemented in phases against
   were implemented in 0.10.0.)*
 
 [Unreleased]: https://github.com/jandro-es/axon/compare/v1.3.9...HEAD
+[1.3.10]: https://github.com/jandro-es/axon/releases/tag/v1.3.10
 [1.3.9]: https://github.com/jandro-es/axon/releases/tag/v1.3.9
 [1.3.8]: https://github.com/jandro-es/axon/releases/tag/v1.3.8
 [1.3.7]: https://github.com/jandro-es/axon/releases/tag/v1.3.7
