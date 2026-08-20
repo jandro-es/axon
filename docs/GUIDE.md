@@ -274,7 +274,7 @@ alternative for machines where Ollama is unavailable or not allowed
 | Subsystem | Config key | Ollama | Apple on-device | Neither available |
 |-----------|-----------|--------|-----------------|-------------------|
 | **Embeddings** (semantic search) | `embeddings.provider` | `ollama` + any embedding model | `apple` — macOS on Apple silicon; a tiny Swift helper compiled once at `axon init`; no server, nothing listening | search degrades to lexical-only (FTS5); vectors back-fill later |
-| **Cheap model tiers** (classify / routine) | `models.classify`, `models.routine` | `"ollama:<chat model>"` on either tier | `"apple"` — **classify tier only**; macOS 26+ with Apple Intelligence enabled (`axon doctor` checks availability) | leave the tiers on Claude model strings (the default) |
+| **Cheap model tiers** (classify / routine) | `models.classify`, `models.routine` | `"ollama:<chat model>"` on either tier | `"apple"` — **classify tier only**; macOS 26+ with Apple Intelligence enabled (`axon doctor` checks availability). On macOS 27+, `"apple:system"` serves classify through the `fm` CLI with measured token usage, and `"apple:pcc"` (requires `models.pcc_enabled: true`) adds a Private Cloud Compute rung that can also serve routine — opt-in, quota-advised, and it degrades to your fallback when PCC is unreachable | leave the tiers on Claude model strings (the default) |
 
 Rules that hold in every setup: **synthesis is always Claude**, agentic runs
 require Claude (local models cannot drive MCP tools), and every local call
