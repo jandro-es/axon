@@ -1,0 +1,7 @@
+{
+  "answer": "You decided SQLite stays the single derived store: FTS5 plus in-file vectors, rebuilt from the vault by reindex.",
+  "citations": ["03-Resources/Knowledge/sqlite-internals.md", "02-Areas/databases.md"],
+  "sources": ["03-Resources/Knowledge/sqlite-internals.md", "02-Areas/databases.md"],
+  "refused": false,
+  "tokens": 8412
+}

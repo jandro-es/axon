@@ -82,6 +82,41 @@ public actor DashboardClient {
         }
     }
 
+    // MARK: query (CFR-92…95 — the Siri/Shortcuts verbs)
+
+    /// Hybrid search (CONTRACT.md §8b). Read-only, zero model spend. 404 means
+    /// the profile disabled `dashboard.search_enabled` (or the daemon predates
+    /// FR-198) — callers surface that as a state.
+    public func search(_ q: String, topK: Int = 8) async throws -> [SearchHit] {
+        try await get(
+            SearchResponse.self, path: "/api/search",
+            query: ["q": q, "top_k": String(topK)],
+            headers: ["X-Axon-Search": "1"]
+        ).hits
+    }
+
+    /// Grounded ask (ADR-023). Spends synthesis tokens through the daemon's
+    /// chokepoint — always human-initiated from here. The synthesis call is
+    /// slow by nature, hence the generous timeout.
+    public func ask(_ question: String) async throws -> AskAnswer {
+        try await post(
+            AskAnswer.self, path: "/api/ask",
+            body: ["question": question],
+            headers: ["X-Axon-Ask": "1"],
+            timeout: 90
+        )
+    }
+
+    /// Non-destructive inbox capture (ADR-024): creates a note under
+    /// `00-Inbox/`, never edits anything. Zero model spend.
+    public func capture(text: String) async throws {
+        try await postIgnoringBody(
+            path: "/api/capture",
+            body: ["text": text],
+            headers: ["X-Axon-Capture": "1"]
+        )
+    }
+
     // MARK: export (CFR-31)
 
     /// The daemon serialises every export; Companion only builds the URL.
@@ -112,6 +147,59 @@ public actor DashboardClient {
     }
 
     // MARK: transport
+
+    private func post<T: Decodable>(
+        _ type: T.Type,
+        path: String,
+        body: [String: String],
+        headers: [String: String],
+        timeout: TimeInterval = DashboardClient.requestTimeout
+    ) async throws -> T {
+        let data = try await postRaw(path: path, body: body, headers: headers, timeout: timeout)
+        do {
+            return try AxonJSON.decode(type, from: data)
+        } catch {
+            throw DashboardError.decoding(String(describing: error))
+        }
+    }
+
+    private func postIgnoringBody(
+        path: String,
+        body: [String: String],
+        headers: [String: String]
+    ) async throws {
+        _ = try await postRaw(path: path, body: body, headers: headers,
+                              timeout: Self.requestTimeout)
+    }
+
+    private func postRaw(
+        path: String,
+        body: [String: String],
+        headers: [String: String],
+        timeout: TimeInterval
+    ) async throws -> Data {
+        var request = URLRequest(url: baseURL.appending(path: path))
+        request.httpMethod = "POST"
+        request.timeoutInterval = timeout
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        for (key, value) in headers {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw DashboardError.unreachable
+        }
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw DashboardError.badStatus(http.statusCode)
+        }
+        return data
+    }
 
     private func get<T: Decodable>(
         _ type: T.Type,
