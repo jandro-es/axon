@@ -43,6 +43,12 @@ func TestValidateLocalRouting(t *testing.T) {
 		{"verify apple rejected", func(m *ModelsConfig) { m.Verify = "apple" }, true},
 		{"verify empty-model rejected", func(m *ModelsConfig) { m.Verify = "ollama:" }, true},
 		{"verify_min_score over range rejected", func(m *ModelsConfig) { m.VerifyMinScore = 11 }, true},
+		// FR-192: reserved Apple ref forms must be rejected, not silently
+		// parsed as Claude model strings and misrouted to claude -p.
+		{"apple:pcc reserved", func(m *ModelsConfig) { m.Classify = "apple:pcc" }, true},
+		{"apple: suffix reserved on routine", func(m *ModelsConfig) { m.Routine = "apple:on-device" }, true},
+		{"apple-fm: reserved", func(m *ModelsConfig) { m.Classify = "apple-fm:foo" }, true},
+		{"bare apple-fm reserved", func(m *ModelsConfig) { m.Synthesis = "apple-fm" }, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -33,6 +33,16 @@ func ParseModelRef(s string) ModelRef {
 	return ModelRef{Provider: ProviderClaude, Model: s}
 }
 
+// reservedAppleRef reports whether a tier string uses a colon-suffixed Apple
+// form (`apple:<x>`, `apple-fm:<x>`) or bare `apple-fm` — reserved for the
+// macOS 27 tier work (FR-192, docs/21 M2). Without this gate such strings
+// parse as Claude model strings and silently misroute to `claude -p`.
+func reservedAppleRef(s string) bool {
+	return s == "apple-fm" ||
+		strings.HasPrefix(s, ProviderApple+":") ||
+		strings.HasPrefix(s, "apple-fm:")
+}
+
 // Fallback returns the local-failure policy, defaulting to "claude"
 // (fall forward through the normal budget path — FR-79).
 func (m ModelsConfig) Fallback() string {
@@ -62,6 +72,13 @@ func (m ModelsConfig) VerifyMinScoreOr() int {
 // can't express. Empty tier strings are skipped (profiles are partial
 // overrides); struct-tag `required` covers the top-level config.
 func validateLocalRouting(m ModelsConfig) error {
+	for _, t := range []struct{ key, val string }{
+		{"classify", m.Classify}, {"routine", m.Routine}, {"synthesis", m.Synthesis},
+	} {
+		if reservedAppleRef(t.val) {
+			return fmt.Errorf("models.%s %q is reserved for the macOS 27 Apple-tier work (docs/21 M2) and not yet supported — use %q (on-device), ollama:<model>, or a Claude model", t.key, t.val, ProviderApple)
+		}
+	}
 	if m.Synthesis != "" && ParseModelRef(m.Synthesis).Provider != ProviderClaude {
 		return fmt.Errorf("models.synthesis must be a Claude model (got %q): local providers are classify/routine only", m.Synthesis)
 	}
