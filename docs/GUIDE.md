@@ -442,6 +442,23 @@ Set `dashboard.capture_enabled: false` to turn the endpoint off entirely.
 
 ## 7. Knowledge ingestion & search
 
+### Images and screenshots
+
+`axon ingest photo.png` (CLI-only, never agent-reachable) turns an image into
+a searchable note: text is recovered **OCR-first**, and when the OCR text is
+sparse a local **vision** model describes the image instead. `ingestion.vision`
+selects the provider: `off` (default), `ollama:<vision-model>` (e.g.
+`ollama:qwen2.5vl`), `apple` (macOS 27 on-device via the `fm` CLI), or
+`apple:pcc` (Private Cloud Compute — requires `models.pcc_enabled: true`, and
+note that redaction rules apply to text, not pixels: PCC vision sends the
+**unredacted image bytes** to Apple-operated compute, which is why it is a
+deliberate, explicit mode and never a fallback). Vision is a budget-exempt
+local perception call — it never touches your Claude budget — and a vision
+failure defers to whatever text OCR recovered — when OCR found nothing, the
+ingest reports the vision provider's actual error instead of writing an
+empty note. The
+original image is copied (never moved) into the vault's attachments folder.
+
 ### Ask your vault
 
 `axon ask` answers a question **from your notes only** — grounded or silent:

@@ -337,8 +337,8 @@ func visionCheck(p config.Profile) Check {
 	switch {
 	case mode == "off":
 		return Check{Name: name, Status: StatusOK, Detail: "vision off"}
-	case mode == "apple":
-		return Check{Name: name, Status: StatusWarn, Detail: `vision provider "apple" requires macOS 27 on-device image input (not yet available) — use ollama:<model> or off`, Fix: "axon config set ingestion.vision off"}
+	case mode == "apple" || mode == "apple:pcc":
+		return visionCheckApple(mode, detectFM(context.Background()))
 	case strings.HasPrefix(mode, "ollama:"):
 		model := strings.TrimPrefix(mode, "ollama:")
 		host := p.Embeddings.Host

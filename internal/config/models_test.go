@@ -80,3 +80,25 @@ func TestModelsFallbackDefault(t *testing.T) {
 		t.Fatalf("fallback = %q, want fail", got)
 	}
 }
+
+// FR-197: apple:pcc vision requires the same PCC opt-in as the tier.
+func TestValidateVision(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		p       Profile
+		wantErr bool
+	}{
+		{"off ok", Profile{}, false},
+		{"ollama ok", Profile{Ingestion: IngestionConfig{Vision: "ollama:qwen2.5vl"}}, false},
+		{"apple ok without opt-in", Profile{Ingestion: IngestionConfig{Vision: "apple"}}, false},
+		{"apple:pcc without opt-in rejected", Profile{Ingestion: IngestionConfig{Vision: "apple:pcc"}}, true},
+		{"apple:pcc with opt-in ok", Profile{Ingestion: IngestionConfig{Vision: "apple:pcc"}, Models: ModelsConfig{PCCEnabled: true}}, false},
+		{"unknown apple variant rejected", Profile{Ingestion: IngestionConfig{Vision: "apple:weird"}}, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := validateVision(tt.p); (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

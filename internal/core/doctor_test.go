@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/http"
@@ -76,12 +77,26 @@ func TestDoctorVisionOff(t *testing.T) {
 	}
 }
 
-func TestDoctorVisionAppleWarns(t *testing.T) {
+func TestDoctorVisionAppleFollowsFMState(t *testing.T) {
 	withStubs(t, map[string]string{}, nil)
+	orig := detectFM
+	defer func() { detectFM = orig }()
+
+	// fm unavailable → warn, OCR-only fallback named (the pre-M3 contract).
+	detectFM = func(context.Context) FMStatus {
+		return FMStatus{State: FMStateAbsent, Detail: "fm CLI not found on PATH"}
+	}
 	r := Doctor(cfgWithIngestion(config.IngestionConfig{Vision: "apple"}), "personal")
 	c, ok := findCheck(r, "vision")
-	if !ok || c.Status != StatusWarn || !strings.Contains(c.Detail, "macOS 27") {
-		t.Fatalf("vision apple check = %+v ok=%v", c, ok)
+	if !ok || c.Status != StatusWarn || !strings.Contains(c.Detail, "OCR-only") {
+		t.Fatalf("vision apple (fm absent) = %+v ok=%v", c, ok)
+	}
+
+	// fm ready → ok (FR-196).
+	detectFM = func(context.Context) FMStatus { return FMStatus{State: FMStateReady} }
+	r = Doctor(cfgWithIngestion(config.IngestionConfig{Vision: "apple"}), "personal")
+	if c, ok = findCheck(r, "vision"); !ok || c.Status != StatusOK {
+		t.Fatalf("vision apple (fm ready) = %+v ok=%v", c, ok)
 	}
 }
 

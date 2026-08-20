@@ -70,6 +70,10 @@ func DetectFM(ctx context.Context) FMStatus {
 	return defaultFMDetector().detect(ctx)
 }
 
+// detectFM is the package indirection doctor uses, stubbable in tests so
+// machine-dependent fm state never decides a test outcome.
+var detectFM = DetectFM
+
 func (d fmDetector) detect(ctx context.Context) FMStatus {
 	st := FMStatus{AppleSilicon: d.goarch == "arm64"}
 	if d.goos != "darwin" {
@@ -220,6 +224,24 @@ func FMQuota(ctx context.Context) (string, bool) {
 		return "", false
 	}
 	return capString(fmSummary(text), fmDetailCap), true
+}
+
+// visionCheckApple maps the fm posture onto the vision check for the apple
+// vision modes (FR-196/197). Advisory: warns keep the OCR-only fallback.
+func visionCheckApple(mode string, st FMStatus) Check {
+	const name = "vision"
+	switch st.State {
+	case FMStateReady:
+		detail := "vision ready: " + mode + " (fm answering)"
+		if mode == "apple:pcc" {
+			detail += " — PCC is context-gated and quota-limited; a failed describe falls back to OCR-only"
+		}
+		return Check{Name: name, Status: StatusOK, Detail: detail}
+	case FMStateLicensePending:
+		return Check{Name: name, Status: StatusWarn, Detail: "vision " + mode + ": fm licence not agreed (images fall back to OCR-only)", Fix: "sudo fm license"}
+	default:
+		return Check{Name: name, Status: StatusWarn, Detail: "vision " + mode + " unavailable: " + st.Detail + " (images fall back to OCR-only)"}
+	}
 }
 
 // fmCheckFrom is the pure status→check mapping (table-tested per state).

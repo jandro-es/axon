@@ -3,6 +3,7 @@ package ingestion
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 
 	"github.com/jandro-es/axon/internal/config"
@@ -18,17 +19,34 @@ type Vision interface {
 	Name() string
 }
 
+// fmLookPath locates the macOS 27 fm CLI; a package seam for tests.
+var fmLookPath = exec.LookPath
+
 // VisionFor builds the configured vision provider, or nil when vision is off.
-// "apple" is accepted by the seam but not yet available; it returns an
-// actionable error so wiring falls back to OCR-only and doctor can report it.
-// goos is runtime.GOOS (kept for the future Apple tier; unused today).
+// "apple" (on-device) and "apple:pcc" (FR-197, gated by models.pcc_enabled at
+// validation) resolve to the fm-backed provider on macOS 27; anywhere the fm
+// CLI is missing they return an actionable error so wiring falls back to
+// OCR-only and doctor can report it. goos is runtime.GOOS.
 func VisionFor(cfg config.IngestionConfig, goos string) (Vision, error) {
 	mode := cfg.VisionMode()
 	switch {
 	case mode == "off":
 		return nil, nil
-	case mode == "apple":
-		return nil, fmt.Errorf(`ingestion.vision: "apple" requires macOS 27 on-device image input (not yet available) — use ollama:<model> or off`)
+	case mode == "apple" || mode == "apple:pcc":
+		if goos != "darwin" {
+			return nil, fmt.Errorf("ingestion.vision: %q requires macOS 27 (running on %s) — use ollama:<model> or off", mode, goos)
+		}
+		bin, err := fmLookPath("fm")
+		if err != nil {
+			return nil, fmt.Errorf("ingestion.vision: %q requires macOS 27's fm CLI (not found on PATH) — use ollama:<model> or off", mode)
+		}
+		variant := "system"
+		if mode == "apple:pcc" {
+			variant = "pcc"
+		}
+		return NewAppleVision(bin, variant), nil
+	case strings.HasPrefix(mode, "apple:"):
+		return nil, fmt.Errorf("ingestion.vision: unknown apple variant %q — use apple (on-device) or apple:pcc", mode)
 	case strings.HasPrefix(mode, "ollama:"):
 		model := strings.TrimPrefix(mode, "ollama:")
 		if model == "" {
