@@ -64,6 +64,23 @@ func unknownAppleVariant(s string) bool {
 	return ok && rest != AppleFMSystem && rest != AppleFMPCC
 }
 
+// validateVision applies the FR-197 cross-field rule: the PCC vision mode
+// needs the same explicit opt-in as the apple:pcc tier (PCC receives
+// unredacted image bytes — selecting it must always be deliberate).
+func validateVision(p Profile) error {
+	mode := p.Ingestion.VisionMode()
+	if !strings.HasPrefix(mode, ProviderApple+":") {
+		return nil
+	}
+	if mode != ProviderApple+":"+AppleFMPCC {
+		return fmt.Errorf("ingestion.vision %q names an unknown apple variant — use apple (on-device) or apple:pcc", mode)
+	}
+	if !p.Models.PCCEnabled {
+		return fmt.Errorf("ingestion.vision %q requires models.pcc_enabled: true — Private Cloud Compute vision sends unredacted image bytes off-device and is opt-in (FR-197)", mode)
+	}
+	return nil
+}
+
 // Fallback returns the local-failure policy, defaulting to "claude"
 // (fall forward through the normal budget path — FR-79).
 func (m ModelsConfig) Fallback() string {
