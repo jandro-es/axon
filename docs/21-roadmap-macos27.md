@@ -147,7 +147,20 @@ on a 27 machine; the same config on macOS 26 keeps today's actionable error;
 Swift API — if so, this routes through a small helper in the existing
 ADR-013 compiled-Swift-helper pattern (the OCR helper's sibling).
 
-### M4 — App Intents MCP: Siri & Spotlight (M) · candidate — not scheduled
+### M4 — App Intents MCP: Siri & Spotlight (M) · **Status: In progress 2026-08-20, reframed (FR-198 + CFR-92…95)**
+
+> **Reframed at design**: Apple's MCP-in-App-Intents is **not public API**
+> (verified against the macOS 27 SDK docs on a real 27.0 machine — the App
+> Intents surface has no MCP symbol; the press coverage was early internal
+> testing). M4 therefore ships **plain App Intents** in the Companion —
+> Search / Ask / Tasks / Capture as Siri & Shortcuts verbs, pure-REST against
+> the daemon (new guarded `GET /api/search` seam, FR-198; the other three
+> ride existing guarded endpoints) — which is exactly the layer Apple says
+> the MCP bridge will attach to. **The MCP hookup itself is a recorded
+> deferral** until the API is public. The will-not-do stands: on-demand
+> answers only, no vault content indexed into Spotlight. Spec:
+> `docs/superpowers/specs/2026-08-20-macos27-m4-app-intents-design.md`.
+> The section below is the original candidate text.
 **Build:** the Companion hosts App Intents that bridge to the daemon's MCP
 server, so Siri and Spotlight can answer from the vault. Exposure is the
 **agentic-read tool set only** (`vault_search`, `vault_read`, `vault_links`,
