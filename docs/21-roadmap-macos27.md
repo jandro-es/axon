@@ -183,7 +183,16 @@ a stable API, and its design pass starts by reading what actually shipped.
 `vault_search` + `actions_list` first); result rendering (snippet vs open-in-
 Obsidian).
 
-### M5 — Companion on macOS 27 (S) · candidate — not scheduled
+### M5 — Companion on macOS 27 (S) · **Status: Shipped 2026-08-20 (companion-v0.2.0 published; two human steps pending)**
+
+> **Executed** (spec: `docs/superpowers/specs/2026-08-20-macos27-m5-companion-release-design.md`).
+> Floor decision: **stays macOS 26** (owner's choice against the raise
+> recommendation — ISSUES #3 remains open until a QA pass on real 26
+> hardware; 0.2.0 uses no 27-only API). companion-v0.2.0 cut headlessly:
+> notarized, stapled, appcast extended and signed, GitHub release published.
+> Remaining: the two human steps — the live Sparkle 0.1.0→0.2.0 update
+> (closes ISSUES #4) and the eyes-on QA checklist in `apps/companion/QA.md`.
+> The section below is the original candidate text.
 **Build:** retire the QA debt on the new OS (`apps/companion/QA.md`,
 `docs/ISSUES.md` #3/#4): human-verify the popover/glass/accessibility items on
 release macOS 27; exercise a real Sparkle update end-to-end

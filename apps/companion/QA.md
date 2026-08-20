@@ -184,3 +184,20 @@ the Shortcuts app and answering via Siri ("Ask Axon…", "Capture in Axon…"),
 parameter follow-up dialogs, and behaviour when the daemon is stopped
 (expected: the "Axon isn't running" dialog). Ask spends real tokens — verify
 against a scratch profile first.
+
+
+## 0.2.0 release — the two human steps (2026-08-20)
+
+Everything headless is done: notarized + stapled universal build, signed
+appcast (0.1.0 → 0.2.0), GitHub release published. Remaining, in order:
+
+1. **Sparkle e2e (ISSUES #4):** with 0.1.0 running, Check for Updates →
+   install 0.2.0 through the Sparkle UI. Success = the menu bar app relaunches
+   as 0.2.0 (About shows 0.2.0 / build 2).
+2. **Siri verbs (CFR-92…95):** Shortcuts app shows Ask Vault / Search Vault /
+   Check Tasks / Capture Thought under Axon; "Ask Axon" via Siri prompts for
+   the question and answers from the vault; "Capture in Axon" lands a note in
+   00-Inbox. With the daemon stopped, every verb answers "Axon isn't running".
+   Ask spends real tokens — point at a scratch profile if you'd rather not.
+3. **Standing MenuBarExtra items** (from 0.1.0, still open): glass rendering,
+   keyboard traversal, VoiceOver, Reduce Transparency fallback, WCAG contrast.
