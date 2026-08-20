@@ -28,9 +28,11 @@ opt-in best-effort). **FR-193…FR-195, ADR-038.** Graduates docs/21 M2.
    `JSONOutput`/`OutputSchema` are not sent (fm serve `response_format`
    unverified) — `ValidateOutput` + the chokepoint retry own correctness.
 2. **`agent.FMSupervisor`** (`internal/agent/fmserve_proc.go`) — owns the
-   child: `fm serve --socket <data_dir>/fm.sock`; `Ensure(ctx)` lazily starts
+   child: `fm serve --socket <FMSocketPath(dataDir)>`; `Ensure(ctx)` lazily starts
    (mutex, one per process), waits for `/health` (bounded), restarts a dead
-   child on next Ensure; `Stop()` SIGTERM + WaitDelay kill; socket dir 0700.
+   child on next Ensure; `Stop()` SIGTERM + kill escalation; socket dir 0700
+   under the per-user temp dir, keyed by a data-dir hash (sun_path is capped
+   at 104 bytes on macOS — a deep data dir EINVALs, found live).
    The binary path comes from `exec.LookPath("fm")` at construction; a
    missing binary makes Ensure error → adapter error → FR-79 ladder.
 3. **Config** — `ParseModelRef`: `apple:system`/`apple:pcc` →

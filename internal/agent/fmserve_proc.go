@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"net"
 	"net/http"
@@ -36,8 +37,22 @@ type FMSupervisor struct {
 	health func(ctx context.Context, socket string) error
 }
 
+// fmSocketMax is a safe bound under the 104-byte darwin sun_path limit.
+const fmSocketMax = 100
+
+// FMSocketPath returns the per-profile fm serve socket path. It deliberately
+// does NOT live in the data dir: unix socket paths are capped at 104 bytes on
+// macOS (a deep AXON_HOME breaks bind/connect with EINVAL — found live), so
+// the socket sits under the per-user temp dir, keyed by a hash of the data
+// dir for stability and per-profile distinctness.
+func FMSocketPath(dataDir string) string {
+	sum := sha256.Sum256([]byte(dataDir))
+	return filepath.Join(os.TempDir(), fmt.Sprintf("axon-fm-%x", sum[:4]), "fm.sock")
+}
+
 // NewFMSupervisor builds the real supervisor. bin is the fm binary path
-// (from exec.LookPath at wiring time); socket lives in the profile data dir.
+// (from exec.LookPath at wiring time); socket normally comes from
+// FMSocketPath.
 func NewFMSupervisor(bin, socket string) *FMSupervisor {
 	s := &FMSupervisor{socket: socket, healthTimeout: 10 * time.Second, health: fmHealth}
 	s.spawn = func() (fmProc, error) { return startFMServe(bin, socket) }
@@ -52,6 +67,9 @@ func (s *FMSupervisor) Socket() string { return s.socket }
 func (s *FMSupervisor) Ensure(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if len(s.socket) > fmSocketMax {
+		return fmt.Errorf("fm serve socket path %q is %d bytes — unix sockets are capped at 104 bytes on macOS; use agent.FMSocketPath", s.socket, len(s.socket))
+	}
 	if s.proc != nil && s.proc.Alive() {
 		return nil
 	}

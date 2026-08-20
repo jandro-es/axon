@@ -146,7 +146,7 @@ func (d *profileDeps) agentRouter() agent.Router {
 			if r.AppleFM == nil {
 				if bin, err := exec.LookPath("fm"); err == nil {
 					if d.fmSup == nil {
-						d.fmSup = agent.NewFMSupervisor(bin, filepath.Join(d.paths.DataDir, "fm.sock"))
+						d.fmSup = agent.NewFMSupervisor(bin, agent.FMSocketPath(d.paths.DataDir))
 					}
 					r.AppleFM = agent.NewFMServe(d.fmSup)
 				}

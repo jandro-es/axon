@@ -155,3 +155,29 @@ type togglableProc struct{ alive bool }
 
 func (p *togglableProc) Alive() bool { return p.alive }
 func (p *togglableProc) Stop()       { p.alive = false }
+
+func TestFMSocketPathIsShortStableAndDistinct(t *testing.T) {
+	deep := "/Users/someone/very/deep/nested/path/to/.axon/profiles/personal/data/dir/that/keeps/going"
+	a := FMSocketPath(deep)
+	if len(a) > 100 {
+		t.Fatalf("socket path %q is %d bytes — must stay under the 104-byte sun_path limit", a, len(a))
+	}
+	if a != FMSocketPath(deep) {
+		t.Error("must be stable for the same data dir")
+	}
+	if a == FMSocketPath("/other/data/dir") {
+		t.Error("must differ per data dir")
+	}
+}
+
+func TestFMSupervisorRejectsOverlongSocket(t *testing.T) {
+	sup := &FMSupervisor{
+		socket:        filepath.Join("/tmp", strings.Repeat("x", 120), "fm.sock"),
+		healthTimeout: 100 * time.Millisecond,
+		health:        func(context.Context, string) error { return errors.New("unreached") },
+	}
+	sup.spawn = func() (fmProc, error) { t.Fatal("must not spawn on an overlong socket path"); return nil, nil }
+	if err := sup.Ensure(context.Background()); err == nil || !strings.Contains(err.Error(), "104") {
+		t.Fatalf("want an actionable sun_path error, got %v", err)
+	}
+}

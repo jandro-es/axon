@@ -702,8 +702,9 @@ established that PCC is **context-gated** (unavailable outside
 Terminal-app-like contexts, with unreliable exit codes) and quota-limited
 (`fm quota-usage`).
 
-**Decision:** (1) **Transport:** a daemon-supervised `fm serve --socket
-<data_dir>/fm.sock` child — lazily started on the first call that resolves to
+**Decision:** (1) **Transport:** a daemon-supervised `fm serve --socket` child (socket
+under the per-user temp dir via `agent.FMSocketPath` — sun_path caps unix
+socket paths at 104 bytes, so it cannot live in a deep data dir) — lazily started on the first call that resolves to
 the provider, `/health`-probed, restarted on death, stopped on shutdown; the
 adapter is a unix-socket HTTP client shaped like the Ollama one. (2)
 **Naming:** the `apple:` family extends — bare `apple` keeps the Swift helper
