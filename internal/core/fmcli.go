@@ -172,6 +172,27 @@ func capString(s string, n int) string {
 	return s[:n] + "… (truncated)"
 }
 
+// fmCheck reports the fm CLI posture in doctor (FR-191). Advisory: only the
+// license-pending state warns, because it is the one thing a user can act on
+// before docs/21 M2 makes anything consume fm. AXON never agrees to the terms
+// itself — `fm license` is a privileged, machine-wide legal agreement.
+func fmCheck() Check {
+	return fmCheckFrom(DetectFM(context.Background()))
+}
+
+// fmCheckFrom is the pure status→check mapping (table-tested per state).
+func fmCheckFrom(st FMStatus) Check {
+	c := Check{Name: "apple-fm", Status: StatusOK, Detail: st.Detail}
+	switch st.State {
+	case FMStateLicensePending:
+		c.Status = StatusWarn
+		c.Fix = "sudo fm license"
+	case FMStateReady:
+		c.Detail = "fm ready: " + st.Detail
+	}
+	return c
+}
+
 // swVersProductVersion asks the OS for its version (e.g. "27.0").
 func swVersProductVersion(ctx context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, fmDetectTimeout)

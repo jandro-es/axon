@@ -131,6 +131,10 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 			// 4c'. Local vision provider (ADR-035) + media caption tooling (advisory).
 			checks = append(checks, visionCheck(p))
 			checks = append(checks, mediaCheck(p))
+			// 4c''. macOS 27 fm CLI posture (FR-191, advisory; macOS only).
+			if runtime.GOOS == "darwin" {
+				checks = append(checks, fmCheck())
+			}
 			checks = append(checks, researchCheck(p))
 			// 4d. Local reranker prerequisite, only when retrieval.rerank is set.
 			if p.Retrieval.RerankMode() != "off" {
