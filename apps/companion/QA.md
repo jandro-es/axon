@@ -191,9 +191,15 @@ against a scratch profile first.
 Everything headless is done: notarized + stapled universal build, signed
 appcast (0.1.0 → 0.2.0), GitHub release published. Remaining, in order:
 
-1. **Sparkle e2e (ISSUES #4):** with 0.1.0 running, Check for Updates →
-   install 0.2.0 through the Sparkle UI. Success = the menu bar app relaunches
-   as 0.2.0 (About shows 0.2.0 / build 2).
+1. **Sparkle e2e (ISSUES #4):** from a REAL install location — never from
+   `dist/` (pipeline output; rebuilds replace the bundle under a running app,
+   which is exactly how the first attempt failed with Sparkle's generic
+   updater error). Procedure: quit any Companion running from `dist/`;
+   unzip the released `Axon-0.1.0.zip` into `/Applications`; launch it;
+   Check for Updates → install 0.2.0 through the Sparkle UI. Success = the
+   menu bar app relaunches as 0.2.0 (About shows 0.2.0 / build 2).
+   Afterwards `make companion-install` is the supported way to (re)install
+   the current packaged build.
 2. **Siri verbs (CFR-92…95):** Shortcuts app shows Ask Vault / Search Vault /
    Check Tasks / Capture Thought under Axon; "Ask Axon" via Siri prompts for
    the question and answers from the vault; "Capture in Axon" lands a note in
