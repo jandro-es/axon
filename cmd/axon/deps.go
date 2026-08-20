@@ -30,7 +30,7 @@ type profileDeps struct {
 	db         *sql.DB
 	vault      *vault.FS
 	embedder   embeddings.Provider
-	configPath string // absolute config path, for subprocess re-invocation (agentic MCP)
+	configPath string              // absolute config path, for subprocess re-invocation (agentic MCP)
 	fmSup      *agent.FMSupervisor // supervised fm serve child (ADR-038); nil unless a tier resolves to it
 }
 
