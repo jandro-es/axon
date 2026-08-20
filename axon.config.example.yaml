@@ -85,8 +85,8 @@ profiles:
       # classify: "apple"                     # Apple Foundation Models on-device (macOS 26+, classify only)
       # classify: "apple:system"              # on-device via macOS 27's fm serve — measured token usage (classify only, ADR-038)
       # routine:  "apple:pcc"                 # Private Cloud Compute rung (32K, classify+routine) — needs pcc_enabled below
-      # pcc_enabled: true                     # opt-in for apple:pcc (FR-195). Apple-operated compute: deliberately
-      #                                       # NOT for deny-by-default (work) profiles; quota advisory in doctor
+      pcc_enabled: false                      # opt-in for apple:pcc (FR-195). Apple-operated compute: deliberately
+                                              # NOT for deny-by-default (work) profiles; quota advisory in doctor
       # ollama_host: "http://localhost:11434" # local chat host (independent of embeddings.host)
       # local_fallback: claude                # claude (default): retry locally once, then fall forward
                                               # through the budget path; fail: surface the error instead

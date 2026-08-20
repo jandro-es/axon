@@ -225,7 +225,13 @@ func (d *profileDeps) evalManager(bus *events.Bus) (tokens.Manager, func(string)
 		case "synthesis":
 			key = p.Models.Synthesis
 		}
-		return config.ParseModelRef(key).Model
+		ref := config.ParseModelRef(key)
+		if ref.Provider == config.ProviderAppleFM {
+			// The fm adapter reports the AXON ref (apple:<variant>) so ledger
+			// rows are unambiguous; the eval expectation must match it.
+			return config.ProviderApple + ":" + ref.Model
+		}
+		return ref.Model
 	}
 	return mgr, resolve
 }
