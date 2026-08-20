@@ -107,6 +107,68 @@ func TestRecipeChangeGateMissingNote(t *testing.T) {
 	}
 }
 
+func TestRecipeRunRenderToBlock(t *testing.T) {
+	rc, _ := newRC(t, map[string]string{"03-Resources/List.md": "- item one\n"})
+	r := RecipeRun{def: testRecipe()}
+	res, err := r.Run(context.Background(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res.Summary, "wrote") {
+		t.Fatalf("summary: %q", res.Summary)
+	}
+	n, err := rc.Vault.Read(context.Background(), "03-Resources/Digest.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(n.Body, "item one") || !strings.Contains(n.Body, "2026-06-28") {
+		t.Fatalf("block content missing: %q", n.Body)
+	}
+	if !strings.Contains(n.Body, "test-recipe") {
+		t.Fatalf("stub preamble should name the recipe: %q", n.Body)
+	}
+	// Re-run: human edits outside the block survive (only the block rewrites).
+	if err := rc.Vault.Append("03-Resources/Digest.md", "\nHuman footnote.\n"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Run(context.Background(), rc); err != nil {
+		t.Fatal(err)
+	}
+	n2, err := rc.Vault.Read(context.Background(), "03-Resources/Digest.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(n2.Body, "Human footnote.") {
+		t.Fatalf("human prose clobbered: %q", n2.Body)
+	}
+}
+
+func TestRecipeRunDryRunWritesNothing(t *testing.T) {
+	rc, _ := newRC(t, map[string]string{"03-Resources/List.md": "- item one\n"})
+	rc.DryRun = true
+	res, err := (RecipeRun{def: testRecipe()}).Run(context.Background(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res.Summary, "would write") {
+		t.Fatalf("summary: %q", res.Summary)
+	}
+	if rc.Vault.Exists("03-Resources/Digest.md") {
+		t.Fatal("dry-run must not write")
+	}
+}
+
+func TestRecipeRunMissingNoteInactive(t *testing.T) {
+	rc, _ := newRC(t, nil)
+	res, err := (RecipeRun{def: testRecipe()}).Run(context.Background(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res.Summary, "absent") {
+		t.Fatalf("summary: %q", res.Summary)
+	}
+}
+
 func TestRecipeInputClip(t *testing.T) {
 	if got := clipInput(strings.Repeat("a", recipeInputCap+10)); len(got) > recipeInputCap+40 || !strings.Contains(got, "truncated") {
 		t.Fatalf("clip failed: len=%d", len(got))

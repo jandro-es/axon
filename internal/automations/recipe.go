@@ -121,6 +121,68 @@ func (r RecipeRun) DetectChange(ctx context.Context, rc RunCtx) (Change, error) 
 	return Change{Changed: true, Reason: fmt.Sprintf("%d input(s) resolved", len(vals)), Cursor: cursor}, nil
 }
 
+// runTarget names the sink for summaries and dry-run Changes.
+func (r RecipeRun) runTarget() string {
+	if b := r.def.Output.Block; b != nil {
+		return b.Note
+	}
+	return ".axon/review-queue.md"
+}
+
+// Run resolves inputs, produces the output text (render or one model call),
+// and writes exactly one sink. DryRun reports without writing.
+func (r RecipeRun) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
+	vals, reason, err := r.resolveInputs(ctx, rc)
+	if err != nil {
+		return RunResult{}, err
+	}
+	if reason != "" {
+		return RunResult{Summary: reason + " (recipe inactive)"}, nil
+	}
+
+	text, est := "", 0
+	if strings.TrimSpace(r.def.Prompt) != "" {
+		out, e, deferred, merr := r.runPrompt(ctx, rc, vals)
+		if merr != nil {
+			return RunResult{}, merr
+		}
+		if deferred {
+			return RunResult{Summary: "deferred (budget)", EstimatedTokens: e}, nil
+		}
+		text, est = out, e
+	} else {
+		text = strings.TrimSpace(r.substitute(r.def.Render, vals, rc))
+	}
+
+	if rc.DryRun {
+		return RunResult{Summary: "would write " + r.runTarget(), Changes: []string{r.runTarget()}, EstimatedTokens: est}, nil
+	}
+	if b := r.def.Output.Block; b != nil {
+		if !rc.Vault.Exists(b.Note) {
+			stub := "# " + base(b.Note) + "\n\nMaintained by the \"" + r.def.Name +
+				"\" recipe. The section below is rewritten on every run; anything outside it is yours.\n"
+			if _, cerr := rc.Vault.Create(b.Note, stub); cerr != nil {
+				return RunResult{}, cerr
+			}
+		}
+		if perr := rc.Vault.Patch(ctx, b.Note, b.Block, text); perr != nil {
+			return RunResult{}, perr
+		}
+		return RunResult{Summary: "wrote axon:" + b.Block + " in " + b.Note, Changes: []string{b.Note}, EstimatedTokens: est}, nil
+	}
+	return r.propose(ctx, rc, text, est)
+}
+
+// runPrompt and propose land in the next tasks; stubs keep this task
+// compiling and honestly failing.
+func (r RecipeRun) runPrompt(ctx context.Context, rc RunCtx, vals map[string]string) (string, int, bool, error) {
+	return "", 0, false, fmt.Errorf("recipe %s: model path not yet implemented", r.def.Name)
+}
+
+func (r RecipeRun) propose(ctx context.Context, rc RunCtx, text string, est int) (RunResult, error) {
+	return RunResult{}, fmt.Errorf("recipe %s: review sink not yet implemented", r.def.Name)
+}
+
 // canonicalInputs is the deterministic form hashed by the automatic
 // change-gate: sorted name/value pairs.
 func canonicalInputs(vals map[string]string) string {
