@@ -55,6 +55,8 @@ type Info struct {
 	Allowed       bool   `json:"allowed"`        // permitted by policy.allowed_automations
 	Schedule      string `json:"schedule,omitempty"`
 	Model         string `json:"model,omitempty"` // configured model tier, or "none"
+	// Recipe marks a user-defined recipe (ADR-039) vs a built-in.
+	Recipe bool `json:"recipe,omitempty"`
 }
 
 // Catalog returns metadata for every built-in automation (sorted by name),
@@ -66,9 +68,15 @@ func Catalog(profile config.Profile) []Info {
 	for name, a := range reg {
 		cfg, hasCfg := profile.Automations[name]
 		allowed := AllowedByPolicy(profile, name)
+		purpose := Purpose(name)
+		rr, isRecipe := a.(RecipeRun)
+		if isRecipe {
+			purpose = rr.def.Purpose
+		}
 		info := Info{
 			Name:          name,
-			Purpose:       Purpose(name),
+			Purpose:       purpose,
+			Recipe:        isRecipe,
 			Essential:     a.Essential(),
 			ConfigEnabled: hasCfg && cfg.Enabled,
 			Allowed:       allowed,

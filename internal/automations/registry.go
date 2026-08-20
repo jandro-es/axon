@@ -7,10 +7,10 @@ import (
 	"github.com/jandro-es/axon/internal/config"
 )
 
-// Registry returns all standard automations keyed by name. Per-automation config
-// (thresholds etc.) is applied where relevant.
-func Registry(profile config.Profile) map[string]Automation {
-	reg := map[string]Automation{
+// builtins returns the standard automations keyed by name. Per-automation
+// config (thresholds etc.) is applied where relevant.
+func builtins() map[string]Automation {
+	return map[string]Automation{
 		BudgetGuard{}.Name():        BudgetGuard{},
 		Heartbeat{}.Name():          Heartbeat{},
 		KnowledgeReindex{}.Name():   KnowledgeReindex{},
@@ -35,6 +35,19 @@ func Registry(profile config.Profile) map[string]Automation {
 		ActionsConsolidate{}.Name(): ActionsConsolidate{},
 		ActionsReview{}.Name():      ActionsReview{},
 		ActionExtract{}.Name():      ActionExtract{},
+	}
+}
+
+// Registry returns all automations for this profile: the standard set plus
+// the profile's recipes (ADR-039). Built-ins always win a name collision —
+// the collision is surfaced by ValidateRecipes, never silently shadowed.
+func Registry(profile config.Profile) map[string]Automation {
+	reg := builtins()
+	for _, r := range profile.Recipes {
+		if _, exists := reg[r.Name]; exists {
+			continue
+		}
+		reg[r.Name] = RecipeRun{def: r}
 	}
 	return reg
 }

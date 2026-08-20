@@ -7,6 +7,7 @@ import (
 
 	"github.com/jandro-es/axon/internal/agent"
 	"github.com/jandro-es/axon/internal/config"
+	"github.com/jandro-es/axon/internal/core"
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/review"
 )
@@ -253,6 +254,73 @@ func TestRecipeReviewSinkProposesAndDedups(t *testing.T) {
 	}
 	if !strings.Contains(res2.Summary, "no new proposals") {
 		t.Fatalf("dedup failed: %q", res2.Summary)
+	}
+}
+
+func TestRegistryIncludesRecipesBuiltinsWin(t *testing.T) {
+	p := config.Profile{Recipes: []config.Recipe{testRecipe(), func() config.Recipe {
+		r := testRecipe()
+		r.Name = "heartbeat" // collides with a built-in
+		return r
+	}()}}
+	reg := Registry(p)
+	if _, ok := reg["test-recipe"].(RecipeRun); !ok {
+		t.Fatalf("recipe not registered: %T", reg["test-recipe"])
+	}
+	if _, isRecipe := reg["heartbeat"].(RecipeRun); isRecipe {
+		t.Fatal("built-in must win a name collision")
+	}
+	if err := ValidateRecipes(p); err == nil || !strings.Contains(err.Error(), "heartbeat") {
+		t.Fatalf("collision must be a loud error, got %v", err)
+	}
+	if err := ValidateRecipes(config.Profile{Recipes: []config.Recipe{testRecipe()}}); err != nil {
+		t.Fatalf("clean recipes must validate: %v", err)
+	}
+}
+
+func TestUnscheduledRecipes(t *testing.T) {
+	p := config.Profile{Recipes: []config.Recipe{testRecipe()}}
+	if got := UnscheduledRecipes(p); len(got) != 1 || got[0] != "test-recipe" {
+		t.Fatalf("want [test-recipe], got %v", got)
+	}
+	p.Automations = map[string]config.Automation{"test-recipe": {Enabled: true, Schedule: "0 8 * * 1"}}
+	if got := UnscheduledRecipes(p); len(got) != 0 {
+		t.Fatalf("scheduled recipe reported unscheduled: %v", got)
+	}
+}
+
+func TestCatalogShowsRecipePurpose(t *testing.T) {
+	p := config.Profile{
+		Recipes:     []config.Recipe{testRecipe()},
+		Automations: map[string]config.Automation{"test-recipe": {Enabled: true, Schedule: "0 8 * * 1", Model: "routine"}},
+	}
+	for _, info := range Catalog(p) {
+		if info.Name == "test-recipe" {
+			if !info.Recipe || info.Purpose != "Test recipe." {
+				t.Fatalf("catalog entry wrong: %+v", info)
+			}
+			return
+		}
+	}
+	t.Fatal("recipe missing from catalog")
+}
+
+func TestRecipesCheckStates(t *testing.T) {
+	none := RecipesCheck(config.Profile{})
+	if none.Status != core.StatusOK || !strings.Contains(none.Detail, "no recipes") {
+		t.Fatalf("none state: %+v", none)
+	}
+	collide := config.Profile{Recipes: []config.Recipe{func() config.Recipe {
+		r := testRecipe()
+		r.Name = "heartbeat"
+		return r
+	}()}}
+	if c := RecipesCheck(collide); c.Status != core.StatusWarn {
+		t.Fatalf("collision must warn: %+v", c)
+	}
+	ok := RecipesCheck(config.Profile{Recipes: []config.Recipe{testRecipe()}})
+	if ok.Status != core.StatusOK || !strings.Contains(ok.Detail, "unscheduled") {
+		t.Fatalf("ok+unscheduled state: %+v", ok)
 	}
 }
 

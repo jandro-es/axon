@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/jandro-es/axon/internal/config"
+	"github.com/jandro-es/axon/internal/core"
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/tokens"
 )
@@ -230,6 +231,51 @@ func (r RecipeRun) propose(ctx context.Context, rc RunCtx, text string, est int)
 		Summary: fmt.Sprintf("proposed %d item(s) to review", len(queue)),
 		Changes: []string{".axon/review-queue.md"}, EstimatedTokens: est,
 	}, nil
+}
+
+// ValidateRecipes is the check only this package can make (FR-201): a
+// recipe name colliding with a built-in. Called from axon start, axon run,
+// and doctor so the misconfig is loud at every entry point.
+func ValidateRecipes(profile config.Profile) error {
+	b := builtins()
+	for _, r := range profile.Recipes {
+		if _, exists := b[r.Name]; exists {
+			return fmt.Errorf("recipe %q collides with a built-in automation — rename the recipe", r.Name)
+		}
+	}
+	return nil
+}
+
+// UnscheduledRecipes lists recipes with no automations.<name> entry — legal
+// (axon run only) but worth a doctor advisory.
+func UnscheduledRecipes(profile config.Profile) []string {
+	var out []string
+	for _, r := range profile.Recipes {
+		if _, ok := profile.Automations[r.Name]; !ok {
+			out = append(out, r.Name)
+		}
+	}
+	return out
+}
+
+// RecipesCheck is the advisory doctor check (FR-201), appended by the
+// doctor command (core cannot import this package — automations→core
+// already exists).
+func RecipesCheck(p config.Profile) core.Check {
+	const name = "recipes"
+	if len(p.Recipes) == 0 {
+		return core.Check{Name: name, Status: core.StatusOK,
+			Detail: "no recipes defined (user-defined automations, ADR-039; add a recipes: block in config.yaml)"}
+	}
+	if err := ValidateRecipes(p); err != nil {
+		return core.Check{Name: name, Status: core.StatusWarn, Detail: err.Error(),
+			Fix: "rename the recipe in config.yaml"}
+	}
+	detail := fmt.Sprintf("%d recipe(s) defined", len(p.Recipes))
+	if un := UnscheduledRecipes(p); len(un) > 0 {
+		detail += " — unscheduled (axon run only): " + strings.Join(un, ", ")
+	}
+	return core.Check{Name: name, Status: core.StatusOK, Detail: detail}
 }
 
 // canonicalInputs is the deterministic form hashed by the automatic
