@@ -77,6 +77,36 @@ func TestRecipeResolveInputsRecentNotes(t *testing.T) {
 	}
 }
 
+func TestRecipeChangeGate(t *testing.T) {
+	rc, _ := newRC(t, map[string]string{"03-Resources/List.md": "- item one\n"})
+	r := RecipeRun{def: testRecipe()}
+	ch, err := r.DetectChange(context.Background(), rc)
+	if err != nil || !ch.Changed || ch.Cursor == "" {
+		t.Fatalf("first run should change: %+v %v", ch, err)
+	}
+	rc.LastCursor = ch.Cursor
+	ch2, err := r.DetectChange(context.Background(), rc)
+	if err != nil || ch2.Changed {
+		t.Fatalf("unchanged inputs should skip: %+v %v", ch2, err)
+	}
+	// Editing the input re-arms the gate.
+	if err := rc.Vault.Append("03-Resources/List.md", "- item three\n"); err != nil {
+		t.Fatal(err)
+	}
+	ch3, err := r.DetectChange(context.Background(), rc)
+	if err != nil || !ch3.Changed || ch3.Cursor == ch.Cursor {
+		t.Fatalf("edited input should re-arm: %+v %v", ch3, err)
+	}
+}
+
+func TestRecipeChangeGateMissingNote(t *testing.T) {
+	rc, _ := newRC(t, nil)
+	ch, err := (RecipeRun{def: testRecipe()}).DetectChange(context.Background(), rc)
+	if err != nil || ch.Changed || !strings.Contains(ch.Reason, "absent") {
+		t.Fatalf("missing note should idle: %+v %v", ch, err)
+	}
+}
+
 func TestRecipeInputClip(t *testing.T) {
 	if got := clipInput(strings.Repeat("a", recipeInputCap+10)); len(got) > recipeInputCap+40 || !strings.Contains(got, "truncated") {
 		t.Fatalf("clip failed: len=%d", len(got))

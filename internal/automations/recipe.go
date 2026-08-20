@@ -103,6 +103,24 @@ func (r RecipeRun) substitute(tmpl string, vals map[string]string, rc RunCtx) st
 	return strings.NewReplacer(pairs...).Replace(tmpl)
 }
 
+// DetectChange is the automatic change-gate (FR-31 generically): the cursor
+// is a hash of the canonically rendered inputs, so unchanged inputs skip
+// with no model call.
+func (r RecipeRun) DetectChange(ctx context.Context, rc RunCtx) (Change, error) {
+	vals, reason, err := r.resolveInputs(ctx, rc)
+	if err != nil {
+		return Change{}, err
+	}
+	if reason != "" {
+		return Change{Changed: false, Reason: reason}, nil
+	}
+	cursor := "recipe:" + hashShort(canonicalInputs(vals))
+	if cursor == rc.LastCursor {
+		return Change{Changed: false, Reason: "inputs unchanged"}, nil
+	}
+	return Change{Changed: true, Reason: fmt.Sprintf("%d input(s) resolved", len(vals)), Cursor: cursor}, nil
+}
+
 // canonicalInputs is the deterministic form hashed by the automatic
 // change-gate: sorted name/value pairs.
 func canonicalInputs(vals map[string]string) string {
