@@ -891,7 +891,7 @@ the vault is the source of truth, a full restore is: copy the vault back and run
 | `axon config validate` | Validate `config.yaml` (default `~/.axon/config.yaml`) + the active profile. |
 | `axon doctor` | Prerequisite checks with remediation hints. |
 | `axon init` | Idempotently provision the profile (steps in §5). |
-| `axon reindex [--embeddings]` | Rebuild notes mirror + link graph from the vault. |
+| `axon reindex [--embeddings]` | Rebuild notes mirror + link graph from the vault; `--embeddings` also forces a full re-embed + vector-index refresh (provider must be reachable). |
 | `axon ingest <url\|path> [--dry-run] [--enrich] [--json]` | Run the ingestion pipeline; `--enrich` summarises with Claude (via the token manager) and reports tokens spent. |
 | `axon search <query> [--top-k N] [--json]` | Hybrid lexical + semantic search. |
 | `axon ask "<question>" [--top-k N] [--json]` | Grounded-or-silent RAG answer with `[[wikilink]]` citations; refuses (zero tokens) when retrieval finds nothing relevant. Flags source conflicts when your notes disagree. |
