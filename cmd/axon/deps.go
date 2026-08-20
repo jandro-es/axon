@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 
@@ -30,6 +31,7 @@ type profileDeps struct {
 	vault      *vault.FS
 	embedder   embeddings.Provider
 	configPath string // absolute config path, for subprocess re-invocation (agentic MCP)
+	fmSup      *agent.FMSupervisor // supervised fm serve child (ADR-038); nil unless a tier resolves to it
 }
 
 // loadProfileDeps loads + validates config, resolves the active profile, builds
@@ -140,6 +142,17 @@ func (d *profileDeps) agentRouter() agent.Router {
 				}
 				r.Apple = agent.NewAppleFM(helper)
 			}
+		case config.ProviderAppleFM:
+			if r.AppleFM == nil {
+				if bin, err := exec.LookPath("fm"); err == nil {
+					if d.fmSup == nil {
+						d.fmSup = agent.NewFMSupervisor(bin, filepath.Join(d.paths.DataDir, "fm.sock"))
+					}
+					r.AppleFM = agent.NewFMServe(d.fmSup)
+				}
+				// fm absent → field stays nil; Resolve returns the actionable
+				// "macOS 27 with the fm CLI is required" error → FR-79 ladder.
+			}
 		}
 	}
 	return r
@@ -228,6 +241,9 @@ func (d *profileDeps) mcpDeps(bus *events.Bus) mcp.Deps {
 
 // close releases the database if open.
 func (d *profileDeps) close() {
+	if d.fmSup != nil {
+		d.fmSup.Stop()
+	}
 	if d.db != nil {
 		_ = d.db.Close()
 	}

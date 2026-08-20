@@ -44,6 +44,30 @@ func TestEvalDriftDetectChange(t *testing.T) {
 	}
 }
 
+// FR-194: fm-backed tiers key drift on the macOS product version — an OS
+// update is the event that swaps the model underneath them.
+func TestEvalDriftFMTierKeysOnOSVersion(t *testing.T) {
+	ctx := context.Background()
+	prof := driftProfile()
+	prof.Models.Classify = "apple:system"
+	a := EvalDrift{
+		digestFn:    func(context.Context, string, string) (string, bool) { return "d1", true },
+		osVersionFn: func(context.Context) (string, bool) { return "27.0", true },
+	}
+	c, _ := a.DetectChange(ctx, RunCtx{Config: prof, LastCursor: ""})
+	if !c.Changed || c.Cursor != "classify=macos:27.0;" {
+		t.Fatalf("want macos-versioned cursor, got %+v", c)
+	}
+	// Same OS → no change; OS update → change.
+	if c2, _ := a.DetectChange(ctx, RunCtx{Config: prof, LastCursor: "classify=macos:27.0;"}); c2.Changed {
+		t.Fatal("same OS version must not report change")
+	}
+	a.osVersionFn = func(context.Context) (string, bool) { return "27.1", true }
+	if c3, _ := a.DetectChange(ctx, RunCtx{Config: prof, LastCursor: "classify=macos:27.0;"}); !c3.Changed {
+		t.Fatal("OS update must report change")
+	}
+}
+
 func TestEvalDriftRunRecordsRowOnDrift(t *testing.T) {
 	ctx := context.Background()
 	d, err := db.Open(db.MemoryDSN)
