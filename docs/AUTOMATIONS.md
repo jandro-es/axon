@@ -55,7 +55,7 @@ ingested through the pipeline; originals are **archived, never deleted**.
 Makes no model call of its own — enrichment only happens when
 `capture.enrich: claude`, and then through the chokepoint on the routine tier.
 
-### `inbox-triage` — on, routine tier, every 30 min
+### `inbox-triage` — on, classify tier, every 30 min
 Classifies new inbox items and proposes filing destinations to the **review
 queue**. **Does not** move anything itself — every move is your accept.
 
@@ -192,7 +192,7 @@ Enable with `axon configure automations eval-drift on`.
 | `knowledge-reindex` | on | none | `0 2 * * *` | Rebuild index from vault |
 | `context-export` | on | none | `0 4 * * 0` | Weekly portable snapshot |
 | `capture` | on | none | `*/5 * * * *` | Inbox URL/file funnel |
-| `inbox-triage` | on | routine | `*/30 * * * *` | Classify inbox → review queue |
+| `inbox-triage` | on | classify | `*/30 * * * *` | Classify inbox → review queue |
 | `subscriptions` | on | routine | `0 * * * *` | Poll feeds, ingest new items |
 | `briefing` | on | routine | `0 6 * * *` | Morning briefing block |
 | `daily-log` | on | routine | `30 21 * * *` | Evening day summary |

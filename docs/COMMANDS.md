@@ -129,9 +129,12 @@ subscribe-from-now — no backfill of old items.
 
 ### `axon reindex`
 Rebuild the notes mirror and link graph from the vault. The vault is the
-source of truth; the database is disposable, and this proves it. The
-`--embeddings` flag is currently a **no-op with a notice** — embeddings are
-refreshed by the daemon/ingestion, not this command.
+source of truth; the database is disposable, and this proves it. Add
+`--embeddings` to also force a **full re-embed** of every chunk and memory
+fact and refresh the vector index — it needs the embeddings provider (e.g.
+Ollama) reachable and can take a while on a large vault. Without the flag,
+embeddings are refreshed incrementally by the daemon/ingestion as content
+changes.
 
 ### `axon export`
 Portable snapshot bundle (manifest + Markdown + JSON) to `--out`.

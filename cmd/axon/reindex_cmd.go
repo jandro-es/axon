@@ -106,6 +106,6 @@ func newReindexCmd(gf *globalFlags) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&embeddings, "embeddings", false, "force a full re-embed (Phase 2; currently a no-op with a notice)")
+	cmd.Flags().BoolVar(&embeddings, "embeddings", false, "also force a full re-embed of every chunk + memory fact and refresh the vector index (needs the embeddings provider reachable)")
 	return cmd
 }

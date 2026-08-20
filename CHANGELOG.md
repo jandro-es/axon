@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **`inbox-triage` runs on the classify tier, as documented.** The starter
+  config seeded `model: routine` while the example config — and the
+  automation's classify-shaped purpose — said `classify`, so fresh installs
+  spent routine-tier tokens on a classification task. Both sources now say
+  `classify`, and the seed-consistency test asserts model and schedule match
+  between the starter and the example's personal profile so they cannot
+  drift again. Existing configs keep whatever they have.
+- **`axon reindex --embeddings` help no longer claims to be a no-op.** The
+  flag has performed a real forced full re-embed (every chunk and memory
+  fact, plus a vector-index refresh) for some time; its help text still said
+  "currently a no-op with a notice", and the command reference repeated it.
+  The text now describes what actually happens. No behaviour change.
+
 ## [1.3.10] — 2026-08-20
 
 **The sudo lockout, and an automation that could never run.** A patch: no

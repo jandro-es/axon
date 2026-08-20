@@ -49,4 +49,20 @@ func TestEveryRegisteredAutomationIsSeeded(t *testing.T) {
 			}
 		}
 	}
+
+	// The starter and the example's personal profile document the same
+	// defaults; a tier or schedule that drifts between them is a bug (the
+	// inbox-triage routine-vs-classify mismatch, docs/ISSUES.md #5).
+	for name, seed := range sources["starter"].Automations {
+		ex, ok := sources["example (personal)"].Automations[name]
+		if !ok {
+			continue // absence is reported above
+		}
+		if seed.Model != ex.Model {
+			t.Errorf("%q model drift: starter %q vs example %q", name, seed.Model, ex.Model)
+		}
+		if seed.Schedule != ex.Schedule {
+			t.Errorf("%q schedule drift: starter %q vs example %q", name, seed.Schedule, ex.Schedule)
+		}
+	}
 }
