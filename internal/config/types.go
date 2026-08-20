@@ -48,6 +48,10 @@ type Profile struct {
 	// Resurfacing tunes the R9 spaced-repetition review scheduler (FR-151…153).
 	// Optional: absent → the Go defaults via the accessors below.
 	Resurfacing ResurfacingConfig `yaml:"resurfacing"`
+	// Recipes are user-defined declarative automations (FR-199, ADR-039).
+	// Optional; validated by validateRecipes. Scheduling/enablement comes
+	// from ordinary automations.<name> entries, like built-ins.
+	Recipes []Recipe `yaml:"recipes,omitempty"`
 	// Merge tunes the R7 near-duplicate merge-proposals sweep (FR-154…156).
 	Merge MergeConfig `yaml:"merge"`
 	// Actions tunes the 1.2.5 actions subsystem (T5). Optional.
