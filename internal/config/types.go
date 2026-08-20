@@ -306,6 +306,9 @@ type DashboardConfig struct {
 	// RelatedEnabled gates the read-only related-notes endpoint (R8/FR-150).
 	// Pointer default-ON: unset = enabled; set false to forbid the endpoint.
 	RelatedEnabled *bool `yaml:"related_enabled,omitempty"`
+	// SearchEnabled gates the read-only search endpoint (FR-198). Pointer
+	// semantics like the others: nil (absent) means enabled.
+	SearchEnabled *bool `yaml:"search_enabled,omitempty"`
 	// ActionsEnabled gates the actions endpoints + tab (1.2.5 T3, ADR-034).
 	// Pointer default-ON: unset = enabled; set false to forbid the browser
 	// completion write and hide the tab.
@@ -320,6 +323,9 @@ func (d DashboardConfig) CaptureAllowed() bool { return d.CaptureEnabled == nil 
 
 // RelatedAllowed reports whether the dashboard related-notes endpoint is enabled (default true).
 func (d DashboardConfig) RelatedAllowed() bool { return d.RelatedEnabled == nil || *d.RelatedEnabled }
+
+// SearchAllowed reports whether the dashboard search endpoint is enabled (default true).
+func (d DashboardConfig) SearchAllowed() bool { return d.SearchEnabled == nil || *d.SearchEnabled }
 
 // ActionsAllowed reports whether the dashboard actions endpoints are enabled (default true).
 func (d DashboardConfig) ActionsAllowed() bool { return d.ActionsEnabled == nil || *d.ActionsEnabled }

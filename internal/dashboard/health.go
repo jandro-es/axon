@@ -26,6 +26,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	out["capture_enabled"] = s.cfg.CaptureEnabled
 	out["related_enabled"] = s.cfg.RelatedEnabled
 	out["actions_enabled"] = s.cfg.ActionsEnabled
+	out["search_enabled"] = s.cfg.SearchEnabled
 	// The Obsidian vault name (its folder basename, never the path) lets the
 	// SPA build `obsidian://open?vault=…&file=…` deep links from any panel that
 	// shows a note. Same value, same reasoning as GET /api/actions, which has

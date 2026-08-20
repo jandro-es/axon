@@ -55,6 +55,9 @@ type Config struct {
 	// ActionsEnabled powers GET /api/actions + POST /api/actions/complete + the
 	// Actions tab (1.2.5 T3). Default-ON via config; false disables (404).
 	ActionsEnabled bool
+	// SearchEnabled + Searcher power GET /api/search (FR-198). A nil Searcher
+	// or SearchEnabled=false disables it (404). Zero generative spend.
+	SearchEnabled bool
 }
 
 // Server is the dashboard HTTP server.
@@ -95,6 +98,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/capture", s.handleCapture)
 	mux.HandleFunc("GET /capture", s.handleCapturePage)
 	mux.HandleFunc("GET /api/related", s.handleRelated)
+	mux.HandleFunc("GET /api/search", s.handleSearch)
 	mux.HandleFunc("GET /api/actions", s.handleActions)
 	mux.HandleFunc("POST /api/actions/complete", s.handleActionComplete)
 	mux.HandleFunc("GET /api/export", s.handleExport)
@@ -387,6 +391,38 @@ func (s *Server) handleRelated(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"related": related})
+}
+
+// handleSearch serves hybrid search to loopback clients (FR-198) — read-only,
+// zero generative spend (the query embedding is the usual budget-exempt local
+// call). Same boundary as handleRelated: dashboard.search_enabled +
+// X-Axon-Search header on top of the loopback bind + Host guard. The
+// Companion's Siri intents are the first consumer (CONTRACT.md); nothing
+// about it is Companion-specific.
+func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
+	if !s.cfg.SearchEnabled || s.cfg.Searcher == nil {
+		http.Error(w, "search is disabled for this profile", http.StatusNotFound)
+		return
+	}
+	if r.Header.Get("X-Axon-Search") != "1" {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		http.Error(w, "q required", http.StatusBadRequest)
+		return
+	}
+	hits, err := s.cfg.Searcher.Search(r.Context(), q, queryInt(r, "top_k", 8))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	out := make([]map[string]any, 0, len(hits))
+	for _, h := range hits {
+		out = append(out, map[string]any{"path": h.Path, "snippet": h.Snippet, "score": h.Score})
+	}
+	writeJSON(w, map[string]any{"hits": out})
 }
 
 func queryInt(r *http.Request, key string, def int) int {

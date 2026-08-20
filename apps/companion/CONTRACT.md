@@ -285,6 +285,23 @@ GET /api/export?dataset=<tokens|runs|ingestion|vault|graph|activity>&format=<csv
 
 ---
 
+## 8b. `GET /api/search` — requires `X-Axon-Search: 1` (FR-198, added for CFR-92)
+
+Hybrid search over the vault. Read-only, zero generative spend. Gated by
+`dashboard.search_enabled` (`search_enabled` on `/health`; absent field on a
+pre-FR-198 daemon means the endpoint does not exist — treat 404 as
+capability-absent, per the §0 compatibility rule).
+
+Query: `q` (required; empty → 400), `top_k` (optional, default 8).
+States: 404 disabled/absent · 403 missing guard header · 400 empty `q` ·
+200:
+
+```json
+{"hits": [{"path": "03-Resources/…md", "snippet": "…", "score": 0.031}]}
+```
+
+`hits` may be empty. `path` is vault-relative. Fixture: `Fixtures/search.json`.
+
 ## 9. `GET /events` (SSE)
 
 Fixture: `Fixtures/events.sse`.
