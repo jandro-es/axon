@@ -126,8 +126,10 @@ func (f *FMServe) Run(ctx context.Context, req Request) (*Response, error) {
 		return nil, fmt.Errorf("fm serve: model refused: %s", r)
 	}
 	return &Response{
-		Text:  out.Choices[0].Message.Content,
-		Model: req.Model,
+		Text: out.Choices[0].Message.Content,
+		// Ledger rows carry the AXON ref (apple:<variant>), whether the
+		// request arrived with the full ref or the bare variant.
+		Model: config.ProviderApple + ":" + variant,
 		Usage: Usage{
 			InputTokens:  out.Usage.PromptTokens,
 			OutputTokens: out.Usage.CompletionTokens,

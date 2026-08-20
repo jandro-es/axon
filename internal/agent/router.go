@@ -11,9 +11,10 @@ import (
 // error so the token manager's fallback ladder can react. The zero value with
 // only Claude set behaves exactly like the pre-ADR-015 single adapter.
 type Router struct {
-	Claude Agent
-	Ollama Agent
-	Apple  Agent
+	Claude  Agent
+	Ollama  Agent
+	Apple   Agent
+	AppleFM Agent // fm serve backend: apple:system / apple:pcc (ADR-038)
 }
 
 // Resolve returns the adapter for a provider, or an actionable error.
@@ -34,6 +35,11 @@ func (r Router) Resolve(provider string) (Agent, error) {
 			return nil, fmt.Errorf("no apple adapter configured (models.* references apple; darwin with the helper compiled is required)")
 		}
 		return r.Apple, nil
+	case config.ProviderAppleFM:
+		if r.AppleFM == nil {
+			return nil, fmt.Errorf("no fm adapter configured (models.* references apple:system/apple:pcc; macOS 27 with the fm CLI is required)")
+		}
+		return r.AppleFM, nil
 	default:
 		return nil, fmt.Errorf("unknown model provider %q", provider)
 	}
