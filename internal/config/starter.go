@@ -51,6 +51,7 @@ profiles:
       routine:   claude-sonnet-5
       synthesis: claude-opus-4-8
       eval_min_pass: 80                        # a local classify/routine tier must pass 'axon eval' at >= this %  (0 disables the gate)
+      pcc_enabled: false                       # opt-in for apple:pcc (macOS 27 Private Cloud Compute rung, ADR-038)
 
     limits:
       daily_tokens:  1_500_000

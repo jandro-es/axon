@@ -11,6 +11,15 @@ const (
 	ProviderClaude = "claude"
 	ProviderOllama = "ollama"
 	ProviderApple  = "apple"
+	// ProviderAppleFM serves the macOS 27 `fm serve` backend (ADR-038):
+	// "apple:system" (on-device) and "apple:pcc" (Private Cloud Compute).
+	ProviderAppleFM = "apple-fm"
+)
+
+// FM-backed apple variants (the ModelRef.Model under ProviderAppleFM).
+const (
+	AppleFMSystem = "system"
+	AppleFMPCC    = "pcc"
 )
 
 // ModelRef is a parsed models.* tier value: which adapter serves it and the
@@ -27,20 +36,32 @@ func ParseModelRef(s string) ModelRef {
 	if s == ProviderApple {
 		return ModelRef{Provider: ProviderApple, Model: AppleFoundationModel}
 	}
+	if rest, ok := strings.CutPrefix(s, ProviderApple+":"); ok {
+		if rest == AppleFMSystem || rest == AppleFMPCC {
+			return ModelRef{Provider: ProviderAppleFM, Model: rest}
+		}
+		// Unknown variants keep parsing as Claude strings so validation —
+		// not routing — is what rejects them with an actionable message.
+	}
 	if rest, ok := strings.CutPrefix(s, ProviderOllama+":"); ok {
 		return ModelRef{Provider: ProviderOllama, Model: rest}
 	}
 	return ModelRef{Provider: ProviderClaude, Model: s}
 }
 
-// reservedAppleRef reports whether a tier string uses a colon-suffixed Apple
-// form (`apple:<x>`, `apple-fm:<x>`) or bare `apple-fm` — reserved for the
-// macOS 27 tier work (FR-192, docs/21 M2). Without this gate such strings
-// parse as Claude model strings and silently misroute to `claude -p`.
+// reservedAppleRef reports whether a tier string uses the permanently reserved
+// `apple-fm` forms (FR-192, narrowed by FR-194: the live `apple:` variants
+// resolve via ParseModelRef instead). Without this gate such strings parse as
+// Claude model strings and silently misroute to `claude -p`.
 func reservedAppleRef(s string) bool {
-	return s == "apple-fm" ||
-		strings.HasPrefix(s, ProviderApple+":") ||
-		strings.HasPrefix(s, "apple-fm:")
+	return s == ProviderAppleFM || strings.HasPrefix(s, ProviderAppleFM+":")
+}
+
+// unknownAppleVariant reports an `apple:<x>` form that is neither of the
+// fm-backed variants — rejected at validation, never routed (FR-194).
+func unknownAppleVariant(s string) bool {
+	rest, ok := strings.CutPrefix(s, ProviderApple+":")
+	return ok && rest != AppleFMSystem && rest != AppleFMPCC
 }
 
 // Fallback returns the local-failure policy, defaulting to "claude"
@@ -76,14 +97,22 @@ func validateLocalRouting(m ModelsConfig) error {
 		{"classify", m.Classify}, {"routine", m.Routine}, {"synthesis", m.Synthesis},
 	} {
 		if reservedAppleRef(t.val) {
-			return fmt.Errorf("models.%s %q is reserved for the macOS 27 Apple-tier work (docs/21 M2) and not yet supported — use %q (on-device), ollama:<model>, or a Claude model", t.key, t.val, ProviderApple)
+			return fmt.Errorf("models.%s %q is reserved and not supported — use %q (on-device), apple:system, apple:pcc, ollama:<model>, or a Claude model", t.key, t.val, ProviderApple)
+		}
+		if unknownAppleVariant(t.val) {
+			return fmt.Errorf("models.%s %q names an unknown apple variant — the fm-backed variants are apple:%s (on-device) and apple:%s (Private Cloud Compute, requires models.pcc_enabled)", t.key, t.val, AppleFMSystem, AppleFMPCC)
+		}
+		if ref := ParseModelRef(t.val); ref.Provider == ProviderAppleFM && ref.Model == AppleFMPCC && !m.PCCEnabled {
+			return fmt.Errorf("models.%s %q requires models.pcc_enabled: true — Private Cloud Compute is opt-in (Apple-operated compute; see docs/21 M2 and FR-195)", t.key, t.val)
 		}
 	}
 	if m.Synthesis != "" && ParseModelRef(m.Synthesis).Provider != ProviderClaude {
 		return fmt.Errorf("models.synthesis must be a Claude model (got %q): local providers are classify/routine only", m.Synthesis)
 	}
-	if m.Routine != "" && ParseModelRef(m.Routine).Provider == ProviderApple {
-		return fmt.Errorf("models.routine cannot be %q: the Apple on-device model's context window limits it to the classify tier", m.Routine)
+	if m.Routine != "" {
+		if ref := ParseModelRef(m.Routine); ref.Provider == ProviderApple || (ref.Provider == ProviderAppleFM && ref.Model == AppleFMSystem) {
+			return fmt.Errorf("models.routine cannot be %q: the Apple on-device model's context window limits it to the classify tier (apple:pcc is the routine-capable rung)", m.Routine)
+		}
 	}
 	for _, tier := range []string{m.Classify, m.Routine} {
 		if ref := ParseModelRef(tier); ref.Provider == ProviderOllama && ref.Model == "" {

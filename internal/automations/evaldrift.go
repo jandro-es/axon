@@ -19,6 +19,10 @@ import (
 type EvalDrift struct {
 	// digestFn is a test seam; nil uses core.OllamaDigest.
 	digestFn func(ctx context.Context, host, model string) (string, bool)
+	// osVersionFn is a test seam; nil uses core.MacOSProductVersion. The OS
+	// version is the drift key for fm-backed tiers (FR-194): no digest
+	// exists, and an OS update is what swaps the model underneath them.
+	osVersionFn func(ctx context.Context) (string, bool)
 }
 
 // Name is the stable config key.
@@ -34,16 +38,35 @@ func (a EvalDrift) digest(ctx context.Context, host, model string) (string, bool
 	return core.OllamaDigest(ctx, host, model)
 }
 
-// gatedOllamaTiers returns the (family, ref, model) of each local ollama
-// classify/routine tier — the ones the promotion gate governs.
-func gatedOllamaTiers(m config.ModelsConfig) []struct{ family, ref, model string } {
-	var out []struct{ family, ref, model string }
+// gatedLocalTiers returns the (family, ref, provider, model) of each local
+// classify/routine tier the promotion gate governs (ollama + fm-backed).
+type gatedTier struct{ family, ref, provider, model string }
+
+func gatedLocalTiers(m config.ModelsConfig) []gatedTier {
+	var out []gatedTier
 	for _, t := range []struct{ family, ref string }{{"classify", m.Classify}, {"routine", m.Routine}} {
-		if r := config.ParseModelRef(t.ref); r.Provider == config.ProviderOllama {
-			out = append(out, struct{ family, ref, model string }{t.family, t.ref, r.Model})
+		if r := config.ParseModelRef(t.ref); r.Provider == config.ProviderOllama || r.Provider == config.ProviderAppleFM {
+			out = append(out, gatedTier{t.family, t.ref, r.Provider, r.Model})
 		}
 	}
 	return out
+}
+
+// tierDigest is the drift key for one gated tier: the Ollama model digest, or
+// "macos:<version>" for fm-backed tiers.
+func (a EvalDrift) tierDigest(ctx context.Context, m config.ModelsConfig, t gatedTier) (string, bool) {
+	if t.provider == config.ProviderAppleFM {
+		fn := a.osVersionFn
+		if fn == nil {
+			fn = core.MacOSProductVersion
+		}
+		v, ok := fn(ctx)
+		if !ok {
+			return "", false
+		}
+		return "macos:" + v, true
+	}
+	return a.digest(ctx, m.OllamaHost, t.model)
 }
 
 // DetectChange builds a cursor from the current digests of gated local tiers;
@@ -54,8 +77,8 @@ func (a EvalDrift) DetectChange(ctx context.Context, rc RunCtx) (Change, error) 
 		return Change{Changed: false, Reason: "eval gate disabled"}, nil
 	}
 	cursor := ""
-	for _, t := range gatedOllamaTiers(m) {
-		d, _ := a.digest(ctx, m.OllamaHost, t.model)
+	for _, t := range gatedLocalTiers(m) {
+		d, _ := a.tierDigest(ctx, m, t)
 		cursor += fmt.Sprintf("%s=%s;", t.family, d)
 	}
 	if cursor == rc.LastCursor {
@@ -73,8 +96,8 @@ func (a EvalDrift) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 		return RunResult{}, nil
 	}
 	var changes []string
-	for _, t := range gatedOllamaTiers(m) {
-		cur, ok := a.digest(ctx, m.OllamaHost, t.model)
+	for _, t := range gatedLocalTiers(m) {
+		cur, ok := a.tierDigest(ctx, m, t)
 		if !ok {
 			continue
 		}

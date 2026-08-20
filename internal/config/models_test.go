@@ -11,6 +11,8 @@ func TestParseModelRef(t *testing.T) {
 		{"claude-haiku-4-5", ProviderClaude, "claude-haiku-4-5"},
 		{"ollama:qwen3:8b", ProviderOllama, "qwen3:8b"},
 		{"apple", ProviderApple, AppleFoundationModel},
+		{"apple:system", ProviderAppleFM, "system"},
+		{"apple:pcc", ProviderAppleFM, "pcc"},
 		{"", ProviderClaude, ""},
 	}
 	for _, tt := range tests {
@@ -43,12 +45,20 @@ func TestValidateLocalRouting(t *testing.T) {
 		{"verify apple rejected", func(m *ModelsConfig) { m.Verify = "apple" }, true},
 		{"verify empty-model rejected", func(m *ModelsConfig) { m.Verify = "ollama:" }, true},
 		{"verify_min_score over range rejected", func(m *ModelsConfig) { m.VerifyMinScore = 11 }, true},
-		// FR-192: reserved Apple ref forms must be rejected, not silently
-		// parsed as Claude model strings and misrouted to claude -p.
-		{"apple:pcc reserved", func(m *ModelsConfig) { m.Classify = "apple:pcc" }, true},
-		{"apple: suffix reserved on routine", func(m *ModelsConfig) { m.Routine = "apple:on-device" }, true},
+		// FR-192 (narrowed by FR-194): apple-fm:* stays reserved; unknown
+		// apple:<x> variants are rejected rather than misrouted to claude -p.
 		{"apple-fm: reserved", func(m *ModelsConfig) { m.Classify = "apple-fm:foo" }, true},
 		{"bare apple-fm reserved", func(m *ModelsConfig) { m.Synthesis = "apple-fm" }, true},
+		{"unknown apple variant rejected", func(m *ModelsConfig) { m.Routine = "apple:on-device" }, true},
+		// FR-194: the two fm-backed variants.
+		{"apple:system classify ok", func(m *ModelsConfig) { m.Classify = "apple:system" }, false},
+		{"apple:system routine rejected (on-device cap)", func(m *ModelsConfig) { m.Routine = "apple:system" }, true},
+		{"apple:system synthesis rejected", func(m *ModelsConfig) { m.Synthesis = "apple:system" }, true},
+		// FR-195: apple:pcc needs the explicit opt-in.
+		{"apple:pcc without opt-in rejected", func(m *ModelsConfig) { m.Classify = "apple:pcc" }, true},
+		{"apple:pcc classify with opt-in ok", func(m *ModelsConfig) { m.Classify = "apple:pcc"; m.PCCEnabled = true }, false},
+		{"apple:pcc routine with opt-in ok", func(m *ModelsConfig) { m.Routine = "apple:pcc"; m.PCCEnabled = true }, false},
+		{"apple:pcc synthesis rejected even with opt-in", func(m *ModelsConfig) { m.Synthesis = "apple:pcc"; m.PCCEnabled = true }, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -74,7 +74,20 @@ behaviour change anywhere else.
 **Risks:** `fm` output formats may shift across betas — parse defensively,
 version-gate assertions.
 
-### M2 — `apple-fm` local tier (M) · candidate — not scheduled
+### M2 — the fm tier (M) · **Status: Shipped to `main` 2026-08-20 (FR-193…195, ADR-038)**
+
+> **Built as specced** (`docs/superpowers/specs/2026-08-20-macos27-m2-fmserve-design.md`).
+> Both post-M1 open decisions resolved: transport = a daemon-supervised
+> `fm serve --socket` child (unix socket, `/health`-gated, restart-on-death,
+> stopped in `deps.close()`); naming = the `apple:` family extends —
+> `apple:system` (on-device via fm, classify-only, **measured token usage in
+> the ledger**) and `apple:pcc` (PCC rung, classify+routine, 28K pre-flight
+> cap, `models.pcc_enabled` opt-in, ledgered under its own ref, quota
+> advisory via `fm quota-usage`); `apple-fm:*` stays permanently rejected and
+> bare `apple` (Swift helper) is untouched. eval-drift keys fm tiers on the
+> macOS version. Everything through the chokepoint; PCC context-gating (the
+> live "use the Terminal app" finding) degrades through the FR-79 ladder.
+> The section below is the original candidate text.
 **Build:** a new provider prefix `apple-fm:` for tier model strings behind the
 ADR-015 seam, implemented against **`fm serve`'s OpenAI-compatible endpoint**
 (one HTTP client, streaming, usage fields — no Swift required in the daemon).

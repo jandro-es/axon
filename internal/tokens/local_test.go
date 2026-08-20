@@ -284,3 +284,79 @@ func seedBudget(t *testing.T, m *manager, used int64) {
 		t.Fatal(err)
 	}
 }
+
+func TestFMSystemInputCapShortCircuits(t *testing.T) {
+	ctx := context.Background()
+	cfg := localTestConfig()
+	cfg.Models.Classify = "apple:system"
+	cfg.Limits = config.LimitsConfig{DailyTokens: 1_000_000, WeeklyTokens: 1_000_000}
+	fmfake := agent.NewFake()
+	claude := agent.NewFake()
+	claude.Reply = "ok"
+	m := testManagerRouter(t, cfg, agent.Router{Claude: claude, AppleFM: fmfake})
+
+	big := strings.Repeat("word ", 8000) // ≫ appleInputCapTokens
+	if _, err := m.Run(ctx, AgentCall{
+		Operation: "test.fm", ModelKey: "classify",
+		Messages: []Message{{Role: "user", Content: big}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if fmfake.CallCount() != 0 {
+		t.Fatalf("fm calls = %d, want 0 (on-device cap short-circuit)", fmfake.CallCount())
+	}
+	if claude.CallCount() != 1 {
+		t.Fatalf("claude calls = %d, want 1 (fallback)", claude.CallCount())
+	}
+}
+
+func TestFMPCCRoutineWithinCapServesLocally(t *testing.T) {
+	ctx := context.Background()
+	cfg := localTestConfig()
+	cfg.Models.Routine = "apple:pcc"
+	cfg.Models.PCCEnabled = true
+	cfg.Limits = config.LimitsConfig{DailyTokens: 1_000_000, WeeklyTokens: 1_000_000}
+	fmfake := agent.NewFake()
+	fmfake.Reply = "local answer"
+	claude := agent.NewFake()
+	m := testManagerRouter(t, cfg, agent.Router{Claude: claude, AppleFM: fmfake})
+
+	// Well over the on-device cap, well under the PCC cap.
+	mid := strings.Repeat("word ", 8000)
+	res, err := m.Run(ctx, AgentCall{
+		Operation: "test.pcc", ModelKey: "routine",
+		Messages: []Message{{Role: "user", Content: mid}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fmfake.CallCount() != 1 || claude.CallCount() != 0 {
+		t.Fatalf("calls fm=%d claude=%d, want 1/0", fmfake.CallCount(), claude.CallCount())
+	}
+	if res.Auth.Provider != config.ProviderAppleFM || res.Auth.Model != config.AppleFMPCC {
+		t.Fatalf("auth = %+v, want apple-fm/pcc", res.Auth)
+	}
+}
+
+func TestFMPCCInputCapShortCircuits(t *testing.T) {
+	ctx := context.Background()
+	cfg := localTestConfig()
+	cfg.Models.Routine = "apple:pcc"
+	cfg.Models.PCCEnabled = true
+	cfg.Limits = config.LimitsConfig{DailyTokens: 2_000_000, WeeklyTokens: 2_000_000}
+	fmfake := agent.NewFake()
+	claude := agent.NewFake()
+	claude.Reply = "ok"
+	m := testManagerRouter(t, cfg, agent.Router{Claude: claude, AppleFM: fmfake})
+
+	huge := strings.Repeat("word ", 130_000) // ≫ pccInputCapTokens
+	if _, err := m.Run(ctx, AgentCall{
+		Operation: "test.pcc", ModelKey: "routine",
+		Messages: []Message{{Role: "user", Content: huge}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if fmfake.CallCount() != 0 || claude.CallCount() != 1 {
+		t.Fatalf("calls fm=%d claude=%d, want 0/1 (PCC cap short-circuit)", fmfake.CallCount(), claude.CallCount())
+	}
+}

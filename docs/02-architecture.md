@@ -688,6 +688,47 @@ map) and must be edited in both. `backdrop-filter` costs GPU on very large
 windows; the reduced-transparency path removes it entirely, which doubles as the
 escape hatch. (FR-177…FR-183.)
 
+### ADR-038 — `fm serve` as a supervised local model backend (`apple:system` / `apple:pcc`) *(accepted — in progress)*
+
+**Status:** Accepted (2026-08-20). FR-193…FR-195; spec in
+`docs/superpowers/specs/2026-08-20-macos27-m2-fmserve-design.md`.
+
+**Context:** macOS 27 ships the `fm` CLI, whose `fm serve` exposes the Apple
+Foundation Models (on-device `system`, and `pcc` on Private Cloud Compute:
+32K context, reasoning, no API keys) as an OpenAI-shaped Chat Completions
+endpoint with **real token-usage fields** — which the existing ADR-013 Swift
+helper cannot report (its calls ride heuristic estimates). Live probing also
+established that PCC is **context-gated** (unavailable outside
+Terminal-app-like contexts, with unreliable exit codes) and quota-limited
+(`fm quota-usage`).
+
+**Decision:** (1) **Transport:** a daemon-supervised `fm serve --socket` child (socket
+under the per-user temp dir via `agent.FMSocketPath` — sun_path caps unix
+socket paths at 104 bytes, so it cannot live in a deep data dir) — lazily started on the first call that resolves to
+the provider, `/health`-probed, restarted on death, stopped on shutdown; the
+adapter is a unix-socket HTTP client shaped like the Ollama one. (2)
+**Naming:** the `apple:` family extends — bare `apple` keeps the Swift helper
+(unchanged), `apple:system` is on-device via fm (classify-only, same input
+cap), `apple:pcc` is the PCC rung (classify + routine, larger cap);
+`apple-fm:*` stays rejected. Eval can therefore compare `apple` vs
+`apple:system` head-to-head, giving a measured migration path off the helper.
+(3) **PCC posture:** opt-in via `models.pcc_enabled` (default false; profiles
+are conventions, so the personal-only stance is this key plus documentation),
+usage **ledgered under its own model string** but not counted against Claude
+budget windows, quota surfaced as an advisory doctor input, and every
+availability/quota failure degrades through the existing local fallback
+ladder (FR-79) — PCC is a best-effort rung, never a dependency. Cardinal rule
+1 is untouched: every fm call goes through the chokepoint like any ADR-015
+local tier, and admission stays eval-gated (ADR-029/030) with `eval-drift`
+keying fm-backed tiers on the macOS version (no digest exists).
+
+**Consequences:** the daemon supervises a child model server (a first — the
+Ollama server is external); the socket keeps it loopback-only by
+construction. Structured output remains `ValidateOutput`-driven (fm serve's
+`response_format` support is unverified). If Apple changes `fm`'s beta
+surface, the adapter fails visibly into the fallback ladder and doctor's
+FR-191 matrix names the state.
+
 ### ADR-027 — Local reranking as a retrieval primitive (outside the chokepoint) *(accepted — built)*
 
 **Status:** Accepted (2026-07-05, roadmap 1.1 B2).

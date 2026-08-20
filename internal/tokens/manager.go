@@ -78,7 +78,7 @@ type AgentCall struct {
 type Authorization struct {
 	Decision Decision
 	Model    string // resolved concrete model to use
-	Provider string // "claude" | "ollama" | "apple" (ADR-015)
+	Provider string // "claude" | "ollama" | "apple" | "apple-fm" (ADR-015/038)
 	EstInput int
 	Reason   string
 }
@@ -533,6 +533,10 @@ func (m *manager) Run(ctx context.Context, call AgentCall) (AgentResult, error) 
 // response. Oversized inputs skip straight to the fallback ladder.
 const appleInputCapTokens = 3500
 
+// pccInputCapTokens bounds apple:pcc pre-flight input (ADR-038): 28K of the
+// 32K Private Cloud Compute window, leaving room for the response.
+const pccInputCapTokens = 28_000
+
 // buildRequest assembles the (redacted) adapter request for a call.
 func (m *manager) buildRequest(call AgentCall, auth Authorization) agent.Request {
 	req := agent.Request{
@@ -608,8 +612,13 @@ func (m *manager) runLocal(ctx context.Context, call AgentCall, auth Authorizati
 		return m.Run(ctx, fb) // resolves to Claude: normal budget-checked path
 	}
 
-	if auth.Provider == config.ProviderApple && auth.EstInput > appleInputCapTokens {
+	onDevice := auth.Provider == config.ProviderApple ||
+		(auth.Provider == config.ProviderAppleFM && auth.Model == config.AppleFMSystem)
+	if onDevice && auth.EstInput > appleInputCapTokens {
 		return fallForward(fmt.Errorf("estimated input %d exceeds the on-device context cap %d", auth.EstInput, appleInputCapTokens))
+	}
+	if auth.Provider == config.ProviderAppleFM && auth.Model == config.AppleFMPCC && auth.EstInput > pccInputCapTokens {
+		return fallForward(fmt.Errorf("estimated input %d exceeds the PCC context cap %d", auth.EstInput, pccInputCapTokens))
 	}
 	ag, err := m.router.Resolve(auth.Provider)
 	if err != nil {

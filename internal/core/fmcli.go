@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jandro-es/axon/internal/config"
 )
 
 // FMState classifies what the macOS 27 `fm` CLI probe found (FR-191). The
@@ -181,11 +183,43 @@ func capString(s string, n int) string {
 }
 
 // fmCheck reports the fm CLI posture in doctor (FR-191). Advisory: only the
-// license-pending state warns, because it is the one thing a user can act on
-// before docs/21 M2 makes anything consume fm. AXON never agrees to the terms
-// itself — `fm license` is a privileged, machine-wide legal agreement.
-func fmCheck() Check {
-	return fmCheckFrom(DetectFM(context.Background()))
+// license-pending state warns, because it is the one thing a user can act on.
+// AXON never agrees to the terms itself — `fm license` is a privileged,
+// machine-wide legal agreement. With PCC opted in (FR-195) a ready machine
+// also carries the quota posture from `fm quota-usage`.
+func fmCheck(p config.Profile) Check {
+	st := DetectFM(context.Background())
+	c := fmCheckFrom(st)
+	if p.Models.PCCEnabled && st.State == FMStateReady {
+		if q, ok := FMQuota(context.Background()); ok {
+			c.Detail += " · quota: " + q
+		}
+	}
+	return c
+}
+
+// FMQuota reports `fm quota-usage` (ANSI-stripped, capped) — advisory input
+// for the PCC rung (FR-195). ok=false when fm is absent or silent.
+func FMQuota(ctx context.Context) (string, bool) {
+	d := defaultFMDetector()
+	if d.goos != "darwin" {
+		return "", false
+	}
+	bin, err := d.lookPath("fm")
+	if err != nil {
+		return "", false
+	}
+	qctx, cancel := context.WithTimeout(ctx, fmDetectTimeout)
+	defer cancel()
+	stdout, stderr, _ := d.runFM(qctx, bin, "quota-usage")
+	text := strings.TrimSpace(stripANSI(string(stdout)))
+	if text == "" {
+		text = strings.TrimSpace(stripANSI(string(stderr)))
+	}
+	if text == "" {
+		return "", false
+	}
+	return capString(fmSummary(text), fmDetailCap), true
 }
 
 // fmCheckFrom is the pure status→check mapping (table-tested per state).
@@ -199,6 +233,20 @@ func fmCheckFrom(st FMStatus) Check {
 		c.Detail = "fm ready: " + st.Detail
 	}
 	return c
+}
+
+// MacOSProductVersion reports the OS version (e.g. "27.0") — the drift key
+// for fm-backed model tiers (FR-194): no digest exists, so an OS update is
+// the re-eval event. ok=false off macOS or when sw_vers fails.
+func MacOSProductVersion(ctx context.Context) (string, bool) {
+	if runtime.GOOS != "darwin" {
+		return "", false
+	}
+	v, err := swVersProductVersion(ctx)
+	if err != nil {
+		return "", false
+	}
+	return strings.TrimSpace(v), true
 }
 
 // swVersProductVersion asks the OS for its version (e.g. "27.0").

@@ -371,6 +371,11 @@ type ModelsConfig struct {
 	// AppleHelper overrides the Foundation Models helper binary path.
 	// Default: DefaultAppleLMHelperPath(). Ignored unless a tier is "apple".
 	AppleHelper string `yaml:"apple_helper,omitempty"`
+	// PCCEnabled opts this profile into Apple's Private Cloud Compute rung
+	// (`apple:pcc`, ADR-038/FR-195). Default false: PCC is Apple-operated
+	// compute — deliberately opt-in, and not for deny-by-default (work)
+	// profiles. Validation rejects apple:pcc tiers while this is false.
+	PCCEnabled bool `yaml:"pcc_enabled,omitempty"`
 }
 
 // LimitsConfig is the token-awareness budget. On subscription/enterprise these

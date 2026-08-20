@@ -8,6 +8,23 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **Apple's macOS 27 models as chokepoint tiers: `apple:system` and
+  `apple:pcc`.** (FR-193…FR-195, ADR-038.) The daemon supervises an
+  `fm serve --socket` child (lazy start, health-gated, restarted on death,
+  stopped on shutdown) and serves the new refs through the same token-manager
+  path as every local tier — with, for the first time on a local tier,
+  **measured token usage** from the endpoint landing in the ledger instead of
+  heuristic estimates. `apple:system` is the on-device model (classify tier,
+  same input cap as `apple`); `apple:pcc` is the Private Cloud Compute rung
+  (classify + routine, 28K pre-flight cap), **opt-in** via
+  `models.pcc_enabled` and deliberately not for deny-by-default profiles —
+  its usage is ledgered under its own ref, `doctor` reports `fm quota-usage`
+  when it's enabled, and any PCC unavailability (it is context-gated on real
+  machines) degrades through the normal local-fallback ladder without
+  failing the run. Admission stays eval-gated; `eval-drift` re-checks
+  fm-backed tiers when the macOS version changes. Bare `apple` (the Swift
+  helper) is unchanged.
+
 - **`doctor` knows about macOS 27's `fm` CLI.** (FR-191, docs/21 M1.) A new
   advisory `apple-fm` check (macOS only) reports the Foundation Models CLI
   posture: needs macOS 27 / not found / **licence not agreed** (the one
