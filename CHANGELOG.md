@@ -8,6 +8,20 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **Apple vision for image ingestion: `ingestion.vision: apple` and
+  `apple:pcc`.** (FR-196/FR-197, ADR-038 amended.) The ADR-035 vision seam's
+  `apple` slot — which since 1.3 returned "requires macOS 27, not yet
+  available" — now works: a bounded per-call `fm respond --image` subprocess
+  describes images with the on-device model (same transcribe-then-describe,
+  image-as-data prompt as the Ollama provider; temp file 0600 and always
+  removed). A separate, explicit `apple:pcc` mode uses Private Cloud Compute
+  — it validates only with `models.pcc_enabled: true` and is disclosed
+  plainly: redaction applies to text, not pixels, so PCC vision sends the
+  unredacted image bytes to Apple-operated compute. Vision stays a
+  budget-exempt local perception primitive; a failed describe keeps the
+  OCR/filename path; `doctor`'s `vision` check reports the fm states
+  (ready / licence-pending with its fix / unavailable → OCR-only).
+
 - **Apple's macOS 27 models as chokepoint tiers: `apple:system` and
   `apple:pcc`.** (FR-193…FR-195, ADR-038.) The daemon supervises an
   `fm serve --socket` child (lazy start, health-gated, restarted on death,

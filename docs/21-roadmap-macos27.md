@@ -120,7 +120,16 @@ is reachable from the work profile at all (recommendation: no — its egress
 posture needs its own review; PCC is Apple-operated compute, which
 `data_residency: local-only` arguably excludes).
 
-### M3 — Apple vision tier (S) · candidate — not scheduled
+### M3 — Apple vision tier (S) · **Status: Shipped to `main` 2026-08-20 (FR-196/197, ADR-038 amended)**
+
+> **Built as specced** (`docs/superpowers/specs/2026-08-20-macos27-m3-apple-vision-design.md`).
+> ADR-035's `apple` slot is filled by a per-call `fm respond --image`
+> subprocess (on-device). Owner's decision widened the original plan: a
+> distinct `ingestion.vision: apple:pcc` mode adds PCC vision under the
+> `models.pcc_enabled` opt-in — explicit, validation-gated, never a silent
+> fallback, and disclosed as sending unredacted image bytes off-device
+> (redaction applies to text, not pixels). Doctor's `vision` check reports
+> the fm states. The section below is the original candidate text.
 **Build:** fill the seam H1 left ready. `internal/ingestion/vision.go` already
 reserves the slot — `ingestion.vision: "apple"` currently returns
 *"requires macOS 27 on-device image input (not yet available) — use

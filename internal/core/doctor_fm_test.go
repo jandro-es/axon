@@ -36,3 +36,26 @@ func TestFMCheckMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestVisionCheckApple(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		mode       string
+		st         FMStatus
+		wantStatus CheckStatus
+		wantFix    string
+		wantIn     string
+	}{
+		{"ready on-device", "apple", FMStatus{State: FMStateReady}, StatusOK, "", "vision ready: apple"},
+		{"ready pcc mentions gating", "apple:pcc", FMStatus{State: FMStateReady}, StatusOK, "", "context-gated"},
+		{"licence pending warns with fix", "apple", FMStatus{State: FMStateLicensePending}, StatusWarn, "sudo fm license", "licence"},
+		{"absent warns with fallback", "apple", FMStatus{State: FMStateAbsent, Detail: "fm CLI not found on PATH"}, StatusWarn, "", "OCR-only"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := visionCheckApple(tc.mode, tc.st)
+			if c.Status != tc.wantStatus || c.Fix != tc.wantFix || !strings.Contains(c.Detail, tc.wantIn) {
+				t.Fatalf("check = %+v", c)
+			}
+		})
+	}
+}

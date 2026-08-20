@@ -222,6 +222,24 @@ func FMQuota(ctx context.Context) (string, bool) {
 	return capString(fmSummary(text), fmDetailCap), true
 }
 
+// visionCheckApple maps the fm posture onto the vision check for the apple
+// vision modes (FR-196/197). Advisory: warns keep the OCR-only fallback.
+func visionCheckApple(mode string, st FMStatus) Check {
+	const name = "vision"
+	switch st.State {
+	case FMStateReady:
+		detail := "vision ready: " + mode + " (fm answering)"
+		if mode == "apple:pcc" {
+			detail += " — PCC is context-gated and quota-limited; a failed describe falls back to OCR-only"
+		}
+		return Check{Name: name, Status: StatusOK, Detail: detail}
+	case FMStateLicensePending:
+		return Check{Name: name, Status: StatusWarn, Detail: "vision " + mode + ": fm licence not agreed (images fall back to OCR-only)", Fix: "sudo fm license"}
+	default:
+		return Check{Name: name, Status: StatusWarn, Detail: "vision " + mode + " unavailable: " + st.Detail + " (images fall back to OCR-only)"}
+	}
+}
+
 // fmCheckFrom is the pure status→check mapping (table-tested per state).
 func fmCheckFrom(st FMStatus) Check {
 	c := Check{Name: "apple-fm", Status: StatusOK, Detail: st.Detail}
