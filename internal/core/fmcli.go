@@ -50,7 +50,7 @@ type fmDetector struct {
 	goos, goarch string
 	lookPath     func(file string) (string, error)
 	osVersion    func(ctx context.Context) (string, error)
-	runFM        func(ctx context.Context, bin string, args ...string) ([]byte, error)
+	runFM        func(ctx context.Context, bin string, args ...string) (stdout, stderr []byte, err error)
 }
 
 func defaultFMDetector() fmDetector {
@@ -96,24 +96,32 @@ func (d fmDetector) detect(ctx context.Context) FMStatus {
 
 	probeCtx, cancel := context.WithTimeout(ctx, fmDetectTimeout)
 	defer cancel()
-	out, runErr := d.runFM(probeCtx, bin, "available")
-	text := strings.TrimSpace(stripANSI(string(out)))
+	stdout, stderr, runErr := d.runFM(probeCtx, bin, "available")
+	outText := strings.TrimSpace(stripANSI(string(stdout)))
+	errText := strings.TrimSpace(stripANSI(string(stderr)))
 
-	// License markers are checked BEFORE the exec error: fm's exit codes are
-	// inconsistent (observed on macOS 27.0: `fm available` exits 0 while
-	// refusing; `fm --help` exits 1 with the same refusal).
-	if fmLicensePending(text) {
+	// fm's exit codes are untrustworthy (observed on macOS 27.0: the licence
+	// refusal exits 0; a real "System model available" answer exits 1 when a
+	// PCC context error rides along on stderr). So: licence markers first,
+	// then any non-empty stdout answer wins over the exit code, and only a
+	// silent stdout with an error is unresponsive.
+	if fmLicensePending(outText) || fmLicensePending(errText) {
 		st.State = FMStateLicensePending
 		st.Detail = "fm is installed but the Foundation Models CLI terms have not been agreed on this machine"
 		return st
 	}
+	if outText != "" {
+		st.State = FMStateReady
+		st.Detail = capString(fmSummary(outText), fmDetailCap)
+		return st
+	}
 	if runErr != nil {
 		st.State = FMStateUnresponsive
-		st.Detail = capString("fm did not answer: "+runErr.Error()+fmOutputSuffix(text), fmDetailCap)
+		st.Detail = capString("fm errored: "+runErr.Error()+fmOutputSuffix(errText), fmDetailCap)
 		return st
 	}
 	st.State = FMStateReady
-	st.Detail = capString(fmSummary(text), fmDetailCap)
+	st.Detail = "fm answered with no output"
 	return st
 }
 
@@ -208,9 +216,14 @@ func swVersProductVersion(ctx context.Context) (string, error) {
 }
 
 // runFMCommand executes fm with the WaitDelay guard used by every other
-// subprocess probe. Combined output: fm styles its refusals on stdout.
-func runFMCommand(ctx context.Context, bin string, args ...string) ([]byte, error) {
+// subprocess probe. Streams stay separate: stdout carries the answer, stderr
+// carries contextual errors (and either may carry the licence refusal).
+func runFMCommand(ctx context.Context, bin string, args ...string) ([]byte, []byte, error) {
 	cmd := exec.CommandContext(ctx, bin, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 	cmd.WaitDelay = 2 * time.Second
-	return cmd.CombinedOutput()
+	err := cmd.Run()
+	return stdout.Bytes(), stderr.Bytes(), err
 }

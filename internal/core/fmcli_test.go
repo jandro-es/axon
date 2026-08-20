@@ -18,8 +18,8 @@ func fmDet(goos, goarch string, mut func(*fmDetector)) fmDetector {
 		goarch:    goarch,
 		lookPath:  func(string) (string, error) { return "/usr/bin/fm", nil },
 		osVersion: func(context.Context) (string, error) { return "27.0", nil },
-		runFM: func(context.Context, string, ...string) ([]byte, error) {
-			return []byte("Model availability:\n  on-device: available\n"), nil
+		runFM: func(context.Context, string, ...string) (stdout, stderr []byte, err error) {
+			return []byte("Model availability:\n  on-device: available\n"), nil, nil
 		},
 	}
 	if mut != nil {
@@ -43,17 +43,27 @@ func TestDetectFMStates(t *testing.T) {
 			d.lookPath = func(string) (string, error) { return "", errors.New("not found") }
 		}), FMStateAbsent},
 		{"license pending, exit 0", fmDet("darwin", "arm64", func(d *fmDetector) {
-			d.runFM = func(context.Context, string, ...string) ([]byte, error) { return []byte(fmLicenseOutput), nil }
+			d.runFM = func(context.Context, string, ...string) ([]byte, []byte, error) { return []byte(fmLicenseOutput), nil, nil }
 		}), FMStateLicensePending},
 		// Marker beats error: fm's exit codes are inconsistent.
 		{"license pending, nonzero exit", fmDet("darwin", "arm64", func(d *fmDetector) {
-			d.runFM = func(context.Context, string, ...string) ([]byte, error) {
-				return []byte(fmLicenseOutput), errors.New("exit status 1")
+			d.runFM = func(context.Context, string, ...string) ([]byte, []byte, error) {
+				return nil, []byte(fmLicenseOutput), errors.New("exit status 1")
 			}
 		}), FMStateLicensePending},
+		// Observed on 27.0: stdout answers "System model available" while
+		// stderr carries a PCC context error and the exit code is 1. A
+		// non-empty stdout answer wins over the exit code.
+		{"ready despite exit 1", fmDet("darwin", "arm64", func(d *fmDetector) {
+			d.runFM = func(context.Context, string, ...string) ([]byte, []byte, error) {
+				return []byte("System model available\n"),
+					[]byte("Error: \x1b[38;2;255;107;128mPrivate Cloud Compute is not available in this context. Please use the Terminal app.\x1b[0m\n"),
+					errors.New("exit status 1")
+			}
+		}), FMStateReady},
 		{"ready", fmDet("darwin", "arm64", nil), FMStateReady},
 		{"unresponsive", fmDet("darwin", "arm64", func(d *fmDetector) {
-			d.runFM = func(context.Context, string, ...string) ([]byte, error) { return nil, errors.New("timeout") }
+			d.runFM = func(context.Context, string, ...string) ([]byte, []byte, error) { return nil, nil, errors.New("timeout") }
 		}), FMStateUnresponsive},
 		// sw_vers failing must not block detection — probe anyway.
 		{"version unknown still probes", fmDet("darwin", "arm64", func(d *fmDetector) {
@@ -99,7 +109,7 @@ func TestDetectFMFields(t *testing.T) {
 	// Persisted output is capped.
 	huge := strings.Repeat("x", 5000)
 	st = fmDet("darwin", "arm64", func(d *fmDetector) {
-		d.runFM = func(context.Context, string, ...string) ([]byte, error) { return []byte(huge), nil }
+		d.runFM = func(context.Context, string, ...string) ([]byte, []byte, error) { return []byte(huge), nil, nil }
 	}).detect(ctx)
 	if len(st.Detail) > 400 {
 		t.Errorf("detail not capped: %d bytes", len(st.Detail))
