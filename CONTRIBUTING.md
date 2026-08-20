@@ -6,7 +6,9 @@ contribute.
 ## Development setup
 
 Prerequisites: **Go 1.26+**, **Node 18+** (to build the dashboard), and — to run
-the daemon meaningfully — the **Claude Code CLI** and **Ollama**.
+the daemon meaningfully — the **Claude Code CLI** and **Ollama**. Working on the
+macOS Companion app additionally needs the **Swift 6.2 toolchain** on macOS
+(SwiftPM only — there is no Xcode project).
 
 ```bash
 git clone https://github.com/jandro-es/axon.git && cd axon
@@ -37,14 +39,25 @@ your change.
 cmd/axon/      the CLI (the only package main; wires cobra)
 internal/      private application packages:
   config db vault embeddings agent tokens ingestion search
-  automations scheduler mcp hooks dashboard core scaffold claudeassets service events
+  automations scheduler mcp hooks dashboard core scaffold claudeassets
+  service events actions ask eval rerank review identity health
+  selfupdate clients ui tui
 web/           the Vite + React + Recharts dashboard (built to web/dist, embedded)
-docs/          PRD, architecture + ADRs, requirements, component specs, and GUIDE.md
+apps/companion/ the macOS menu-bar app (SwiftPM, two targets: AxonKit + Companion;
+               make companion / companion-test / companion-release; its API
+               contract with the daemon is apps/companion/CONTRACT.md)
+docs/          PRD, architecture + ADRs, requirements, component specs, GUIDE.md,
+               and the COMMANDS/AUTOMATIONS/PROFILES references
 ```
 
 Dependency rule: `internal/config` is imported by everyone and imports nothing
 internal. Leaf packages don't import each other's callers; `core` and the CLI
 compose them. Go enforces an acyclic graph — fix a cycle, don't work around it.
+
+Companion rule: the app holds **zero business logic** — it only reads the
+daemon's REST/SSE surfaces and drives the CLI. If it needs something the daemon
+cannot answer, grow a *general* daemon seam (with an FR) rather than working
+around it in Swift.
 
 ## Coding conventions
 
