@@ -70,6 +70,10 @@ func DetectFM(ctx context.Context) FMStatus {
 	return defaultFMDetector().detect(ctx)
 }
 
+// detectFM is the package indirection doctor uses, stubbable in tests so
+// machine-dependent fm state never decides a test outcome.
+var detectFM = DetectFM
+
 func (d fmDetector) detect(ctx context.Context) FMStatus {
 	st := FMStatus{AppleSilicon: d.goarch == "arm64"}
 	if d.goos != "darwin" {

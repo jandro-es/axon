@@ -338,7 +338,7 @@ func visionCheck(p config.Profile) Check {
 	case mode == "off":
 		return Check{Name: name, Status: StatusOK, Detail: "vision off"}
 	case mode == "apple" || mode == "apple:pcc":
-		return visionCheckApple(mode, DetectFM(context.Background()))
+		return visionCheckApple(mode, detectFM(context.Background()))
 	case strings.HasPrefix(mode, "ollama:"):
 		model := strings.TrimPrefix(mode, "ollama:")
 		host := p.Embeddings.Host
