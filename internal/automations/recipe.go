@@ -196,8 +196,40 @@ func (r RecipeRun) runPrompt(ctx context.Context, rc RunCtx, vals map[string]str
 	return strings.TrimSpace(out), est, deferred, err
 }
 
+// propose appends output lines to the review queue as acknowledge-only
+// `recipe` items (FR-201), deduped forever via proposal memory.
 func (r RecipeRun) propose(ctx context.Context, rc RunCtx, text string, est int) (RunResult, error) {
-	return RunResult{}, fmt.Errorf("recipe %s: review sink not yet implemented", r.def.Name)
+	stateKey := r.def.Name + "/proposed"
+	proposed := loadProposalMemory(ctx, rc, stateKey)
+	var queue []string
+	for _, raw := range strings.Split(text, "\n") {
+		line := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(raw), "- "))
+		if line == "" {
+			continue
+		}
+		line = strings.ReplaceAll(line, `"`, "'")
+		key := hashShort(line)
+		if proposed[key] {
+			continue
+		}
+		proposed[key] = true
+		queue = append(queue, fmt.Sprintf("- [ ] recipe %q (from %s)", line, r.def.Name))
+		if len(queue) >= recipeMaxProposals {
+			break
+		}
+	}
+	if len(queue) == 0 {
+		return RunResult{Summary: "no new proposals", EstimatedTokens: est}, nil
+	}
+	header := fmt.Sprintf("\n## Recipe %s (%s)\n", r.def.Name, today(rc))
+	if aerr := rc.Vault.Append(".axon/review-queue.md", header+strings.Join(queue, "\n")+"\n"); aerr != nil {
+		return RunResult{}, aerr
+	}
+	saveProposalMemory(ctx, rc, stateKey, proposed)
+	return RunResult{
+		Summary: fmt.Sprintf("proposed %d item(s) to review", len(queue)),
+		Changes: []string{".axon/review-queue.md"}, EstimatedTokens: est,
+	}, nil
 }
 
 // canonicalInputs is the deterministic form hashed by the automatic

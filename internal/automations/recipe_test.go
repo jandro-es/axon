@@ -8,6 +8,7 @@ import (
 	"github.com/jandro-es/axon/internal/agent"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
+	"github.com/jandro-es/axon/internal/review"
 )
 
 func testRecipe() config.Recipe {
@@ -209,6 +210,49 @@ func TestRecipeRunPromptDefaultsRoutine(t *testing.T) {
 	}
 	if len(fake.Calls) != 1 || fake.Calls[0].Model != "sonnet" {
 		t.Fatalf("want routine default, got %+v", fake.Calls)
+	}
+}
+
+func reviewRecipe() config.Recipe {
+	def := testRecipe()
+	def.Output = config.RecipeOutput{Review: &config.RecipeReviewSink{}}
+	def.Render = "- suggestion \"one\"\n- suggestion two\n\n{{list}}"
+	return def
+}
+
+func TestRecipeReviewSinkProposesAndDedups(t *testing.T) {
+	rc, _ := newRC(t, map[string]string{"03-Resources/List.md": "third line\n"})
+	r := RecipeRun{def: reviewRecipe()}
+	res, err := r.Run(context.Background(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res.Summary, "proposed") {
+		t.Fatalf("summary: %q", res.Summary)
+	}
+	items, err := review.Load(context.Background(), rc.Vault)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := 0
+	for _, it := range items {
+		if it.Kind == "recipe" && it.Note == "test-recipe" {
+			found++
+			if strings.Contains(it.Target, `"`) {
+				t.Fatalf("quotes must be sanitized: %q", it.Target)
+			}
+		}
+	}
+	if found == 0 {
+		t.Fatalf("no recipe items in queue: %+v", items)
+	}
+	// Second run with identical output: proposal memory silences everything.
+	res2, err := r.Run(context.Background(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res2.Summary, "no new proposals") {
+		t.Fatalf("dedup failed: %q", res2.Summary)
 	}
 }
 
