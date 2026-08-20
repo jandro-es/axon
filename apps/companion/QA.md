@@ -191,7 +191,10 @@ against a scratch profile first.
 Everything headless is done: notarized + stapled universal build, signed
 appcast (0.1.0 → 0.2.0), GitHub release published. Remaining, in order:
 
-1. **Sparkle e2e (ISSUES #4):** from a REAL install location — never from
+1. **Sparkle e2e (ISSUES #4): ✅ VERIFIED 2026-08-20** — 0.1.0 at
+   /Applications updated to 0.2.0 through the published feed (About shows
+   0.2.0 / build 2). Original procedure kept below for the next release's
+   update test. From a REAL install location — never from
    `dist/` (pipeline output; rebuilds replace the bundle under a running app,
    which is exactly how the first attempt failed with Sparkle's generic
    updater error). Procedure: quit any Companion running from `dist/`;
