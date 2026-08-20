@@ -3,6 +3,15 @@
     <channel>
         <title>Axon</title>
         <item>
+            <title>0.2.0</title>
+            <pubDate>Thu, 20 Aug 2026 22:27:45 +0100</pubDate>
+            <link>https://github.com/jandro-es/axon</link>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/jandro-es/axon/releases/download/companion-v0.2.0/Axon-0.2.0.zip" length="3276976" type="application/octet-stream" sparkle:edSignature="qQru/dP3qjiEcUdrue2WA64Ca5UB6P6MX159XXBHJ7r2B2lN3dND1VzgL9AEIzcW5cMlx17A62xj0cv3EnVGAw=="/>
+        </item>
+        <item>
             <title>0.1.0</title>
             <pubDate>Sun, 16 Aug 2026 20:44:04 +0100</pubDate>
             <link>https://github.com/jandro-es/axon</link>
