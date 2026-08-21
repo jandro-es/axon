@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Rationale: ENTITLEMENTS.md. App extensions MUST be sandboxed, even -->
+    <!-- though their container app here is not. -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <!-- Outgoing connections only, and in practice only to 127.0.0.1:7777. -->
+    <!-- Without this the sandboxed extension cannot reach the daemon at all. -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>

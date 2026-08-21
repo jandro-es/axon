@@ -276,6 +276,46 @@ extract_appintents_metadata() {
 }
 extract_appintents_metadata
 
+# The share extension (CFR-96). A .appex is an ordinary bundle whose executable
+# starts at NSExtensionMain; SwiftPM builds that binary, this assembles it.
+SHARE_EXT_NAME=${SHARE_EXT_NAME:-AxonShare}
+APPEX="$APP/Contents/PlugIns/${SHARE_EXT_NAME}.appex"
+mkdir -p "$APPEX/Contents/MacOS" "$APPEX/Contents/Resources"
+install_binary "$SHARE_EXT_NAME" "$APPEX/Contents/MacOS/$SHARE_EXT_NAME"
+cat > "$APPEX/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key><string>${APP_NAME}</string>
+    <key>CFBundleDisplayName</key><string>${APP_NAME}</string>
+    <key>CFBundleIdentifier</key><string>${BUNDLE_ID}.share</string>
+    <key>CFBundleExecutable</key><string>${SHARE_EXT_NAME}</string>
+    <key>CFBundlePackageType</key><string>XPC!</string>
+    <key>CFBundleShortVersionString</key><string>${MARKETING_VERSION}</string>
+    <key>CFBundleVersion</key><string>${BUILD_NUMBER}</string>
+    <key>LSMinimumSystemVersion</key><string>${MACOS_MIN_VERSION}</string>
+    <key>NSExtension</key>
+    <dict>
+        <key>NSExtensionPointIdentifier</key><string>com.apple.share-services</string>
+        <!-- Module-qualified: renaming the target or the class breaks loading. -->
+        <key>NSExtensionPrincipalClass</key><string>${SHARE_EXT_NAME}.ShareViewController</string>
+        <key>NSExtensionAttributes</key>
+        <dict>
+            <!-- URLs, web pages and text only. Files have their own door:
+                 watch-folders (FR-208/209). -->
+            <key>NSExtensionActivationRule</key>
+            <dict>
+                <key>NSExtensionActivationSupportsWebURLWithMaxCount</key><integer>1</integer>
+                <key>NSExtensionActivationSupportsWebPageWithMaxCount</key><integer>1</integer>
+                <key>NSExtensionActivationSupportsText</key><true/>
+            </dict>
+        </dict>
+    </dict>
+</dict>
+</plist>
+PLIST
+
 # Ensure contents are writable before stripping attributes and signing.
 chmod -R u+w "$APP"
 
@@ -321,6 +361,10 @@ sign_frameworks() {
   done
 }
 sign_frameworks
+
+# Nested code first: signing the container invalidates any later nested change.
+APPEX_ENTITLEMENTS=${APPEX_ENTITLEMENTS:-$ROOT/AxonShare.entitlements}
+codesign "${CODESIGN_ARGS[@]}" --entitlements "$APPEX_ENTITLEMENTS" "$APPEX"
 
 codesign "${CODESIGN_ARGS[@]}" \
   --entitlements "$APP_ENTITLEMENTS" \
