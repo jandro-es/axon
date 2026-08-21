@@ -114,6 +114,55 @@ It parses the JSON result for the final output and usage, feeds usage into the l
 ## 5. Extensibility (NFR-12)
 A new automation = a module in `automations/` implementing `Automation` + a config block. The engine discovers it; no core wiring edits. Same for a new ingestion source (a `Fetcher`).
 
+## 5b. User-defined recipes (ADR-039, FR-199…201)
+
+A **recipe** is an automation the owner writes as data instead of Go. It
+declares named inputs, one optional model call, and one sink; AXON turns each
+valid recipe into an ordinary `Automation` and appends it to the registry, so
+the whole engine contract above — change-gate, chokepoint, budgets, dry-run,
+`axon run`, catalog, policy allow-list, budget-guard pause, the dashboard
+reliability table — applies to recipes with no engine changes.
+
+**Where they live.** A `recipes:` list in `config.yaml`, validated at load.
+Deliberately *not* in the vault: the vault is a model-writable surface
+(ADR-022 `vault_write`), while config.yaml is outside every model write path,
+so no model call can author or alter an automation.
+
+**Vocabulary (v1).** Three zero-Claude readers — `note {path}` (a note body),
+`search {query, top_k ≤ 20}` (hybrid hits as `[[path]]: excerpt`),
+`recent_notes {lookback_days 1–90, limit ≤ 100}` (`[[path]] (updated DATE)`).
+Exactly one of `prompt` (one one-shot chokepoint call) or `render` (no model
+call). Exactly one sink: `block {note, block}` rebuilds a recipe-owned
+`axon:<block>` managed block, or `review {}` proposes lines to the review
+queue. Templating is plain `{{input-name}}` / `{{today}}` substitution — no
+conditionals, loops, or functions. Recipes are data, not programs.
+
+**Scheduling and tier.** From an ordinary `automations.<name>` entry, exactly
+like a built-in: `enabled`, `schedule`, `model` (the tier for the prompt call;
+empty → routine), `budget_tokens`. A recipe with no entry is legal and runs
+only via `axon run <name>` (doctor lists it as unscheduled).
+
+**Change-gate.** Automatic and free: the cursor is a hash of the canonically
+rendered inputs, so unchanged inputs skip with no model call (FR-31 held
+generically rather than hand-rolled per automation). A `note` input whose file
+does not exist yet leaves the recipe idle rather than failing.
+
+**Safety.** Both cardinal rules hold by construction: the only model path is
+the chokepoint, and the only writers are the managed-block `Patch` and the
+review-queue append. Block sinks reject reserved built-in block names
+(`briefing`, `actions`, `memory`, …) and any target under `.axon/` or
+`.trash/`; managed-block markers in resolved inputs and model output are
+neutralized so recipe output can never terminate its own block and leak into
+a note's human region. The `recipe` review kind is **acknowledge-only** — its
+accept records "✓ noted" and mutates nothing, so a recipe may propose anything
+while writing only managed blocks. A recipe name colliding with a built-in is
+refused loudly at `axon start`, `axon run`, and in doctor (built-ins always
+win); recipes are never `Essential`, so budget-guard may pause them.
+
+**Caps** are code, not config: 32 KB per rendered input, ≤ 8 inputs, ≤ 10
+review proposals per run. Anything needing a new reader, a second model call,
+or a different sink is a Go automation, not a recipe stretch.
+
 ## 6. Acceptance checks
 - With nothing changed, each automation logs a skip and makes no Claude call (FR-31; success criterion S3).
 - `axon run daily-log --dry-run` prints intended edits + token estimate, writes nothing (FR-33/FR-34).

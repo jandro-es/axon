@@ -650,6 +650,63 @@ automations:
 **Dry-run and the change-gate mean automations are safe to leave on.** Disabling
 all of them still leaves a working system (manual ingest/search + dashboard).
 
+### Write your own automation (recipes)
+
+You don't need to write Go to add an automation. A **recipe** declares one as
+data in `config.yaml`: what to read, whether to ask a model, and where to put
+the result. Say you want a weekly digest of what changed in your reading:
+
+```yaml
+recipes:
+  - name: reading-digest
+    purpose: "Weekly digest of notes touching my reading list."
+    inputs:
+      - name: recent
+        recent_notes: { lookback_days: 7, limit: 20 }
+      - name: hits
+        search: { query: "reading list", top_k: 5 }
+    prompt: |
+      From these recently-updated notes and search matches, write a short
+      digest of what changed in my reading ({{today}}).
+      {{recent}}
+      {{hits}}
+    output:
+      block: { note: "03-Resources/Reading Digest.md", block: "recipe" }
+
+automations:
+  reading-digest: { enabled: true, schedule: "0 8 * * 1", model: routine, budget_tokens: 20_000 }
+```
+
+Try it before scheduling it: `axon run reading-digest --dry-run` shows the
+token estimate and the file it would touch without writing, and
+`axon run reading-digest` does it for real. The recipe then appears in
+`axon automations` beside the built-ins.
+
+**The pieces.** *Inputs* are the three things a recipe can read — a note
+(`note`), a hybrid search (`search`), or recently-updated notes
+(`recent_notes`) — each given a name you reference as `{{name}}` in the
+template (`{{today}}` is always available). Use `prompt:` for one model call,
+or `render:` for a purely mechanical digest with **no model call at all**.
+*Output* is either a `block:` (AXON rewrites that one `axon:` section of the
+note and never touches the rest of the page) or `review: {}` (each output line
+becomes a review-queue item you accept or dismiss; accepting one just marks it
+noted — a recipe proposal never changes anything by itself).
+
+**What you get for free.** The model call goes through the same budget and
+ledger as everything else, so a recipe can't overspend. AXON hashes the
+resolved inputs, so a run where nothing changed makes no model call at all.
+`--dry-run` works. Budget pressure pauses recipes before it touches essential
+automations. And a recipe can only ever write its own managed block — your
+prose in the target note is safe, and so is every built-in's block (AXON
+refuses reserved names like `briefing` or `actions`, and won't target
+`.axon/`).
+
+Recipes live in `config.yaml` rather than in your vault on purpose: nothing
+Claude can write reaches your config, so no automation can invent itself. If a
+recipe's name clashes with a built-in, AXON says so and refuses to start rather
+than quietly shadowing it. Full vocabulary and limits:
+`docs/06-component-automation-engine.md` §5b.
+
 ---
 
 ## 9. Token budgeting

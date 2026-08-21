@@ -176,6 +176,35 @@ profiles:
       eval-drift:          { enabled: false, schedule: "0 5 * * 1",      model: none,      budget_tokens: 0 }        # weekly: re-run axon eval when a gated local model's Ollama digest changed (FR-143, off by default; local eval calls only, no Claude spend)
     # actions: { stale_after_days: 30 }   # T5: sweep open undated actions in notes untouched this long (default 30)
 
+    # --- User-defined recipes (ADR-039, FR-199…201) -------------------------
+    # A recipe is a declarative automation: named zero-model inputs, exactly
+    # one of prompt (ONE chokepoint call) or render (no model call at all),
+    # and exactly one sink. Recipes live here — never in the vault — because
+    # config.yaml is outside every model write path, so no model call can
+    # author an automation. Schedule one with a normal automations.<name>
+    # entry, exactly like a built-in; `axon run <name>` works without one.
+    # Placeholders are plain substitution: {{input-name}} and {{today}}.
+    # Docs: docs/06 §"User-defined recipes" + GUIDE.
+    # recipes:
+    #   - name: reading-digest
+    #     purpose: "Weekly digest of notes touching my reading list."
+    #     inputs:
+    #       - name: recent
+    #         recent_notes: { lookback_days: 7, limit: 20 }   # [[path]] (updated DATE) lines
+    #       - name: hits
+    #         search: { query: "reading list", top_k: 5 }     # [[path]]: excerpt lines
+    #     prompt: |
+    #       From these recently-updated notes and search matches, write a
+    #       short digest of what changed in my reading ({{today}}).
+    #       {{recent}}
+    #       {{hits}}
+    #     output:
+    #       block: { note: "03-Resources/Reading Digest.md", block: "recipe" }
+    #       # or:  review: {}   → each output line becomes a review-queue
+    #       #                     proposal whose accept only acknowledges
+    # …and in automations: above:
+    #   reading-digest: { enabled: true, schedule: "0 8 * * 1", model: routine, budget_tokens: 20_000 }
+
     # Personal identity & memory layer (Component 12). Injected at SessionStart so
     # the assistant knows you. Optional block — these are the defaults.
     memory:
