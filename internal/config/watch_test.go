@@ -58,13 +58,19 @@ func TestValidateWatchFolders(t *testing.T) {
 
 // A symlink pointing at a deny-listed root must be refused too — the lexical
 // check alone cannot see it.
+//
+// The target is /etc rather than ~/.ssh deliberately: EvalSymlinks resolves
+// nothing when the target does not exist, and a CI runner has no ~/.ssh — so
+// that version of this test passed locally and failed on Linux. /etc exists
+// on every platform this builds for. (A symlink to a MISSING deny-listed path
+// is not caught, by design: it is unreadable at runtime too, so the
+// watch-folders doctor check surfaces it.)
 func TestValidateWatchFoldersResolvesSymlinks(t *testing.T) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Skip("no home dir on this machine")
+	if _, err := os.Stat("/etc"); err != nil {
+		t.Skip("/etc not present on this platform")
 	}
 	link := filepath.Join(t.TempDir(), "sneaky")
-	if err := os.Symlink(filepath.Join(home, ".ssh"), link); err != nil {
+	if err := os.Symlink("/etc", link); err != nil {
 		t.Skipf("cannot create symlink here: %v", err)
 	}
 	p := Profile{VaultPath: t.TempDir(), Capture: CaptureConfig{WatchFolders: []string{link}}}
@@ -82,5 +88,22 @@ func TestValidateWatchFoldersAllowsMissingFolder(t *testing.T) {
 	}
 	if err := validateWatchFolders(p); err != nil {
 		t.Fatalf("a missing folder must validate (runtime + doctor handle it), got %v", err)
+	}
+}
+
+// A deny-listed root can itself be a symlink: on macOS /etc links to
+// /private/etc. Configuring the resolved form must be refused too, or the
+// deny-list is trivially sidestepped on that platform.
+func TestValidateWatchFoldersDeniesResolvedFormOfRoots(t *testing.T) {
+	resolved, err := filepath.EvalSymlinks("/etc")
+	if err != nil {
+		t.Skip("/etc not resolvable on this platform")
+	}
+	if resolved == "/etc" {
+		t.Skip("/etc is not a symlink here — nothing to sidestep")
+	}
+	p := Profile{VaultPath: t.TempDir(), Capture: CaptureConfig{WatchFolders: []string{resolved}}}
+	if err := validateWatchFolders(p); err == nil || !strings.Contains(err.Error(), "not be watched") {
+		t.Fatalf("the resolved form of a deny-listed root must be refused, got %v", err)
 	}
 }

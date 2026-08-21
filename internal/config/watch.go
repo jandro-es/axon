@@ -26,9 +26,17 @@ func validateWatchFolders(p Profile) error {
 		return nil
 	}
 	vault := filepath.Clean(ExpandPath(p.VaultPath))
-	denied := make(map[string]bool, len(deniedWatchRoots))
+	// The deny-list is compared on BOTH the lexical and the resolved form of
+	// each root, because a root can itself be a symlink: on macOS /etc is a
+	// link to /private/etc, so a literal-only list would let /private/etc (or
+	// any link resolving there) through.
+	denied := make(map[string]bool, len(deniedWatchRoots)*2)
 	for _, d := range deniedWatchRoots {
-		denied[filepath.Clean(ExpandPath(d))] = true
+		clean := filepath.Clean(ExpandPath(d))
+		denied[clean] = true
+		if resolved, err := filepath.EvalSymlinks(clean); err == nil {
+			denied[filepath.Clean(resolved)] = true
+		}
 	}
 	seen := map[string]bool{}
 	for _, raw := range folders {
