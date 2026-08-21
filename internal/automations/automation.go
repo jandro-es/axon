@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jandro-es/axon/internal/config"
+	"github.com/jandro-es/axon/internal/core"
 	"github.com/jandro-es/axon/internal/embeddings"
 	"github.com/jandro-es/axon/internal/ingestion"
 	"github.com/jandro-es/axon/internal/search"
@@ -55,6 +56,11 @@ type RunCtx struct {
 	// input cap for one-shot calls, the per-run total cap for agentic runs
 	// (FR-85; wired by the engine, previously display-only).
 	BudgetTokens int
+	// SelfCheck returns the same doctor report `axon doctor` prints. Injected
+	// by cmd/axon, where the full config and the build version live, so no
+	// automation gains access to other profiles' configuration (FR-206). Nil
+	// when the caller did not wire it — the self-check automation then idles.
+	SelfCheck func(context.Context) []core.Check
 }
 
 // now returns the run's clock (injectable for tests).

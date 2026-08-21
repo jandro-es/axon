@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jandro-es/axon/internal/config"
+	"github.com/jandro-es/axon/internal/core"
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/embeddings"
 	"github.com/jandro-es/axon/internal/events"
@@ -38,6 +39,11 @@ type EngineDeps struct {
 	Log      *slog.Logger
 	Now      func() time.Time
 	Timeout  time.Duration
+	// SelfCheck returns the same doctor report `axon doctor` prints. Injected
+	// by cmd/axon, where the full config and the build version live, so no
+	// automation gains access to other profiles' configuration (FR-206). Nil
+	// when the caller did not wire it — the self-check automation then idles.
+	SelfCheck func(context.Context) []core.Check
 }
 
 // Outcome is the engine's report of a single run.
@@ -178,18 +184,19 @@ func (e *Engine) Run(ctx context.Context, a Automation, dryRun bool) (Outcome, e
 
 func (e *Engine) runCtx(name string, runID int64, dryRun bool) RunCtx {
 	rc := RunCtx{
-		Profile:  e.deps.Profile,
-		Config:   e.deps.Config,
-		DB:       e.deps.DB,
-		Vault:    e.deps.Vault,
-		Manager:  e.deps.Manager,
-		Searcher: e.deps.Searcher,
-		Embedder: e.deps.Embedder,
-		Pipeline: e.deps.Pipeline,
-		Log:      e.deps.Log,
-		DryRun:   dryRun,
-		RunID:    runID,
-		Now:      e.now,
+		Profile:   e.deps.Profile,
+		Config:    e.deps.Config,
+		DB:        e.deps.DB,
+		Vault:     e.deps.Vault,
+		Manager:   e.deps.Manager,
+		Searcher:  e.deps.Searcher,
+		Embedder:  e.deps.Embedder,
+		Pipeline:  e.deps.Pipeline,
+		Log:       e.deps.Log,
+		DryRun:    dryRun,
+		RunID:     runID,
+		Now:       e.now,
+		SelfCheck: e.deps.SelfCheck,
 	}
 	// Activate the automation's configured budget_tokens (FR-85): the
 	// per-call input cap for one-shot calls, the per-run total cap for
