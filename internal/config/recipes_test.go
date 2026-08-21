@@ -1,8 +1,11 @@
 package config
 
 import (
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/goccy/go-yaml"
 )
 
 func validRecipe() Recipe {
@@ -189,4 +192,77 @@ func TestValidateRecipesRefusesSelfFeedingReviewRecipe(t *testing.T) {
 	if err := validateRecipes(Profile{Recipes: []Recipe{okBlock}}); err != nil {
 		t.Fatalf("block sink reading the queue must be legal: %v", err)
 	}
+}
+
+// The example config ships its recipes commented out, so nothing validates
+// them — a renamed field would rot every example silently and greet the next
+// user who copies one with a validation error. This uncomments the personal
+// profile's `recipes:` block and runs it through the real validator.
+func TestExampleConfigRecipesValidate(t *testing.T) {
+	raw, err := os.ReadFile(exampleConfigPath(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, n := uncommentRecipes(string(raw))
+	if n == 0 {
+		t.Fatal("no commented recipe example found in axon.config.example.yaml — did the block move?")
+	}
+	var doc struct {
+		Recipes []Recipe `yaml:"recipes"`
+	}
+	if err := yaml.Unmarshal([]byte(block), &doc); err != nil {
+		t.Fatalf("the commented recipe example is not valid YAML once uncommented:\n%s\nerror: %v", block, err)
+	}
+	if len(doc.Recipes) == 0 {
+		t.Fatalf("uncommented block parsed to zero recipes:\n%s", block)
+	}
+	if err := validateRecipes(Profile{Recipes: doc.Recipes}); err != nil {
+		t.Fatalf("a shipped recipe example does not validate: %v\n%s", err, block)
+	}
+	t.Logf("validated %d shipped recipe example(s)", len(doc.Recipes))
+}
+
+// uncommentRecipes lifts every commented recipe list-item out of the example
+// config and returns them as one YAML document plus the count of recipes
+// found. It collects each `- name:` item and its more-indented continuation
+// lines, skipping the prose lines that separate the examples — so all shipped
+// examples are covered, not just the first.
+func uncommentRecipes(src string) (string, int) {
+	out := []string{"recipes:"}
+	found := 0
+	collecting := false
+	baseIndent := 0
+	for _, line := range strings.Split(src, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "#") {
+			collecting = false
+			continue
+		}
+		body := strings.TrimPrefix(trimmed, "#")
+		if strings.HasPrefix(body, " ") {
+			body = body[1:]
+		}
+		inner := strings.TrimSpace(body)
+		// Indent of the content itself, measured inside the comment.
+		indent := len(body) - len(strings.TrimLeft(body, " "))
+		switch {
+		case strings.HasPrefix(inner, "- name:") && (!collecting || indent <= baseIndent):
+			// A new recipe item. The indent guard matters: `inputs:` also
+			// contains `- name:` entries, and those are continuations, not
+			// new recipes.
+			collecting, baseIndent = true, indent
+			found++
+			out = append(out, "  "+inner)
+		case collecting && inner == "":
+			// A blank line inside a block scalar (the `render: |` templates
+			// contain them). Keep it — dropping it truncates the template and
+			// its placeholders go unreferenced.
+			out = append(out, "")
+		case collecting && indent > baseIndent && !strings.HasPrefix(inner, "#"):
+			out = append(out, "  "+strings.Repeat(" ", indent-baseIndent)+inner)
+		default:
+			collecting = false
+		}
+	}
+	return strings.Join(out, "\n"), found
 }
