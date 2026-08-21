@@ -88,11 +88,11 @@ install_hint() {
     go)
       case "$pm" in
         brew) echo "brew install go" ;;
-        apt)  echo "sudo apt-get install -y golang-go   # or https://go.dev/dl for 1.22+" ;;
+        apt)  echo "sudo apt-get install -y golang-go   # or https://go.dev/dl for 1.26+" ;;
         dnf)  echo "sudo dnf install -y golang" ;;
         pacman) echo "sudo pacman -S go" ;;
         zypper) echo "sudo zypper install -y go" ;;
-        *)    echo "https://go.dev/dl  (need Go 1.22+)" ;;
+        *)    echo "https://go.dev/dl  (need Go 1.26+)" ;;
       esac ;;
     node|npm)
       case "$pm" in
