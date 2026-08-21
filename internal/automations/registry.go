@@ -32,6 +32,7 @@ func builtins() map[string]Automation {
 		ProjectPulse{}.Name():       ProjectPulse{},
 		EvalDrift{}.Name():          EvalDrift{},
 		MergeProposals{}.Name():     MergeProposals{},
+		OrphanReport{}.Name():       OrphanReport{},
 		ActionsConsolidate{}.Name(): ActionsConsolidate{},
 		ActionsReview{}.Name():      ActionsReview{},
 		ActionExtract{}.Name():      ActionExtract{},
