@@ -37,7 +37,10 @@ type profileDeps struct {
 // loadProfileDeps loads + validates config, resolves the active profile, builds
 // the vault and embedding provider, and (if openDB) opens + migrates the
 // database. The caller must Close the db when done.
-func loadProfileDeps(gf *globalFlags, openDB bool) (*profileDeps, error) {
+//
+// A variable, not a plain func, so tests can wrap it to observe the deps a
+// command builds — notably that every early return still closes them.
+var loadProfileDeps = func(gf *globalFlags, openDB bool) (*profileDeps, error) {
 	_ = config.LoadDotEnv(gf.envPath)
 	cfg, err := config.Load(gf.configPath)
 	if err != nil {

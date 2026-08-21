@@ -39,6 +39,13 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Covers every guard that returns before the shutdown closure
+			// below is registered. Defers are LIFO, so this runs AFTER that
+			// closure on the normal path — its cancel → wg.Wait() →
+			// bus.Close() → deps.close() ordering is preserved, and the
+			// resulting second close is a no-op (FMSupervisor.Stop nils its
+			// proc under a mutex; sql.DB.Close is idempotent).
+			defer deps.close()
 
 			bus := events.NewBus()
 			logger := events.NewLogger(cmd.OutOrStdout(), events.FormatText, "info")
