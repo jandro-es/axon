@@ -1,6 +1,8 @@
 package automations
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -139,22 +141,45 @@ func moveFile(src, dest string) error {
 	if err != nil {
 		return fmt.Errorf("create %q: %w", filepath.Base(dest), err)
 	}
+	// On any copy failure the partial destination is removed best-effort:
+	// the original error is what the caller needs, and a failed cleanup must
+	// not mask it. The source file is untouched either way.
 	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		os.Remove(dest)
+		_ = out.Close()
+		_ = os.Remove(dest)
 		return fmt.Errorf("copy %q: %w", filepath.Base(src), err)
 	}
 	if err := out.Sync(); err != nil {
-		out.Close()
-		os.Remove(dest)
+		_ = out.Close()
+		_ = os.Remove(dest)
 		return fmt.Errorf("sync %q: %w", filepath.Base(dest), err)
 	}
 	if err := out.Close(); err != nil {
-		os.Remove(dest)
+		_ = os.Remove(dest)
 		return fmt.Errorf("close %q: %w", filepath.Base(dest), err)
 	}
 	if err := os.Remove(src); err != nil {
 		return fmt.Errorf("remove source %q after copy: %w", filepath.Base(src), err)
 	}
 	return nil
+}
+
+// watchFingerprint hashes the eligible watched-folder files (name, size,
+// mtime — never content) for the capture change-gate. Empty when no folders
+// are configured, so capture's cursor is byte-identical to what it was before
+// watch-folders existed.
+//
+// This half of the gate is load-bearing (FR-209): DetectChange runs BEFORE
+// Run, so a cursor covering only 00-Inbox would skip the tick whenever a file
+// appeared outside the vault, and the sweep would never execute.
+func watchFingerprint(rc RunCtx) string {
+	files := eligibleWatchFiles(rc)
+	if len(files) == 0 {
+		return ""
+	}
+	h := sha256.New()
+	for _, f := range files {
+		fmt.Fprintf(h, "%s\x00%s\x00%d\x00%d\n", f.Dir, f.Name, f.Size, f.ModNano)
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }

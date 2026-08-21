@@ -1,6 +1,7 @@
 package automations
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -204,5 +205,75 @@ func TestEligibleWatchFilesIsContentFree(t *testing.T) {
 	}
 	if files[0].Size == 0 {
 		t.Fatal("size is part of the fingerprint and must be populated")
+	}
+}
+
+// THE regression for this slice. DetectChange runs BEFORE Run, so if the
+// fingerprint covers only 00-Inbox, a new file in a watched folder leaves the
+// inbox unchanged, capture reports "no change", Run never executes, and the
+// sweep never happens — a feature that looks correct and does nothing.
+func TestCaptureDetectsChangesInWatchedFolders(t *testing.T) {
+	watched := t.TempDir()
+	rc := watchRC(t, watched)
+	ctx := context.Background()
+
+	// Baseline with an empty inbox and an empty watched folder.
+	first, err := (Capture{}).DetectChange(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rc.LastCursor = first.Cursor
+	if again, err := (Capture{}).DetectChange(ctx, rc); err != nil || again.Changed {
+		t.Fatalf("nothing moved; want unchanged, got %+v err=%v", again, err)
+	}
+
+	// A file appears in the WATCHED folder. The inbox is untouched.
+	agedFile(t, watched, "new.txt", "hello")
+	after, err := (Capture{}).DetectChange(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.Changed {
+		t.Fatal("a new file in a watched folder must re-arm the capture gate")
+	}
+}
+
+// A file in a watched folder is swept into the inbox by Run and reported.
+func TestCaptureRunSweepsWatchedFolders(t *testing.T) {
+	watched := t.TempDir()
+	agedFile(t, watched, "dropped.txt", "some captured text")
+	rc := watchRC(t, watched)
+
+	res, err := (Capture{}).Run(context.Background(), rc)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(watched, "dropped.txt")); !os.IsNotExist(err) {
+		t.Fatal("the watched folder should be empty after the sweep")
+	}
+	if !strings.Contains(res.Summary, "watch") && len(res.Changes) == 0 {
+		t.Fatalf("the run should report what it swept: %+v", res)
+	}
+}
+
+// With no watch folders configured, capture's fingerprint and behaviour must
+// be exactly what they were before this slice.
+func TestCaptureUnchangedWithoutWatchFolders(t *testing.T) {
+	rc, _ := newRC(t, nil)
+	ctx := context.Background()
+	ch, err := (Capture{}).DetectChange(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ch.Cursor == "" {
+		t.Fatal("fingerprint must still be produced")
+	}
+	rc.LastCursor = ch.Cursor
+	again, err := (Capture{}).DetectChange(ctx, rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Changed {
+		t.Fatal("an unchanged empty vault with no watch folders must skip")
 	}
 }

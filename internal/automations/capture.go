@@ -95,8 +95,14 @@ func (Capture) DetectChange(ctx context.Context, rc RunCtx) (Change, error) {
 	if err != nil {
 		return Change{}, err
 	}
+	// Watched folders are part of the gate (FR-209). Appended rather than
+	// folded into inboxFingerprint so each function keeps one job — and so a
+	// profile with no watch folders produces exactly the cursor it did before.
+	if wfp := watchFingerprint(rc); wfp != "" {
+		fp += ":" + wfp
+	}
 	if fp == rc.LastCursor {
-		return Change{Changed: false, Reason: "inbox unchanged since last capture"}, nil
+		return Change{Changed: false, Reason: "inbox and watched folders unchanged since last capture"}, nil
 	}
 	// A run that archives files changes the listing after this cursor was
 	// computed, so the next tick runs once more and finds nothing new — DB
@@ -106,6 +112,26 @@ func (Capture) DetectChange(ctx context.Context, rc RunCtx) (Change, error) {
 
 func (Capture) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 	root := rc.Vault.Root()
+
+	// Watched folders first (FR-209): anything moved in is picked up by the
+	// inbox listing below, so the shipped ingest-and-archive flow handles it
+	// with no special casing.
+	var watchNotes []string
+	if rc.DryRun {
+		if files := eligibleWatchFiles(rc); len(files) > 0 {
+			watchNotes = append(watchNotes, fmt.Sprintf("would sweep %d file(s) from watched folders", len(files)))
+		}
+	} else {
+		swept, capped, problems := sweepWatchFolders(rc)
+		if len(swept) > 0 {
+			watchNotes = append(watchNotes, fmt.Sprintf("swept %d file(s) from watched folders", len(swept)))
+		}
+		if capped {
+			watchNotes = append(watchNotes, fmt.Sprintf("watch-folder cap reached (%d/tick) — more will arrive next tick", watchMaxPerTick))
+		}
+		watchNotes = append(watchNotes, problems...)
+	}
+
 	entries, err := listInboxDir(root)
 	if err != nil {
 		return RunResult{}, err
@@ -203,10 +229,11 @@ func (Capture) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 		saveCaptureFailures(ctx, rc, failures)
 	}
 
-	return RunResult{
-		Summary: fmt.Sprintf("captured %d, skipped %d, failed %d", captured, skipped, failed),
-		Changes: changes,
-	}, nil
+	summary := fmt.Sprintf("captured %d, skipped %d, failed %d", captured, skipped, failed)
+	if len(watchNotes) > 0 {
+		summary = strings.Join(watchNotes, "; ") + "; " + summary
+	}
+	return RunResult{Summary: summary, Changes: changes}, nil
 }
 
 // enrichedPipeline returns a shallow copy of the shared pipeline with the
