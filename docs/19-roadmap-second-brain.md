@@ -145,7 +145,7 @@ through the review queue instead of free-text nudges.
 frontmatter patch (new narrow mutation, needs its own design pass) or a manual
 step.
 
-### D3 — Weekly review flow (S) · candidate — not scheduled *(mostly a recipe — tried 2026-08-21)*
+### D3 — Weekly review flow (S) · **SHIPPED 2026-08-21 as a documented example recipe — no Go, no FR**
 **Value:** GTD's weekly review is the habit AXON is best placed to scaffold —
 everything it needs (stale actions, someday list, pulse, orphans, pending
 proposals) already exists, just not in one place.
@@ -171,12 +171,28 @@ and `01-Projects/Project Pulse.md` supplies the pulse the same way.
   (see `docs/20` C2 priority 3, and prefer shipping **E1** below first, which
   would render one).
 
-**So D3 may not need a Go slice at all** — and as of 2026-08-21 C2's read fix
-has shipped (FR-202), so the "pending proposals" section is reachable: a note
-input may now read `.axon/review-queue.md`. That makes D3 four-fifths a config
-block today, and shipping E1 would close the fifth (orphans). Reassess before
-writing Go; if it does ship as a recipe, ship it as a documented example
-rather than a built-in.
+**D3 needed no Go slice.** Both blockers closed the same day — FR-202 made
+`.axon/review-queue.md` readable, and E1's `orphan-report` (FR-204) renders
+orphans into a note — so D3 shipped as a **documented example recipe** in
+`axon.config.example.yaml` plus a `docs/GUIDE.md` walkthrough. Zero model
+calls, zero new code, no FR number: it is config and prose. Verified live —
+both sections compose, the nested `axon:actions` markers come back inert, the
+change-gate skips an unchanged re-run and re-arms on an input edit, and human
+prose outside the block survives.
+
+**Open decisions resolved.** *Its own note, not a section of `Actions.md`* —
+and that was settled by the code rather than taste: `actions` is a reserved
+block name, so a recipe cannot extend the board's own block. *Day/time:*
+Friday 17:00 (`0 17 * * 5`), the GTD convention of reviewing before the week
+closes.
+
+**Two characteristics worth knowing before building on this pattern.** A
+`note` input reads the **whole** note, so the source's title and headings come
+along — the output is useful rather than tidy, and a future "section" or
+"body-only" reader is the obvious refinement if that grates. And a recipe
+**idles entirely** while any input note is missing, so the shipped example
+uses only the two always-present sources and documents the optional pulse and
+orphan inputs in prose rather than half-YAML.
 
 ## Theme E — Knowledge health
 
@@ -275,9 +291,12 @@ pattern applied to topics.
 
 ## Sequencing sketch *(not a commitment)*
 
-Highest leverage first: **D3 weekly review** and **E1 orphan proposals** are
-small pure compositions of shipped machinery. **B1 STT ingestion** is the
-biggest single unlock and gates B2/M6. Theme A deepens quality behind the
+*Updated 2026-08-21: **D3** and **E1** have both shipped — D3 as a documented
+example recipe (no Go), E1 as `orphan-report` plus the link-suggester ordering
+fix (FR-204/205).* Of what remains, **B1 STT ingestion** is the biggest single
+unlock and gates B2/M6; **E2**'s aggregate half is now expressible as a recipe
+while its per-note half stays Go; **F2 MOC materialisation** needs a new
+review-queue kind, so it is a Go slice. Theme A deepens quality behind the
 scenes; C and F are optional reach. Anything here can be displaced by
 `docs/20`/`docs/21` slices — the roadmaps compete for the same build slots.
 

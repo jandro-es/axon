@@ -225,6 +225,42 @@ profiles:
     #       block: { note: "03-Resources/Source Freshness.md", block: "freshness" }
     # A note input may also read .axon/review-queue.md (FR-202) — reading is
     # not writing — but a review{}-sink recipe may not read its own queue.
+    #
+    # A weekly GTD review, composing over what other automations already
+    # wrote (docs/19 D3). Automation output is just a note, so reading
+    # Actions.md inherits the whole action board without an actions reader
+    # existing. Zero-model — it is pure composition:
+    #   - name: weekly-review
+    #     purpose: "Friday GTD review: the action board plus what is waiting on me."
+    #     inputs:
+    #       - name: board
+    #         note: { path: "01-Projects/Actions.md" }   # actions-consolidate (on by default)
+    #       - name: pending
+    #         note: { path: ".axon/review-queue.md" }    # readable since FR-202
+    #     render: |
+    #       Weekly review — {{today}}
+    #
+    #       **Your board**
+    #       {{board}}
+    #
+    #       **Waiting on you**
+    #       {{pending}}
+    #     output:
+    #       block: { note: "01-Projects/Weekly Review.md", block: "review" }
+    # …and in automations: above:
+    #   weekly-review: { enabled: true, schedule: "0 17 * * 5", model: none, budget_tokens: 0 }
+    #
+    # To add the pulse and orphan sections: enable `project-pulse` and
+    # `orphan-report`, then give the recipe two more inputs — one named
+    # `pulse` reading "01-Projects/Project Pulse.md", one named `orphans`
+    # reading "03-Resources/Vault Health.md" — and reference {{pulse}} and
+    # {{orphans}} in the render template.
+    # A recipe idles entirely while ANY note input is missing ("input note
+    # absent"), so add an input only once the automation writing it is on —
+    # AXON waits rather than emitting a half-review.
+    # (Avoid '#' markdown headings inside a commented render: template, since a
+    # '#' inside a YAML comment is ambiguous to reader and parser alike. Bold
+    # labels read the same in Obsidian.)
 
     # Personal identity & memory layer (Component 12). Injected at SessionStart so
     # the assistant knows you. Optional block — these are the defaults.

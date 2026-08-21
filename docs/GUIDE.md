@@ -709,6 +709,26 @@ recipe's name clashes with a built-in, AXON says so and refuses to start rather
 than quietly shadowing it. Full vocabulary and limits:
 `docs/06-component-automation-engine.md` §5b.
 
+**Recipes compose over other automations.** This is the part that makes them
+more capable than the five readers suggest: an automation's output is just a
+note, so pointing a `note` input at one inherits everything that automation
+renders. The shipped `weekly-review` example (see `axon.config.example.yaml`)
+is a GTD weekly review built entirely this way — reading
+`01-Projects/Actions.md` gives it the whole action board that
+`actions-consolidate` wrote (overdue, next actions, waiting-for, someday)
+without any actions reader existing, and reading `.axon/review-queue.md` gives
+it everything waiting on your decision. Zero model calls; it is pure
+composition. Enable `project-pulse` and `orphan-report` and you can add two
+more inputs for project momentum and disconnected notes.
+
+Two things to know when you compose this way. A `note` input reads the
+**whole** note, so the source's own title and headings come along — the result
+is useful rather than pretty, and you may want the render template to label
+each section. And a recipe **idles entirely** while any of its input notes is
+missing (the run log says `input note absent`), so add an input only once the
+automation that writes it is enabled: AXON waits rather than producing a
+half-review.
+
 ---
 
 ## 9. Token budgeting

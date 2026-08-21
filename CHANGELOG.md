@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **A weekly GTD review you can turn on by uncommenting it.** (`docs/19` D3;
+  no code, no FR — it is config and prose.) `axon.config.example.yaml` ships a
+  `weekly-review` recipe that composes your action board and everything waiting
+  on your decision into one dated note, with zero model calls. It works because
+  an automation's output is just a note: reading `01-Projects/Actions.md`
+  inherits the whole board `actions-consolidate` wrote. `docs/GUIDE.md` walks
+  through the pattern, including the two things to know — a `note` input reads
+  the whole note, and a recipe idles while any input note is missing.
+- The shipped recipe examples are now validated by a test, so a renamed field
+  can no longer rot them silently.
+
 ## [1.6.0] — 2026-08-21
 
 **Second brain, self-maintaining.** A minor release: no schema change (stays

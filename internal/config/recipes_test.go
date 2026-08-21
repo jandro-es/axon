@@ -238,10 +238,7 @@ func uncommentRecipes(src string) (string, int) {
 			collecting = false
 			continue
 		}
-		body := strings.TrimPrefix(trimmed, "#")
-		if strings.HasPrefix(body, " ") {
-			body = body[1:]
-		}
+		body := strings.TrimPrefix(strings.TrimPrefix(trimmed, "#"), " ")
 		inner := strings.TrimSpace(body)
 		// Indent of the content itself, measured inside the comment.
 		indent := len(body) - len(strings.TrimLeft(body, " "))
