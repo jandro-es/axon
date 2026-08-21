@@ -3,6 +3,7 @@ package ingestion
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -10,6 +11,20 @@ import (
 
 	"github.com/jandro-es/axon/internal/config"
 )
+
+// ErrNoSTT, ErrTooLong and ErrTooLarge are non-fatal: each routes to the
+// flagged-00-Inbox path, so an audio file that cannot be transcribed is
+// archived and recorded rather than failing the run (ADR-042).
+var (
+	ErrNoSTT    = errors.New("no speech-to-text provider configured")
+	ErrTooLong  = errors.New("recording is longer than ingestion.stt.max_minutes")
+	ErrTooLarge = errors.New("recording exceeds the size cap")
+)
+
+// sttMaxBytes is the mechanical guard, checked before the file is opened.
+// Deliberately NOT aligned with max_minutes: it protects memory regardless of
+// format, so lossless audio hits it first.
+const sttMaxBytes = 500 << 20 // 500 MB
 
 // Transcript is what an STT provider returns. Duration is informational once
 // transcription has happened; the duration CAP is enforced earlier, via Probe.

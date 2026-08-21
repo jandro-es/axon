@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
@@ -392,5 +393,96 @@ func TestDryRunWritesNothing(t *testing.T) {
 	}
 	if n, _ := db.CountVectors(ctx, p.DB); n != 0 {
 		t.Errorf("dry-run stored %d vectors", n)
+	}
+}
+
+type fakeSTT struct {
+	text     string
+	duration time.Duration
+	err      error
+}
+
+func (f fakeSTT) Probe(context.Context, string) (time.Duration, error) { return f.duration, nil }
+func (f fakeSTT) Transcribe(context.Context, string) (Transcript, error) {
+	if f.err != nil {
+		return Transcript{}, f.err
+	}
+	return Transcript{Text: f.text, Duration: f.duration, Model: "fake"}, nil
+}
+
+// The core promise: a transcript flows through the UNCHANGED tail, and the
+// audio bytes reach the attachment and nothing else.
+func TestIngestAudioTranscribesAndArchives(t *testing.T) {
+	p, _, _ := newTestPipeline(t, config.PolicyConfig{})
+	p.STT = fakeSTT{text: "quantum entanglement and flux pinning", duration: time.Minute}
+	dir := t.TempDir()
+	src := writeFile(t, dir, "memo.m4a", "fake audio bytes")
+
+	res, err := p.Ingest(context.Background(), src, IngestOptions{AllowLocalFiles: true})
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+	if res.Status != "ok" {
+		t.Fatalf("status = %q, want ok", res.Status)
+	}
+	note, err := p.Vault.Read(context.Background(), res.NotePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(note.Body, "flux pinning") {
+		t.Fatalf("the transcript must be the note body:\n%s", note.Body)
+	}
+	if strings.Contains(note.Body, "fake audio bytes") {
+		t.Fatal("audio bytes must never reach the note — only the transcript does")
+	}
+	if res.Chunks == 0 {
+		t.Fatal("the transcript must be chunked like any other text")
+	}
+}
+
+func TestIngestAudioWithoutProviderCapturesInsteadOfFailing(t *testing.T) {
+	p, _, _ := newTestPipeline(t, config.PolicyConfig{})
+	p.STT = nil // transcription off
+	dir := t.TempDir()
+	src := writeFile(t, dir, "memo.m4a", "fake audio bytes")
+
+	res, err := p.Ingest(context.Background(), src, IngestOptions{AllowLocalFiles: true})
+	if err != nil {
+		t.Fatalf("no provider must NOT be a failure: %v", err)
+	}
+	if res.Status != "captured" {
+		t.Fatalf("status = %q, want captured", res.Status)
+	}
+	if !strings.HasPrefix(res.NotePath, "00-Inbox/audio-") {
+		t.Fatalf("want a flagged 00-Inbox audio note, got %q", res.NotePath)
+	}
+	note, _ := p.Vault.Read(context.Background(), res.NotePath)
+	if !strings.Contains(strings.ToLower(note.Body), "transcri") {
+		t.Fatalf("the note must say why it was not transcribed:\n%s", note.Body)
+	}
+}
+
+func TestIngestAudioOverDurationCapIsCaptured(t *testing.T) {
+	p, _, _ := newTestPipeline(t, config.PolicyConfig{})
+	p.STTMaxMinutes = 1
+	p.STT = fakeSTT{text: "should never be used", duration: 90 * time.Minute}
+	dir := t.TempDir()
+	src := writeFile(t, dir, "long.m4a", "fake audio bytes")
+
+	res, err := p.Ingest(context.Background(), src, IngestOptions{AllowLocalFiles: true})
+	if err != nil {
+		t.Fatalf("over-cap must NOT be a failure: %v", err)
+	}
+	if res.Status != "captured" {
+		t.Fatalf("status = %q, want captured", res.Status)
+	}
+	note, _ := p.Vault.Read(context.Background(), res.NotePath)
+	// The note must name WHICH cap refused it: the byte and duration caps are
+	// deliberately unaligned, so "too big" and "too long" are different facts.
+	if !strings.Contains(strings.ToLower(note.Body), "long") {
+		t.Fatalf("the note must say it was too long:\n%s", note.Body)
+	}
+	if strings.Contains(note.Body, "should never be used") {
+		t.Fatal("transcription must not run when the duration cap refuses")
 	}
 }

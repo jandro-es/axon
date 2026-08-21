@@ -51,6 +51,11 @@ type Pipeline struct {
 	// vision is off. Local perception primitive (ADR-035): budget-exempt, not
 	// chokepoint-routed.
 	Vision Vision
+	// STT transcribes KindAudio files (FR-213, ADR-042); nil means
+	// transcription is off and audio is captured untranscribed.
+	STT STT
+	// STTMaxMinutes is ingestion.stt.max_minutes; 0 uses the 120 default.
+	STTMaxMinutes int
 	// Captioner fetches transcripts for KindMedia URLs. nil builds a default
 	// yt-dlp fetcher on demand. MediaHosts extends the built-in media host set;
 	// CaptionLangs is the yt-dlp --sub-langs selector.
@@ -119,6 +124,17 @@ func (p *Pipeline) Ingest(ctx context.Context, arg string, opts IngestOptions) (
 	if err != nil {
 		if in.Kind == KindMedia && errors.Is(err, ErrNoCaptions) {
 			return p.writeCapturedNote(in, "no captions available", "media")
+		}
+		// Audio that cannot be transcribed is archived and recorded, never a
+		// failure: a recorded failure per dropped file would make capture and
+		// watch-folders noisy for everyone who has not configured STT.
+		if in.Kind == KindAudio {
+			switch {
+			case errors.Is(err, ErrNoSTT):
+				return p.writeCapturedNote(in, "no transcription provider configured — set ingestion.stt.mode", "audio")
+			case errors.Is(err, ErrTooLong), errors.Is(err, ErrTooLarge):
+				return p.writeCapturedNote(in, err.Error(), "audio")
+			}
 		}
 		return res, err
 	}
@@ -240,6 +256,31 @@ func (p *Pipeline) read(ctx context.Context, in Input) (*Document, error) {
 			return nil, err // may be ErrNoCaptions
 		}
 		return &Document{URL: in.URL, Body: []byte(transcript), Title: title, FetchedAt: time.Now().UTC()}, nil
+	case KindAudio:
+		if p.STT == nil {
+			return nil, ErrNoSTT
+		}
+		st, serr := os.Stat(in.Path)
+		if serr != nil {
+			return nil, fmt.Errorf("read audio %q: %w", in.Path, serr)
+		}
+		if st.Size() > sttMaxBytes {
+			return nil, fmt.Errorf("%w: %d MB exceeds %d MB", ErrTooLarge, st.Size()>>20, int64(sttMaxBytes)>>20)
+		}
+		// Probe BEFORE transcribing: reading the duration off a finished
+		// transcript would mean the CPU was already spent, which is what the
+		// cap exists to prevent. (0, nil) means "unknown, proceed".
+		if d, perr := p.STT.Probe(ctx, in.Path); perr == nil && d > 0 {
+			if limit := time.Duration(p.sttMaxMinutes()) * time.Minute; d > limit {
+				return nil, fmt.Errorf("%w: %s exceeds %s", ErrTooLong, d.Round(time.Second), limit)
+			}
+		}
+		tr, terr := p.STT.Transcribe(ctx, in.Path)
+		if terr != nil {
+			return nil, fmt.Errorf("transcribe %q: %w", filepath.Base(in.Path), terr)
+		}
+		// The TRANSCRIPT is the document. Audio bytes go only to the archive.
+		return &Document{URL: "file://" + in.Path, Body: []byte(tr.Text), FetchedAt: time.Now().UTC()}, nil
 	case KindFile, KindPDF, KindImage:
 		// All are local files; PDFs and images are parsed in the extract stage.
 		return ReadFile(in.Path)
@@ -334,6 +375,13 @@ func (p *Pipeline) writeNote(ctx context.Context, path string, enr Enrichment, c
 		return p.Vault.Patch(ctx, path, "source", cleaned)
 	}
 	// Archive the source image (copy, never move) so the vault is self-contained.
+	// Archive the source audio by STREAMING — never as a string, which would
+	// hold the whole recording in memory (ADR-042).
+	if in.Kind == KindAudio {
+		if err := p.Vault.CopyFile(attachmentPath(hash, in.Path), in.Path); err != nil {
+			return err
+		}
+	}
 	if in.Kind == KindImage && len(img) > 0 {
 		if _, err := p.Vault.Create(attachmentPath(hash, in.Path), string(img)); err != nil {
 			return err
@@ -623,4 +671,12 @@ func yamlList(items []string) string {
 		quoted[i] = yamlString(it)
 	}
 	return "[" + strings.Join(quoted, ", ") + "]"
+}
+
+// sttMaxMinutes is the configured duration cap, defaulting to 120.
+func (p *Pipeline) sttMaxMinutes() int {
+	if p.STTMaxMinutes <= 0 {
+		return 120
+	}
+	return p.STTMaxMinutes
 }
