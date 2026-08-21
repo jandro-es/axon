@@ -15,17 +15,25 @@ cut from 1.3 on 2026-07-10; each states why the economics changed.
 
 ## Theme A — OS-level presence *(macOS 27)*
 
-### A1 — Siri & Spotlight via App Intents MCP (M) · candidate — not scheduled
+### A1 — Siri & Spotlight via App Intents (M) · **SHIPPED 2026-08-20 in v1.4.0 / companion-v0.2.0 — FR-198 + CFR-92…95** (the MCP-bridge half is deferred, see below)
 **Value:** "ask my vault" without opening anything — AXON's answers where the
-OS already listens. macOS 27 builds MCP support into App Intents (the layer
-powering Siri, Spotlight, Shortcuts), which is precisely the protocol AXON
-already speaks.
-**Shape:** planned in detail as `docs/21-roadmap-macos27.md` **M4** — the
-Companion hosts the intents and bridges to the daemon's MCP server, exposing
-the **agentic-read tool set only** (`vault_search`, `vault_read`,
-`knowledge_search`, `actions_list`, …); never the write tools, never
-`vault_ask`'s token spend without the same guard the dashboard applies.
-**Open decisions:** see docs/21 M4.
+OS already listens.
+**Shipped shape:** `docs/21-roadmap-macos27.md` **M4**. The premise was that
+macOS 27 exposes MCP through App Intents; verifying it against the macOS 27
+SDK showed **that is not public API** (no MCP symbol — the press coverage
+described early internal testing), so M4 shipped the layer such a bridge
+would attach to: four plain App Intents in the Companion with Siri phrases
+(Search Vault, Ask Vault, Check Tasks, Capture Thought), pure-REST against
+the daemon, plus the guarded `GET /api/search` seam (FR-198) built on
+`/api/related`'s trust boundary. Ask spends tokens through the same
+chokepoint guard the dashboard applies; nothing is indexed into Spotlight.
+**Deferred (still a candidate):** the MCP bridge itself — exposing the
+**agentic-read tool set** (`vault_search`, `vault_read`, `knowledge_search`,
+`actions_list`, …) through App Intents, never the write tools — if and when
+Apple makes MCP-in-App-Intents public. Until then, adding a verb means adding
+an App Intent, which is why the intent set is deliberately small.
+**Remaining:** Siri verb visibility and the spoken flows are human QA
+(`apps/companion/QA.md`, 0.2.0 section).
 
 ## Theme B — Channel delivery & capture-back *(previously cut from 1.3)*
 
@@ -161,13 +169,27 @@ belongs here or stays dashboard-only.
 
 ## Sequencing sketch *(not a commitment)*
 
-**A1 + D1 ride the macOS 27 wave** and should track `docs/21`'s M2/M4.
-**E1 watch-folders** and **B1 notifications** are the small high-leverage
-starts of their themes. **C1 recipes** is the largest and most
-platform-defining slice — it deserves its own design cycle and probably its own
-release. **G1** is cheap and compounds trust. As with docs/19, these compete
-for the same build slots; the two roadmaps are deliberately separate lenses,
-not separate teams.
+*Updated 2026-08-21, after A1 (v1.4.0) and C1 (v1.5.0) shipped.*
+
+**Shipped:** **A1** (as plain App Intents — the MCP half deferred until Apple
+makes it public) and **C1 recipes**, which was the largest and most
+platform-defining slice and did get its own release.
+
+**Now that recipes exist, test them before writing more Go.** Several
+candidates on both roadmaps may already be expressible as a recipe rather
+than a new Go automation — `docs/19`'s E2 (source freshness), D3 (weekly
+review flow) and F2 (MOC materialisation) are the obvious ones. Trying one is
+the cheapest way to learn whether the v1 vocabulary is sufficient or needs a
+fourth reader or a second sink, while the design is still fresh. That answer
+should inform the next build slice rather than follow it.
+
+**Then:** **G1** is the strongest remaining pick — cheap, it compounds trust,
+and recipes just widened what doctor can warn about (name collisions,
+unscheduled recipes), which is exactly the raw material G1 turns into review
+items. **E1 watch-folders** and **B1 notifications** remain the small
+high-leverage starts of their themes; **D1** is the local-fleet play. As with
+docs/19, these compete for the same build slots; the two roadmaps are
+deliberately separate lenses, not separate teams.
 
 ## Explicit non-goals
 
