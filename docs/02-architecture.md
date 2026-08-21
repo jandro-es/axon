@@ -894,3 +894,59 @@ doctor` reports their state.
 **Decision:** Allow opted-in automations to run Claude headlessly **with AXON's own MCP tools**: the adapter's agentic shape is `claude --print --output-format stream-json --max-turns <N> --tools "" --strict-mcp-config --mcp-config <inline: axon mcp --tools <csv>> --allowedTools mcp__axon__<tool>… --no-session-persistence --setting-sources ""`. Doc 08's precondition — per-turn budget enforcement — is met with a **streaming kill-switch**: the adapter accumulates real usage from each turn's stream-json event and kills the process group the moment the run's token cap (`automations.<name>.budget_tokens`, wired to runtime by this ADR after being display-only) is exceeded; the chokepoint ledgers the **accumulated real usage** on every path, including kills (`token.run_budget_kill` event + `:failed` row). Tool access is **read-only in v1** (`vault_search`, `vault_read`, `vault_links`, `knowledge_search`, `tokens_status`) and enforced on **both sides of the wire**: `--allowedTools` client-side and a new `axon mcp --tools <csv>` server-side filter, so the subprocess MCP server physically lacks everything else. Writes stay in the automations' deterministic Go code (wikilink-safe managed-block patches), preserving the engine's "never leave a half-edited note" guarantee and trivial dry-run semantics. Agentic calls require the Claude provider (local models cannot drive MCP; synthesis is Claude by ADR-015 validation). v1 opts in **knowledge-digest** (reads the week's sources instead of a count) and **compaction** (checks backlinks before distilling), each keeping its one-shot prompt as the `agentic: false` fallback and the degradation path.
 **Why:** One-shot automations cap out at "summarize what Go handed you" — knowledge-digest literally received a source *count*. Tool use upgrades the entire automation pattern (retrieve-then-synthesize with grounded wikilinks) using infrastructure AXON already owns: the MCP server, the WAL/busy-timeout multi-process DB story, and the chokepoint. Rejected: post-hoc-only accounting (a run could overshoot its cap within allowed turns — fails doc 08's precondition); `--max-budget-usd` (dollar-denominated, meaningless on subscription); write tools in v1 (a killed mid-run agent could half-finish multi-note work, and MCP tools have no dry-run story yet); hook-based guarding (unnecessary — with `--tools ""` there are no built-in tools to guard).
 **Trade-offs:** agentic runs cost multiple turns of frontier-tier tokens — bounded by turn caps, the now-live budget_tokens, the kill-switch, and budget-guard; P3 already moved cheap work to local tiers. The stream-json schema is CLI surface that can drift (isolated in one adapter function, like parseClaudeJSON). Activating budget_tokens is a behavior change for one-shot automations (previously-dead config now defers oversized calls; starter values are generous). Supersedes doc 08 §3's "headless automations deliberately do not use tools" for opted-in automations; the inert shape remains the default for everything else. (Spec: `docs/superpowers/specs/2026-07-03-agentic-automations-design.md`; FR-84…FR-87.)
+
+### ADR-040 — Watch-folders: polled, allow-listed, move-in ingress *(accepted — planned)*
+
+**Status:** Accepted (2026-08-21). FR-208…FR-209; spec in
+`docs/superpowers/specs/2026-08-21-watch-folders-design.md`. Graduates
+docs/20 E1.
+
+**Context:** Everything AXON ingests today either lives in the vault
+(`00-Inbox`, swept by the `capture` automation) or is a URL the owner handed
+it. `docs/20` E1 asks for a third path: drop a file in a folder outside the
+vault and have it flow in without opening Obsidian. That is the first time the
+daemon would read host directories the owner named in config — a new **ingress
+boundary**, and the criteria that let the three preceding slices skip an ADR
+(no new sink, no new model path, no new egress, no schema change) say nothing
+about ingress.
+
+The ingestion constitution (`docs/17`) already binds this: opt-in and off by
+default, explicitly listed rather than discovered, content treated as data and
+never as commands, archive rather than delete.
+
+**Decision:** (1) **Polled by `capture`, not watched.** Watched folders are
+swept on the existing `capture` tick (default every 5 minutes), reusing its
+schedule, change-gate, failure memory and review-queue reporting. No
+`fsnotify` dependency, no new goroutine lifecycle, no new automation. The
+cost is latency measured in minutes, which is the right trade for a
+drop-box. (2) **Explicitly listed, never discovered.** `capture.watch_folders`
+is a list of absolute paths; there is no recursion into subdirectories and no
+scanning of a parent. Config-load validation refuses relative paths, `..`,
+any path inside the vault (which would loop against `00-Inbox`), and a
+deny-list of roots that must never be bulk-ingested (`$HOME` itself, `/`,
+`/etc`, `~/.ssh`, `~/.aws`, `~/.config`, `~/Library`). A folder that is merely
+absent or unreadable at runtime is skipped with a doctor warning rather than
+failing config validation, so an unmounted volume cannot break
+`axon config validate`. (3) **Move in, then reuse everything.** An eligible
+file is moved into `00-Inbox`, after which the shipped capture flow ingests
+and archives it unchanged — no new archive logic, and no per-folder
+seen-ledger, because a moved file cannot be reprocessed. Nothing is destroyed:
+the file lands in the vault archive and stays recoverable. `os.Rename` falls
+back to copy-then-remove across filesystems. (4) **Three refusals the inbox
+never needed.** Symlinks are skipped — the inbox is a place the owner puts
+things deliberately, while a watched folder may contain links the owner never
+made, and following one would read its target (`~/.ssh/id_rsa`) into the vault
+and the model. Files younger than a settle window are skipped, so a download
+in progress is not ingested truncated. And the per-tick move count is capped,
+so a folder holding thousands of files cannot stall a tick.
+
+**Consequences:** the capture change-gate must fingerprint the watched folders
+as well as the inbox — `DetectChange` runs before `Run`, so a fingerprint
+covering only `00-Inbox` would skip the tick and the sweep would never
+execute, leaving a feature that looks correct and does nothing. Watch-folders
+inherit every downstream property of capture for free (kind classification by
+extension, content hashing, redaction, NFR-05 data-not-commands, archive on
+success). Per-folder kind hints were considered and rejected as a second
+source of truth for classification that can disagree with the first. The
+`fsnotify` option stays available if minutes-latency ever proves wrong, and
+this decision does not foreclose it.
