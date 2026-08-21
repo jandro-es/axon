@@ -79,3 +79,39 @@ struct ShareExtractionTests {
         #expect(payload.isEmpty)
     }
 }
+
+/// CFR-98 — a failed capture always says something true and specific.
+@Suite
+struct ShareCaptureMessageTests {
+    @Test func daemonDownReadsAsAState() {
+        #expect(ShareCaptureMessage.text(for: DashboardError.unreachable)
+            == "Axon isn't running. Open Axon Companion to start it.")
+    }
+
+    @Test func captureDisabledIsNotAnError() {
+        #expect(ShareCaptureMessage.text(for: DashboardError.badStatus(404))
+            == "Capture is switched off for this profile.")
+    }
+
+    @Test func guardRejectionIsCalledOut() {
+        // 403 means the request guard refused us — a bug report, not a user error.
+        #expect(ShareCaptureMessage.text(for: DashboardError.badStatus(403))
+            == "Axon refused the capture.")
+    }
+
+    @Test func otherStatusesCarryTheirCode() {
+        #expect(ShareCaptureMessage.text(for: DashboardError.badStatus(500))
+            == "Axon answered 500.")
+    }
+
+    @Test func brokenContractIsDistinctFromBeingDown() {
+        #expect(ShareCaptureMessage.text(for: DashboardError.decoding("nonsense"))
+            == "Axon answered with something unreadable.")
+    }
+
+    @Test func nonDashboardErrorsStillSayWhatHappened() {
+        let message = ShareCaptureMessage.text(for: URLError(.timedOut))
+        #expect(message.hasPrefix("Axon couldn't capture that: "))
+        #expect(message.count > "Axon couldn't capture that: ".count)
+    }
+}
