@@ -109,10 +109,20 @@ public actor DashboardClient {
 
     /// Non-destructive inbox capture (ADR-024): creates a note under
     /// `00-Inbox/`, never edits anything. Zero model spend.
-    public func capture(text: String) async throws {
+    ///
+    /// Empty fields are omitted rather than sent as `""`: the daemon renders
+    /// `# Captured note` when it receives no title, and writes the URL on its
+    /// own first line — which is what makes the capture automation fetch it.
+    /// The default arguments keep the spoken-thought caller (CFR-95) reading
+    /// as `capture(text:)`.
+    public func capture(url: String = "", title: String = "", text: String = "") async throws {
+        var body: [String: String] = [:]
+        if !url.isEmpty { body["url"] = url }
+        if !title.isEmpty { body["title"] = title }
+        if !text.isEmpty { body["text"] = text }
         try await postIgnoringBody(
             path: "/api/capture",
-            body: ["text": text],
+            body: body,
             headers: ["X-Axon-Capture": "1"]
         )
     }
