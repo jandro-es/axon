@@ -951,7 +951,7 @@ source of truth for classification that can disagree with the first. The
 `fsnotify` option stays available if minutes-latency ever proves wrong, and
 this decision does not foreclose it.
 
-### ADR-041 — Outbound notifications: config-named targets, no IP guard, best-effort delivery *(accepted — planned)*
+### ADR-041 — Outbound notifications: config-named targets, no IP guard, best-effort delivery *(accepted — built)*
 
 **Status:** Accepted (2026-08-21). FR-210…FR-211; spec in
 `docs/superpowers/specs/2026-08-21-notifications-design.md`. Graduates

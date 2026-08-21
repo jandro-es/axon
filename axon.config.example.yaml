@@ -92,6 +92,17 @@ profiles:
                                               # through the budget path; fail: surface the error instead
       # apple_helper: "~/.axon/bin/axon-apple-lm"  # Foundation Models helper binary override
 
+    # notify:                                 # push events to an ntfy topic (ADR-041)
+    #   url: "https://ntfy.sh/axon-CHANGE-ME" # the ONLY destination; pick an unguessable topic
+    #   events:                               # nothing is sent unless a kind is listed
+    #     - "automation.fail"
+    #     - "token.deny"
+    # Both empty = off (the default, both profiles). https is required unless
+    # the host is loopback/LAN, so a self-hosted ntfy works. The host must also
+    # pass policy.egress_allowlist. Only the kind, level and message are sent —
+    # never event data — and redaction_rules apply before sending. Delivery is
+    # best-effort: capped at 10/minute, never retried.
+
     capture:                                  # inbox capture funnel (ADR-016)
       enrich: heuristic                       # heuristic (default, zero tokens) | claude (chokepoint, routine tier)
       archive_dir: "04-Archive/Capture"       # where ingested inbox originals are moved (never deleted)

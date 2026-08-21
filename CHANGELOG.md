@@ -25,6 +25,15 @@ All notable changes to this project are documented here. The format is based on
   drops are. Off by default — an empty list is the off state. Symlinks are
   never followed, files still being written are left until they settle, and
   system and home roots are refused at config load.
+- **AXON can now tell you when something happens.** (FR-210, FR-211,
+  **ADR-041**; no schema change.) Point `notify.url` at an ntfy topic and list
+  the event kinds you care about, and the daemon pushes them — a failed
+  automation, a denied budget, the daily briefing. Off by default: nothing is
+  sent unless you name both a destination and at least one kind. Only the kind,
+  level and message leave the machine, redacted with your `redaction_rules`;
+  a self-hosted ntfy on localhost or your LAN works, and https is required for
+  anything public. Delivery is best-effort — capped at ten a minute, never
+  retried, and never able to break the daemon.
 
 ## [1.6.0] — 2026-08-21
 

@@ -46,7 +46,7 @@ FR-26 funnel — never a command). ntfy-class topic push makes the outbound half
 nearly free; the D1 capture endpoint (ADR-024) already proved the guarded
 inbound pattern.
 
-### B1 — Outbound notifications (S) · candidate — not scheduled
+### B1 — Outbound notifications (S) · **SHIPPED 2026-08-21 — FR-210/FR-211, ADR-041** (spec: `docs/superpowers/specs/2026-08-21-notifications-design.md`)
 **Value:** the briefing and "Needs you" panel reach the owner instead of
 waiting to be opened.
 **Shape:** a `notify` provider seam (ntfy topic first; the OS-native path is
@@ -55,6 +55,28 @@ event bus; per-event-kind opt-in; egress to the push host allow-listed like any
 other; redaction applies to payloads; work profile default-off.
 **Open decisions:** ntfy vs Companion-local first; digest vs per-event
 granularity.
+
+**Open decisions resolved.** **ntfy first**, behind a `Notifier` seam — it is
+daemon-side, cross-platform, works on a headless install, and delivers the
+actual value (reaching you when you are away from the machine). The
+Companion-local path stays available behind the same seam and needs no daemon
+change. **Per-event, opt-in by kind**, which subsumes the digest for free: the
+daily briefing is itself an event, so "push me the briefing" is one list entry.
+
+**Two egress findings this entry did not anticipate.** The default
+`egress_allowlist` is `["localhost", "*"]` — a wildcard — so it could not be
+*the* guard; the configured URL is the allow-list, with the egress list
+applying additionally so a work profile's strict list still bites. And
+`BlockedIPReason` refuses loopback and private addresses, which is exactly
+where a self-hosted ntfy lives — it is deliberately **not** applied here,
+because a notify URL comes from config, outside every model write path.
+
+**And one design decision reversed during implementation.** The spec had
+config refuse any unrecognised event kind. Reading the emitters showed kinds
+are not statically enumerable — literals at some, parameters at others, and
+built at runtime from user input (`"review." + action`) — so a stale list
+would refuse *valid* config. It became a doctor warning instead: nothing valid
+is blocked, and the typo is still surfaced where the owner looks.
 
 ### B2 — Capture-back channel (M) · candidate — not scheduled
 **Value:** send AXON a link or thought from a phone; it lands in the inbox
@@ -306,9 +328,8 @@ note, which is the surface a recipe reads.
 
 **G1 has now shipped** — and recipes did feed it exactly as predicted: the
 name-collision and unscheduled-recipe warnings both carry a `Fix`, so they
-became the first things `self-check` files. **E1 watch-folders has now shipped too.** **B1
-notifications** remains the small
-high-leverage starts of their themes; **D1** is the local-fleet play. As with
+became the first things `self-check` files. **E1 watch-folders and B1 notifications have both now shipped.** **D1** is the
+local-fleet play and the largest remaining piece here. As with
 docs/19, these compete for the same build slots; the two roadmaps are
 deliberately separate lenses, not separate teams.
 

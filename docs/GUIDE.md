@@ -753,6 +753,33 @@ are never followed, and a file that is still being written is left alone until
 it stops changing. `axon doctor` tells you if a watched folder has gone
 missing.
 
+### Get told when something happens
+
+By default AXON waits to be opened. If you would rather it told you, point it
+at an [ntfy](https://ntfy.sh) topic and list the events you care about:
+
+```yaml
+notify:
+  url: "https://ntfy.sh/axon-pick-something-unguessable"
+  events:
+    - "automation.fail"     # something broke
+    - "token.deny"          # a call was refused on budget
+    - "automation.briefing" # your daily briefing, pushed
+```
+
+Nothing is sent unless you set **both** keys — that is the off state, and it
+is the default on both profiles. Only the event's kind, level and one-line
+message leave your machine; never the event's data, and your
+`policy.redaction_rules` apply before anything is sent. Delivery is
+best-effort: capped at ten per minute, never retried, and a failure is logged
+rather than surfaced as a broken automation.
+
+Your topic name is the only thing protecting it, so pick something
+unguessable. If you run your own ntfy server, `http://` to `localhost` or a
+LAN address is accepted — https is only required for public hosts. `axon
+doctor` tells you if the destination is blocked by your egress policy, or if
+you subscribed to an event kind that will never fire.
+
 ## 9. Token budgeting
 
 Every Claude call passes through the token manager — and there is exactly one

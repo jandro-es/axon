@@ -82,3 +82,18 @@ These let the human work entirely inside Obsidian while the operational dashboar
 - Dashboard binds to localhost and exposes no secrets (FR-63/NFR-05) — `vault` is a folder name, not a path.
 - Appearance survives a reload with no flash, follows the OS while set to *system*, and both themes are complete (FR-177).
 - With reduced transparency enabled, no surface is translucent (FR-178).
+
+## Event-bus subscribers
+
+The in-process bus (`internal/events`) has three subscribers, and `Publish`
+**drops rather than blocks** on any that falls behind — no emitter ever waits
+on a consumer:
+
+1. **SSE** (`internal/dashboard/sse.go`) — streams to open dashboard tabs.
+2. **Persistence** (`internal/dashboard/persist.go`) — writes every event to
+   the `events` table for the activity-feed history.
+3. **Notifications** (`internal/notify`, FR-211/ADR-041) — opt-in, off by
+   default, pushes selected kinds to a config-named destination. Because the
+   bus drops rather than blocks, delivery runs behind a bounded queue with its
+   own timeout and rate limit, so a hung POST cannot silently cost the other
+   two subscribers anything.
