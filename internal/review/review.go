@@ -33,7 +33,7 @@ const (
 // Item is one review-queue entry.
 type Item struct {
 	ID      string   `json:"id"`
-	Kind    string   `json:"kind"` // link | pair | triage | resurface | contradicts | merge | reconcile | stalled | action | recipe | info
+	Kind    string   `json:"kind"` // link | pair | triage | resurface | contradicts | merge | reconcile | stalled | action | recipe | fix | info
 	Section string   `json:"section"`
 	Line    string   `json:"line"`
 	Checked bool     `json:"checked"`
@@ -57,6 +57,7 @@ var (
 	stalledRe     = regexp.MustCompile(`^stalled action "(.+)" in \[\[([^\]]+)\]\] \(\d+d\)`)
 	actionRe      = regexp.MustCompile(`^action "(.+)" from \[\[([^\]]+)\]\]`)
 	recipeRe      = regexp.MustCompile(`^recipe "(.+)" \(from ([a-z0-9-]+)\)`)
+	fixRe         = regexp.MustCompile("^fix ([a-z0-9-]+) — \"(.+)\" → `(.+)`$")
 )
 
 // Load parses the queue file. A missing file is an empty queue.
@@ -132,6 +133,12 @@ func Load(ctx context.Context, v *vault.FS) ([]Item, error) {
 		case recipeRe.MatchString(body):
 			rm := recipeRe.FindStringSubmatch(body)
 			it.Kind, it.Target, it.Note = "recipe", rm[1], rm[2] // Target=text, Note=recipe name
+		case fixRe.MatchString(body):
+			fm := fixRe.FindStringSubmatch(body)
+			// fm[2] is the detail: matched so the regex anchors on the whole
+			// rendered line, but not stored — nothing in the accept path needs
+			// it, and the owner reads it from the line itself.
+			it.Kind, it.Note, it.Target = "fix", fm[1], fm[3]
 		}
 		// The ID hashes the normalized body (checkbox + resolution suffix
 		// stripped) so an item keeps its identity across resolution — a
@@ -182,9 +189,11 @@ func Accept(ctx context.Context, v *vault.FS, id string) (Item, error) {
 			return Item{}, err
 		}
 		suffix = "✓ added to [[" + it.Note + "]]"
-	case "recipe":
-		// Acknowledge-only (ADR-039): a recipe proposal never mutates on
-		// accept — the resolution itself is the outcome.
+	case "recipe", "fix":
+		// Acknowledge-only: a recipe proposal (ADR-039) and a self-check fix
+		// (FR-207) never mutate on accept — the resolution itself is the
+		// outcome. For `fix` this is the whole safety property: AXON surfaces
+		// the remediation, the owner decides whether to run it.
 		suffix = "✓ noted"
 	default:
 		return Item{}, fmt.Errorf("item %s (%s) is not actionable — dismiss it instead", id, it.Kind)
