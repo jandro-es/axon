@@ -985,7 +985,11 @@ cannot occur on this path. `https` is required unless the host is loopback or
 private, so a plaintext push to a public host is not reachable by typo.
 (3) **Per-event, opt-in by kind, empty by default.** `notify.events` lists
 event kinds; nothing is sent unless a kind is listed, and an empty list or an
-empty URL is the off state on both profiles. This subsumes the digest case
+empty URL is the off state on both profiles. An **unrecognised** kind is a
+doctor warning rather than a config-load refusal: kinds are assembled at three
+different sites, one of them at runtime from user input (`"review." + action`),
+so a static list is correct only until the next emitter lands — and a stale
+list refusing valid config is a worse failure than the typo it prevents. This subsumes the digest case
 without a second delivery path: the daily briefing is itself an event, so
 "push me the briefing" is one entry in the list. (4) **Best-effort, and
 bounded.** The event bus drops rather than blocks on a slow subscriber, so a

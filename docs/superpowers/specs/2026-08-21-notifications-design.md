@@ -62,23 +62,26 @@ beside `validateWatchFolders`:
 | `events` set but `url` empty, or `url` set but `events` empty | a half-configured notifier is silent, and silence is indistinguishable from working |
 | `url` not parseable, or scheme not `http`/`https` | no `file://`, no shell-adjacent schemes |
 | `http://` to a non-loopback, non-private host | a plaintext push of vault activity to a public host should not be reachable by typo |
-| an event kind not in the known set | a typo'd kind is silent forever |
+| an empty or whitespace-only kind | nothing to subscribe to |
 
-The known-kind check is the one that earns its keep: `notify.events:
-["automation.failed"]` (past tense — the real kind is `automation.fail`) would
-otherwise produce a notifier that is configured, enabled, and never fires.
+**Unrecognised kinds are a doctor warning, not a load-time refusal — revised
+2026-08-21 during implementation.** The original design refused any kind
+absent from a known set, justified as "a loud refusal beats a permanently
+silent notifier". Reading the emitters invalidated that: kinds are assembled
+three different ways — literals at the emitter (`tokens`), passed as a
+parameter with literals at the callers (`ingestion.Pipeline.emit`), and
+**built at runtime from user input** (`dashboard/server.go` publishes
+`"review." + in.Action`). A static list is therefore correct only until the
+next emitter or review action is added, and a stale list would refuse
+*genuinely valid* config — a far more confusing failure than the typo it
+prevents.
 
-**Where the known set lives, and its one risk.** Event kinds are string
-literals at their emitters today, so the list has to be written down
-somewhere. It goes in **`internal/events`** as an exported
-`KnownKinds` slice — beside the `Event` type and as close to the emitters as
-the current structure allows — not in `internal/notify`, which would put it a
-package away from everything that could invalidate it. The risk is real and
-worth stating: a **new** event kind added without updating the list would be
-refused by `notify.events` validation until someone notices. That is the
-deliberate trade — a loud refusal at config load beats a notifier that is
-enabled and permanently silent — and a test asserts every kind in `KnownKinds`
-is non-empty and unique, so at least the list cannot rot into duplicates.
+So: **config accepts any non-empty kind**, and the `notify` doctor check names
+any subscribed kind not in `events.KnownKinds` as a warning carrying a `Fix`.
+Nothing valid is ever blocked, the typo is still surfaced where the owner
+already looks, and `self-check` (FR-207) files it to the review queue
+automatically. `events.KnownKinds` remains — as a best-effort advisory list,
+which is what its achievable accuracy supports, rather than a gate.
 
 ### The egress rules, stated precisely
 
