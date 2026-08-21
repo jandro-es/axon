@@ -61,6 +61,7 @@ type Profile struct {
 	// Capture tunes the capture automation (ADR-016). Optional: an absent block
 	// resolves to heuristic enrichment and the default archive folder.
 	Capture CaptureConfig `yaml:"capture"`
+	Notify  NotifyConfig  `yaml:"notify,omitempty"`
 	// Subscriptions declares the RSS/Atom feeds AXON polls (ADR-019).
 	// Optional: an absent block means no feeds and the automation skips.
 	Subscriptions SubscriptionsConfig `yaml:"subscriptions"`
@@ -133,6 +134,21 @@ type CaptureConfig struct {
 	// or empty means no watching at all — there is no separate toggle, and
 	// that is the default on both profiles.
 	WatchFolders []string `yaml:"watch_folders,omitempty"`
+}
+
+// NotifyConfig configures outbound notifications (FR-210, ADR-041). Both
+// fields empty is the default on both profiles and is the off state — there is
+// no separate toggle. The URL is the entire allow-list: AXON pushes there and
+// nowhere else.
+type NotifyConfig struct {
+	URL    string   `yaml:"url,omitempty"`
+	Events []string `yaml:"events,omitempty"`
+}
+
+// Enabled reports whether notifications should run: both a destination and at
+// least one subscribed kind.
+func (n NotifyConfig) Enabled() bool {
+	return strings.TrimSpace(n.URL) != "" && len(n.Events) > 0
 }
 
 // EnrichMode returns the enrichment mode, defaulting to "heuristic".

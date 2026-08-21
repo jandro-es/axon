@@ -70,6 +70,9 @@ func (c *Config) Validate() error {
 		if err := validateWatchFolders(p); err != nil {
 			return fmt.Errorf("config validation failed: profile %q: %w", name, err)
 		}
+		if err := validateNotify(p); err != nil {
+			return fmt.Errorf("config validation failed: profile %q: %w", name, err)
+		}
 	}
 	return nil
 }
