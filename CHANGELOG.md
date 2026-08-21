@@ -6,6 +6,79 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-08-21
+
+**Write your own automations.** A minor release: no schema change (stays v7),
+no new MCP tool, no new built-in automation. The `recipes:` config key is
+additive — an absent or empty list changes nothing, and every existing config
+keeps working untouched.
+
+### Added
+
+- **User-defined automations as declarative recipes.** (FR-199…FR-201,
+  **ADR-039**, graduating `docs/20` C1.) Until now a new automation meant a Go
+  type and a registry entry. A **recipe** declares one as data in
+  `config.yaml`: a name and purpose, 1–8 named zero-model **inputs** (`note`
+  reads a note body, `search` runs hybrid search, `recent_notes` lists
+  recently-updated notes), exactly one of **`prompt`** (one one-shot call
+  through the token chokepoint) or **`render`** (no model call at all), and
+  exactly one **sink** — rebuild an `axon:<block>` managed block in a note, or
+  propose lines into the review queue. Templating is plain `{{input-name}}` /
+  `{{today}}` substitution: recipes are data, not programs (no logic, no
+  agentic runs, no shell, no egress).
+
+  Each valid recipe becomes an ordinary `Automation` appended to the registry
+  and is scheduled by a normal `automations.<name>` entry, so it inherits the
+  entire engine with **no engine changes**: the change-gate, budget
+  enforcement and the ledger, `--dry-run`, `axon run`, `axon automations`,
+  `policy.allowed_automations`, budget-guard pausing, and the dashboard
+  reliability table. The change-gate is automatic — the cursor is a hash of
+  the resolved inputs, so a run whose inputs haven't moved makes no model call
+  (FR-31, held generically instead of hand-rolled per automation).
+
+  Both cardinal rules hold by construction: the only model path is the
+  chokepoint, and the only writers are the managed-block patch and the
+  review-queue append. Block sinks refuse reserved built-in block names
+  (`briefing`, `actions`, `memory`, …) and any target under `.axon/` or
+  `.trash/`; the new `recipe` review kind is **acknowledge-only**, so
+  accepting a proposal records "✓ noted" and mutates nothing. A recipe whose
+  name collides with a built-in is refused loudly at `axon start`, `axon run`
+  and in `axon doctor` — built-ins always win, never silently shadowed.
+  Recipes live in `config.yaml` rather than the vault on purpose: the vault is
+  a model-writable surface, config is not, so no model call can author or
+  alter an automation.
+
+  Worked example in `docs/GUIDE.md` §8, full vocabulary in
+  `docs/06-component-automation-engine.md` §5b, a commented block in
+  `axon.config.example.yaml`, and an advisory `recipes` check in `doctor`.
+
+### Fixed
+
+- **Untrusted text could break out of a managed block.** `vault.Patch` does
+  not neutralize `<!-- axon:*:… -->` markers — by design, the caller owns that
+  (as `vault.Merge` already did) — so a recipe whose output derived from a
+  note body, a search snippet or a model reply could terminate its own block
+  early and strand injected content in the note's **human region**, where a
+  later run could no longer rewrite it. `vault.NeutralizeMarkers` is now
+  exported (the same zero-width-space helper, not a second copy) and applied
+  at the recipe block sink, with a regression test that fails without it. The
+  review sink was already safe — quotes are sanitized, `%q` escapes newlines,
+  and every review-kind pattern is anchored — and is now covered by a test
+  that tries to forge a mutating `triage`/`merge` item.
+
+- **`axon start` leaked its profile resources when a guard refused.**
+  (`docs/ISSUES.md` #10.) `start` registers `deps.close()` inside its
+  shutdown closure — ordered `cancel → wg.Wait() → bus.Close() → close` so the
+  dashboard and persister goroutines never race a closed database — which left
+  the guards returning *before* it (recipe-collision, root, double-start)
+  leaking the SQLite handle and the `fm` supervisor. Harmless for a real
+  process that exits immediately, but in-process callers leaked a handle per
+  refused start. A plain `defer deps.close()` now sits right after the load;
+  defers are LIFO, so it runs after the closure and the ordering is preserved,
+  and the second close is a no-op. The recipe-collision check also moved up
+  beside the other refusals, so a bad config now costs nothing and leaves no
+  pidfile behind.
+
 ## [1.4.0] — 2026-08-20
 
 **AXON meets macOS 27.** A minor release: no schema change (stays v7), no new
@@ -1026,7 +1099,8 @@ The initial feature-complete build, implemented in phases against
   `config get/set`. *(PDF ingestion, the api_key adapter and `config get/set`
   were implemented in 0.10.0.)*
 
-[Unreleased]: https://github.com/jandro-es/axon/compare/v1.3.9...HEAD
+[Unreleased]: https://github.com/jandro-es/axon/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/jandro-es/axon/releases/tag/v1.5.0
 [1.4.0]: https://github.com/jandro-es/axon/releases/tag/v1.4.0
 [1.3.10]: https://github.com/jandro-es/axon/releases/tag/v1.3.10
 [1.3.9]: https://github.com/jandro-es/axon/releases/tag/v1.3.9

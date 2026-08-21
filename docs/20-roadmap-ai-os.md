@@ -61,7 +61,7 @@ authentication; personal-only vs configurable.
 
 ## Theme C — User-defined automations
 
-### C1 — Declarative automation recipes (L) · **graduated 2026-08-20 — FR-199…FR-201, ADR-039** (spec: `docs/superpowers/specs/2026-08-20-automation-recipes-design.md`)
+### C1 — Declarative automation recipes (L) · **SHIPPED 2026-08-21 in v1.5.0 — FR-199…FR-201, ADR-039** (spec: `docs/superpowers/specs/2026-08-20-automation-recipes-design.md`)
 **Value:** today a new automation is a Go type, a registry entry, and three
 count-assertion bumps. The 24 shipped automations decompose into a small
 vocabulary — trigger (cron + change-gate), retrieval (search/list readers),

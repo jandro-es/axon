@@ -738,7 +738,7 @@ construction. Structured output remains `ValidateOutput`-driven (fm serve's
 surface, the adapter fails visibly into the fallback ladder and doctor's
 FR-191 matrix names the state.
 
-### ADR-039 — User-defined automations as declarative config recipes *(accepted — planned)*
+### ADR-039 — User-defined automations as declarative config recipes *(accepted — built)*
 
 **Status:** Accepted (2026-08-20). FR-199…FR-201; spec in
 `docs/superpowers/specs/2026-08-20-automation-recipes-design.md`. Graduates

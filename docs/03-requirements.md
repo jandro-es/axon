@@ -319,7 +319,7 @@ CFR-92…95 in its PRD. Spec in
 |----|-----|-------------|
 | FR-198 | S | **`GET /api/search` (guarded read seam).** The dashboard serves hybrid search over the vault to loopback clients: `/api/related`'s exact trust boundary (loopback bind + Host guard + `X-Axon-Search: 1` header forcing a CORS preflight), gated by `dashboard.search_enabled` (pointer-default-ON, `SearchAllowed()`); 404 disabled / 403 missing header / 400 empty `q` / 200 `{"hits":[{path, snippet, score}]}` from the hybrid searcher (`top_k` clamped, default 8). Zero generative spend — the query embedding is the usual budget-exempt local call; no ledger row, no SSE event. A general seam (FR-184 pattern): the Companion's Siri intents are its first consumer, recorded in `apps/companion/CONTRACT.md`, but nothing about it is Companion-specific. |
 
-### Automation recipes (docs/20 C1) *(spec approved 2026-08-20)*
+### Automation recipes (docs/20 C1) *(built 2026-08-21, v1.5.0)*
 
 FR-199…FR-201 trace to **ADR-039** and graduate docs/20 C1; spec in
 `docs/superpowers/specs/2026-08-20-automation-recipes-design.md`.

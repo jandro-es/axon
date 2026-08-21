@@ -53,6 +53,15 @@ them off; a system with all automations off still runs and is useful. Each is
 documented — including what it deliberately does *not* do — in
 [docs/AUTOMATIONS.md](docs/AUTOMATIONS.md).
 
+**And you can write your own without writing Go.** A **recipe** declares an
+automation as data in `config.yaml`: what to read (a note, a search, recently
+updated notes), optionally one model call, and where the result goes (a
+managed block in a note, or proposals into the review queue). It then behaves
+exactly like a built-in — scheduled the same way, listed by `axon automations`,
+budget-enforced, dry-runnable, and skipped automatically when its inputs
+haven't changed. Recipes live in your config, never in the vault, so nothing
+the model can write is able to invent an automation.
+
 **It tracks what you have to do.** Every `- [ ]` checkbox in the vault is
 indexed into one trusted GTD list — `axon actions` on the CLI, a consolidated
 `01-Projects/Actions.md` note, and the dashboard's **Actions** tab, where
@@ -172,8 +181,8 @@ is enforced.
 | [Command reference](docs/COMMANDS.md) | Every CLI command: what it does, what it doesn't, key flags, examples. |
 | [Automations reference](docs/AUTOMATIONS.md) | All 24 automations: purpose, schedule, cost tier, and explicit non-goals. |
 | [Profiles](docs/PROFILES.md) | Personal vs work: auth, budgets, egress, redaction, memory — and where each difference is enforced. |
-| [Architecture](docs/02-architecture.md) | System design, module boundaries, data flow, ADR-001…038. |
-| [Requirements](docs/03-requirements.md) | The numbered contract: FR-01…198, NFR-01…14. |
+| [Architecture](docs/02-architecture.md) | System design, module boundaries, data flow, ADR-001…039. |
+| [Requirements](docs/03-requirements.md) | The numbered contract: FR-01…201, NFR-01…14. |
 | [Data model & config](docs/04-data-model-and-config.md) | Vault layout, DB schema, frontmatter, full config reference. |
 | [Knowledge ingestion](docs/05-component-knowledge-ingestion.md) | URL/PDF/capture/feeds → Markdown → chunk → embed → index. |
 | [Automation engine](docs/06-component-automation-engine.md) | Scheduler, the standard automation set, agentic runs. |

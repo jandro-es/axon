@@ -293,6 +293,18 @@ profiles:
     # proposed to the review queue by the (off-by-default) actions-review
     # automation; accepting demotes it to Someday/Maybe (#someday). Default 30.
     actions: { stale_after_days: 30 }
+    # recipes: user-defined automations as declarative data (ADR-039,
+    # FR-199…201). Optional. Each entry needs a unique kebab-case `name` (never
+    # a built-in automation's — that is refused at start/run/doctor), a
+    # `purpose`, 1–8 named zero-model `inputs` (exactly one reader each:
+    # note{path} | search{query,top_k≤20} | recent_notes{lookback_days 1–90,
+    # limit≤100}), exactly one of `prompt` (ONE chokepoint call, tier from the
+    # automations entry's model) or `render` (no model call), and exactly one
+    # `output` sink: block{note,block} (reserved built-in block names and
+    # .axon//.trash/ targets refused) or review{} (acknowledge-only proposals).
+    # Templating is plain {{input-name}} / {{today}} substitution — no logic.
+    # Scheduling/enablement/budget come from a normal automations.<name> entry.
+    recipes: []
     policy:
       data_residency: local-only
       egress_allowlist: ["localhost", "*"]
