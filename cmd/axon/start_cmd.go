@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -15,6 +16,8 @@ import (
 	"github.com/jandro-es/axon/internal/automations"
 	"github.com/jandro-es/axon/internal/dashboard"
 	"github.com/jandro-es/axon/internal/events"
+	"github.com/jandro-es/axon/internal/ingestion"
+	"github.com/jandro-es/axon/internal/notify"
 	"github.com/jandro-es/axon/internal/scheduler"
 	"github.com/jandro-es/axon/internal/selfupdate"
 	"github.com/jandro-es/axon/internal/ui"
@@ -102,6 +105,29 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 				defer wg.Done()
 				dashboard.PersistEvents(ctx, bus, deps.db)
 			}()
+
+			// Outbound notifications (FR-211, ADR-041): off unless the profile
+			// names both a destination and at least one event kind. Every
+			// failure here disables notifications and says so — a notifier
+			// must never be able to stop the daemon starting.
+			if nc := deps.profile.Notify; nc.Enabled() {
+				host := ""
+				if u, uerr := url.Parse(nc.URL); uerr == nil {
+					host = u.Hostname()
+				}
+				if perr := ingestion.CheckEgressPolicy(deps.profile.Policy, host); perr != nil {
+					logger.Warn("notify: destination refused by egress policy — notifications disabled", "host", host, "err", perr)
+				} else if n, nerr := notify.NewNtfy(nc.URL, deps.profile.Policy.RedactionRules); nerr != nil {
+					logger.Warn("notify: disabled", "err", nerr)
+				} else {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						notify.Run(ctx, bus, nc.Events, n, logger)
+					}()
+					logger.Info("notify: enabled", "host", host, "kinds", len(nc.Events))
+				}
+			}
 
 			// Schedule automations.
 			sched := scheduler.New(scheduler.Options{Log: logger, Jitter: 5 * time.Second})
