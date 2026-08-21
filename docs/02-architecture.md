@@ -950,3 +950,56 @@ success). Per-folder kind hints were considered and rejected as a second
 source of truth for classification that can disagree with the first. The
 `fsnotify` option stays available if minutes-latency ever proves wrong, and
 this decision does not foreclose it.
+
+### ADR-041 — Outbound notifications: config-named targets, no IP guard, best-effort delivery *(accepted — planned)*
+
+**Status:** Accepted (2026-08-21). FR-210…FR-211; spec in
+`docs/superpowers/specs/2026-08-21-notifications-design.md`. Graduates
+docs/20 B1.
+
+**Context:** Everything AXON sends outward today is a *pull the owner or an
+automation initiated* — an ingest fetch, a Claude call, an Ollama request.
+`docs/20` B1 asks for the first **push**: the daemon telling the owner that
+something happened, on its own initiative, to a third-party host. That is a
+new egress shape, and the constitution's rule 2 ("egress passes the policy
+engine or it does not happen") has to be interpreted for it rather than
+reused verbatim, because the policy engine was written for ingest.
+
+Two facts made that interpretation necessary rather than optional. The default
+`egress_allowlist` is `["localhost", "*"]` — a wildcard — so treating it as
+*the* guard would be vacuous on a default personal install. And
+`ingestion.BlockedIPReason` refuses loopback and private addresses, which is
+exactly where a self-hosted ntfy lives.
+
+**Decision:** (1) **The configured target is the allow-list.** `notify.url` is
+a single explicit URL; AXON sends there and nowhere else. The host must
+**additionally** pass `egress_allowlist`, so a work profile's strict
+`["localhost"]` still refuses a public host — but the wildcard default never
+stands alone as the only check, because the URL had to be named in config to
+exist at all. (2) **`BlockedIPReason` is deliberately NOT applied.** That guard
+exists because a prompt-injected agent can influence an *ingest* URL; a notify
+URL comes from `config.yaml`, which is outside every model write path
+(ADR-039). Applying it would break self-hosted ntfy on localhost or a LAN —
+the most privacy-preserving deployment — while defending against a threat that
+cannot occur on this path. `https` is required unless the host is loopback or
+private, so a plaintext push to a public host is not reachable by typo.
+(3) **Per-event, opt-in by kind, empty by default.** `notify.events` lists
+event kinds; nothing is sent unless a kind is listed, and an empty list or an
+empty URL is the off state on both profiles. This subsumes the digest case
+without a second delivery path: the daily briefing is itself an event, so
+"push me the briefing" is one entry in the list. (4) **Best-effort, and
+bounded.** The event bus drops rather than blocks on a slow subscriber, so a
+hung POST would lose events silently; delivery therefore runs behind a bounded
+internal queue with a request timeout, and a token bucket caps the rate. Drops
+are counted and logged rather than swallowed. A delivery failure is logged and
+discarded — never retried, never surfaced as an automation failure, never
+allowed to propagate into the daemon.
+
+**Consequences:** the payload is deliberately thin — kind, level and the
+human-readable message, redacted with the profile's `redaction_rules` before
+send, capped, and never `Event.Data`, whose fields are arbitrary and
+emitter-defined. A `Notifier` interface fronts delivery so the Companion-local
+path (macOS user notifications raised from the SSE stream, no egress at all)
+can land later without touching the subscriber. Notifications are outside the
+token chokepoint because they involve no model call, and outside the review
+queue because they are not proposals — the two cardinal rules are untouched.
