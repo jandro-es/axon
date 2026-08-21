@@ -1,6 +1,6 @@
-# The 25 automations
+# The 26 automations
 
-AXON ships 25 automations. Five rules govern all of them:
+AXON ships 26 automations. Five rules govern all of them:
 
 1. **They run on new material, not on the clock for its own sake.** Every
    automation has a change gate (content hashes, cursors, "anything new since
@@ -130,6 +130,17 @@ own spaced-repetition ladder; link proposals stay with `link-suggester`, which
 now visits those same orphans first. The note is created on first run with a
 preamble; your own prose outside the block is never touched.
 
+### `self-check` — off, zero-model, weekly Mon 12:00
+Turns `axon doctor` findings into review-queue proposals, so a drifted install
+files itself where you already review work. A check proposes only if it carries
+a **remediation** — the `Check` type separates "what is wrong" from "what to
+do", and a finding with nothing to do has nothing to propose. The queue line
+carries the exact command: `fix service-path — "…" → \`axon service reinstall\``.
+**Accepting only acknowledges it.** AXON never runs a system change on your
+behalf — no service reinstall, no config rewrite, no update. Each distinct
+remediation proposes **once**, not weekly; if the remediation itself changes,
+that is different work and proposes again. Capped at 5 per run.
+
 ---
 
 ## GTD actions
@@ -216,6 +227,7 @@ Enable with `axon configure automations eval-drift on`.
 | `resurfacer` | on | none¹ | `0 7 * * 1` | Spaced-rep resurfacing |
 | `merge-proposals` | off | none | `0 11 * * 1` | Near-duplicate proposals |
 | `orphan-report` | off | none | `0 10 * * 1` | Orphan + dormant report (no proposals) |
+| `self-check` | off | none | `0 12 * * 1` | Doctor findings → review proposals |
 | `actions-consolidate` | on | none | `0 7 * * *` | Render GTD board |
 | `actions-review` | off | none | `0 8 * * 6` | Stale actions → #someday |
 | `action-extract` | off | routine | `0 6 * * *` | Implicit commitments → tasks |

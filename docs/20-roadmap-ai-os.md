@@ -222,7 +222,7 @@ replaces the Dataview dashboards in the scaffold.
 
 ## Theme G — Self-maintenance
 
-### G1 — The daemon proposes its own fixes (M) · candidate — not scheduled
+### G1 — The daemon proposes its own fixes (M) · **SHIPPED 2026-08-21 — FR-206/FR-207** (spec: `docs/superpowers/specs/2026-08-21-self-maintenance-design.md`)
 **Value:** doctor already knows what's wrong *and* the fix (FR-185
 remediations); the "Needs you" panel shows it. The last step is AXON filing the
 work where the owner already reviews work: the review queue. A failing
@@ -236,6 +236,24 @@ candidate for a later, separately-designed auto-apply).
 **Open decisions:** which check classes are proposal-worthy; dedup/backoff so a
 persistent warning doesn't nag weekly; whether `axon update` availability
 belongs here or stays dashboard-only.
+
+**Two findings from the code, neither visible from this entry.** (1) Nothing in
+the daemon had ever run doctor — `core.Doctor` had exactly one caller, the CLI —
+so the seam was the work, not the proposal logic. (2) The *full* report was
+assembled in `cmd/axon/doctor_cmd.go`, which appended `update-available` and
+`recipes` after `core.Doctor` returned; an in-daemon caller would have proposed
+from a smaller report than the owner had ever seen. Both are fixed by FR-206's
+shared `selfCheckExtras` helper, pinned by a divergence regression test.
+
+**Open decisions resolved.** Proposal-worthy = any check carrying a non-empty
+`Fix`, which needs no allow-list to maintain — the `Check` type already
+separates "what is wrong" from "what to do". Dedup is proposal memory keyed on
+name + remediation, so a standing warning proposes once and a *changed*
+remediation re-proposes; there is no weekly re-nag. `update-available` belongs
+here rather than staying dashboard-only, since it carries a `Fix` like any
+other check. Run-failure streaks were **cut** from v1 and remain a candidate:
+a failed automation carries no remediation, so the proposal would be a
+notification wearing a fix's shape.
 
 ## Sequencing sketch *(not a commitment)*
 
@@ -264,10 +282,10 @@ recipe experiment.
 without being built — `docs/19` E1's `orphan-report` renders orphans into a
 note, which is the surface a recipe reads.
 
-**Then:** **G1** is the strongest remaining pick — cheap, it compounds trust,
-and recipes just widened what doctor can warn about (name collisions,
-unscheduled recipes), which is exactly the raw material G1 turns into review
-items. **E1 watch-folders** and **B1 notifications** remain the small
+**G1 has now shipped** — and recipes did feed it exactly as predicted: the
+name-collision and unscheduled-recipe warnings both carry a `Fix`, so they
+became the first things `self-check` files. **E1 watch-folders** and **B1
+notifications** remain the small
 high-leverage starts of their themes; **D1** is the local-fleet play. As with
 docs/19, these compete for the same build slots; the two roadmaps are
 deliberately separate lenses, not separate teams.

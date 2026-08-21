@@ -16,6 +16,15 @@ All notable changes to this project are documented here. The format is based on
   out plus notes untouched for 180 days. It proposes nothing and spends
   nothing — dormant-note proposals stay with the resurfacer.
 
+- **AXON now files its own maintenance work.** (FR-206, FR-207; no ADR, no
+  schema change; graduating `docs/20` G1.) A new zero-model automation,
+  `self-check` (the 26th, disabled by default), turns any `axon doctor` finding
+  that carries a remediation into a review-queue item with the exact command
+  attached. **Accepting one only acknowledges it** — AXON never runs a system
+  change on your behalf. Each distinct remediation proposes once, not weekly.
+  The daemon and the CLI now assemble the doctor report through one path, so
+  they cannot disagree about what is wrong.
+
 ### Fixed
 
 - **`link-suggester` now visits orphans first.** (FR-205.) It previously
