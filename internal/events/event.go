@@ -24,3 +24,51 @@ type Event struct {
 	Message string         `json:"message"` // human-readable summary
 	Data    map[string]any `json:"data,omitempty"`
 }
+
+// KnownKinds is a best-effort list of the event kinds AXON publishes, used to
+// warn (never to refuse) about a notify.events subscription that will never
+// fire — "automation.failed" for "automation.fail", say.
+//
+// It is ADVISORY on purpose. Kinds are assembled three ways: literals at the
+// emitter (tokens), passed as a parameter with literals at the callers
+// (ingestion.Pipeline.emit), and built at runtime from user input (the
+// dashboard publishes "review." + action). A static list is therefore correct
+// only until the next emitter lands, so it drives a doctor warning rather than
+// a config-load refusal — a stale list refusing valid config would be a worse
+// failure than the typo it catches.
+var KnownKinds = []string{
+	"automation.briefing",
+	"automation.compaction",
+	"automation.fail",
+	"automation.heartbeat",
+	"automation.resurfacer.contradiction",
+	"automation.run",
+	"automation.skip",
+	"capture.received",
+	"action.done",
+	"ingest.done",
+	"ingest.embed.fail",
+	"ingest.embed.skip",
+	"ingest.enrich",
+	"ingest.skip",
+	"review.accept",
+	"review.dismiss",
+	"run.end",
+	"token.defer",
+	"token.deny",
+	"token.downgrade",
+	"token.error",
+	"token.ledger",
+	"token.unvetted_local",
+}
+
+// IsKnownKind reports whether kind appears in the advisory KnownKinds list.
+// A false result means "probably a typo", never "invalid".
+func IsKnownKind(kind string) bool {
+	for _, k := range KnownKinds {
+		if k == kind {
+			return true
+		}
+	}
+	return false
+}
