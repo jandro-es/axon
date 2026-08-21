@@ -127,3 +127,29 @@ func TestOrphanReportNeverTouchesReviewQueue(t *testing.T) {
 		t.Fatal("orphan-report must never write proposals")
 	}
 }
+
+// FR-205: link-suggester used to walk the vault alphabetically and stop at
+// MaxSuggestions, so an orphan late in the alphabet never received proposals.
+// Orphans must now come first.
+func TestLinkSuggesterVisitsOrphansFirst(t *testing.T) {
+	files := map[string]string{
+		"Zzz Orphan.md": "quantum entanglement notes about physics and measurement\n",
+		"Hub.md":        "the hub note about physics and measurement\n",
+	}
+	// Several connected notes that sort BEFORE the orphan alphabetically.
+	for _, n := range []string{"Aaa", "Bbb", "Ccc", "Ddd"} {
+		files[n+".md"] = "physics and measurement notes linking [[Hub]]\n"
+	}
+	rc, _ := newRC(t, files)
+	ctx := context.Background()
+	mustReindex(t, rc)
+
+	res, err := (LinkSuggester{MaxSuggestions: 2}).Run(ctx, rc)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	joined := strings.Join(res.Changes, "\n")
+	if !strings.Contains(joined, "Zzz Orphan") {
+		t.Fatalf("the orphan must be proposed first, got:\n%s\nsummary=%s", joined, res.Summary)
+	}
+}

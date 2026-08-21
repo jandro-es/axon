@@ -189,7 +189,7 @@ func (l LinkSuggester) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 	if err != nil {
 		return RunResult{}, err
 	}
-	sort.Strings(paths)
+	paths = orphansFirst(ctx, rc, paths)
 
 	// Proposal memory (FR-102): pairs already queued once — accepted or
 	// dismissed — are never re-proposed. Unordered: direction is noise.
@@ -252,4 +252,35 @@ func (l LinkSuggester) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 	}
 	saveProposalMemory(ctx, rc, linkSuggesterProposedState, proposed)
 	return RunResult{Summary: fmt.Sprintf("proposed %d link(s) in review queue", len(suggestions)), Changes: changes}, nil
+}
+
+// orphansFirst orders the scan so disconnected notes are visited before
+// connected ones (FR-205). link-suggester stops at MaxSuggestions, so a purely
+// lexical walk spent its whole budget on early-alphabet notes and never
+// reached an orphan — exactly the notes that most need a link. Ordering only:
+// the budget, the proposal memory and the accept path are unchanged.
+//
+// A failing orphan query degrades to plain lexical order rather than taking
+// out the run: link suggestions are advisory.
+func orphansFirst(ctx context.Context, rc RunCtx, paths []string) []string {
+	sort.Strings(paths)
+	orphans, err := db.OrphanNotes(ctx, rc.DB, 0)
+	if err != nil || len(orphans) == 0 {
+		return paths
+	}
+	rank := make(map[string]int, len(orphans))
+	for i, o := range orphans {
+		rank[o.Path] = i
+	}
+	first := make([]string, 0, len(orphans))
+	rest := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if _, ok := rank[p]; ok {
+			first = append(first, p)
+			continue
+		}
+		rest = append(rest, p)
+	}
+	sort.SliceStable(first, func(i, j int) bool { return rank[first[i]] < rank[first[j]] })
+	return append(first, rest...)
 }
