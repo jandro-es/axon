@@ -204,6 +204,25 @@ profiles:
     #       #                     proposal whose accept only acknowledges
     # …and in automations: above:
     #   reading-digest: { enabled: true, schedule: "0 8 * * 1", model: routine, budget_tokens: 20_000 }
+    #
+    # A zero-model example using the FR-203 readers:
+    #   - name: source-freshness
+    #     purpose: "Weekly advisory on research sources that have gone stale."
+    #     inputs:
+    #       - name: old
+    #         sources: { older_than_days: 180, limit: 30 }     # [[note]] — url (fetched D, kind, status)
+    #       - name: dormant
+    #         stale_notes: { older_than_days: 365, limit: 20 } # [[path]] (updated D)
+    #     render: |
+    #       Sources not re-fetched in 180 days ({{today}}):
+    #       {{old}}
+    #
+    #       Notes untouched in a year:
+    #       {{dormant}}
+    #     output:
+    #       block: { note: "03-Resources/Source Freshness.md", block: "freshness" }
+    # A note input may also read .axon/review-queue.md (FR-202) — reading is
+    # not writing — but a review{}-sink recipe may not read its own queue.
 
     # Personal identity & memory layer (Component 12). Injected at SessionStart so
     # the assistant knows you. Optional block — these are the defaults.

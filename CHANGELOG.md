@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Recipes can read the review queue, and reach note staleness and ingested
+  sources.** (FR-202, FR-203; **ADR-039 amended**, no new ADR, no schema
+  change; graduating `docs/20` C2 Priorities 1–2.) The recipe path rule is now
+  **two** rules: the block sink still refuses `.axon/` entirely, but a note
+  *input* may read `.axon/review-queue.md` and `.axon/review-queue-archive.md`
+  — reading is not writing, and a weekly-review recipe needs the queue.
+  Nothing else under `.axon/` opened up. Two new zero-model readers join the
+  three existing ones: `stale_notes {older_than_days, limit}` (notes untouched
+  before a cutoff, up to 10 years back — a sibling of `recent_notes`, which
+  keeps its honest 90-day cap) and `sources {older_than_days, limit}`
+  (`[[note]] — url (fetched DATE, kind, status)` from the ingest table, status
+  rendered and never filtered). One combination is refused: a `review {}`-sink
+  recipe may not read its own queue, because its output would be its next
+  input and the change-gate could never skip — read the archive instead.
+
 ## [1.5.0] — 2026-08-21
 
 **Write your own automations.** A minor release: no schema change (stays v7),

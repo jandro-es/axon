@@ -171,10 +171,12 @@ and `01-Projects/Project Pulse.md` supplies the pulse the same way.
   (see `docs/20` C2 priority 3, and prefer shipping **E1** below first, which
   would render one).
 
-**So D3 may not need a Go slice at all** — with C2's one-line read fix it is
-four-fifths a config block, and shipping E1 would close the fifth. Reassess
-before writing Go; if it does ship as a recipe, ship it as a documented
-example rather than a built-in.
+**So D3 may not need a Go slice at all** — and as of 2026-08-21 C2's read fix
+has shipped (FR-202), so the "pending proposals" section is reachable: a note
+input may now read `.axon/review-queue.md`. That makes D3 four-fifths a config
+block today, and shipping E1 would close the fifth (orphans). Reassess before
+writing Go; if it does ship as a recipe, ship it as a documented example
+rather than a built-in.
 
 ## Theme E — Knowledge health
 
@@ -190,7 +192,7 @@ vector neighbours and proposing `link` items (link-suggester's accept path) or
 **Open decisions:** proposal budget per week; whether "archive candidate" is a
 proposal kind at all (it edges toward delete-shaped territory — likely no).
 
-### E2 — Source freshness for research notes (S) · candidate — not scheduled *(confirmed Go, not a recipe — 2026-08-21)*
+### E2 — Source freshness for research notes (S) · candidate — not scheduled *(partly unblocked 2026-08-21: the aggregate half is now a recipe, the per-note half stays Go)*
 **Value:** ingested sources go stale; a research report citing a 2024 page
 presents as current.
 **Shape:** derived staleness from `source:`+ingest date already in the DB;
@@ -199,8 +201,20 @@ line on report notes and the health score. Re-fetch stays manual (egress is
 owner-initiated).
 **Open decisions:** staleness thresholds per source kind; health-score weight.
 
-**Tried as a recipe (ADR-039) and it does not fit — four independent
-blockers, found by building and running the closest possible recipe:**
+**Update 2026-08-21 — C2 P1+P2 shipped (FR-202/FR-203) and removed three of
+the four blockers below.** A `sources {older_than_days, limit}` reader now
+renders `[[note]] — url (fetched DATE, kind, status)`, and a sibling
+`stale_notes {older_than_days ≤ 3650}` reader lifts the 90-day cap for the
+age-selecting path. What remains Go is blocker 4: E2 wants an advisory line on
+*each* matched report note, and a fan-out sink was **deliberately rejected** —
+it would take a recipe's blast radius from one named note to N discovered
+ones, exactly the boundary ADR-039 drew. So: **E2's aggregate "stale sources"
+digest is expressible as a recipe today; its per-note annotation and its
+health-score weight stay Go.**
+
+**Original finding — tried as a recipe (ADR-039) and it did not fit; four
+independent blockers, found by building and running the closest possible
+recipe:**
 1. **The signal is unreachable.** Staleness lives in the `sources` table
    (`url`, `fetched_at`, `kind`, `status`); no recipe reader touches it.
    `recent_notes` surfaces the `notes` table, so the only dates a recipe sees

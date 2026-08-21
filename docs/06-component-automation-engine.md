@@ -128,13 +128,33 @@ Deliberately *not* in the vault: the vault is a model-writable surface
 (ADR-022 `vault_write`), while config.yaml is outside every model write path,
 so no model call can author or alter an automation.
 
-**Vocabulary (v1).** Three zero-Claude readers — `note {path}` (a note body),
-`search {query, top_k ≤ 20}` (hybrid hits as `[[path]]: excerpt`),
-`recent_notes {lookback_days 1–90, limit ≤ 100}` (`[[path]] (updated DATE)`).
-Exactly one of `prompt` (one one-shot chokepoint call) or `render` (no model
-call). Exactly one sink: `block {note, block}` rebuilds a recipe-owned
-`axon:<block>` managed block, or `review {}` proposes lines to the review
-queue. Templating is plain `{{input-name}}` / `{{today}}` substitution — no
+**Vocabulary (v2, FR-203).** Five zero-Claude readers — `note {path}` (a note
+body), `search {query, top_k ≤ 20}` (hybrid hits as `[[path]]: excerpt`),
+`recent_notes {lookback_days 1–90, limit ≤ 100}` (`[[path]] (updated DATE)`),
+`stale_notes {older_than_days 0–3650 (0 → 90), limit 0–100}` (the inverse:
+notes untouched before the cutoff, same line shape), and
+`sources {older_than_days 0–3650 (0 → no age filter), limit 0–100}`
+(`[[note]] — url (fetched DATE, kind, status)` from the ingest table; status
+is rendered, never filtered, and a source whose note is gone renders without
+the wikilink). Exactly one of `prompt` (one one-shot chokepoint call) or
+`render` (no model call). Exactly one sink: `block {note, block}` rebuilds a
+recipe-owned `axon:<block>` managed block, or `review {}` proposes lines to
+the review queue.
+
+**Paths are two rules, not one (FR-202).** Reading is not writing. The block
+sink never targets `.axon/` or `.trash/`; a note *input* may additionally read
+`.axon/review-queue.md` and `.axon/review-queue-archive.md` — and nothing else
+under `.axon/` — because the review queue is plain Markdown the dashboard
+already serves and a weekly-review recipe needs it. One combination is
+refused: a `review {}`-sink recipe may not read `.axon/review-queue.md`, since
+its own output would become its next input and the change-gate could never
+skip. Read the archive instead.
+
+**Recipes compose over other automations.** Automation output is just a note,
+so a `note` reader pointed at `01-Projects/Actions.md` inherits the whole GTD
+board that `actions-consolidate` rendered, without an actions reader existing.
+That makes nested `axon:` markers the common case rather than an edge case —
+the sink neutralizes them so recipe output can never terminate its own block. Templating is plain `{{input-name}}` / `{{today}}` substitution — no
 conditionals, loops, or functions. Recipes are data, not programs.
 
 **Scheduling and tier.** From an ordinary `automations.<name>` entry, exactly

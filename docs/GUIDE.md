@@ -682,9 +682,11 @@ token estimate and the file it would touch without writing, and
 `axon run reading-digest` does it for real. The recipe then appears in
 `axon automations` beside the built-ins.
 
-**The pieces.** *Inputs* are the three things a recipe can read — a note
-(`note`), a hybrid search (`search`), or recently-updated notes
-(`recent_notes`) — each given a name you reference as `{{name}}` in the
+**The pieces.** *Inputs* are the five things a recipe can read — a note
+(`note`), a hybrid search (`search`), recently-updated notes
+(`recent_notes`), notes nothing has touched in a long time (`stale_notes`),
+or the pages AXON has ingested (`sources`) — each given a name you reference
+as `{{name}}` in the
 template (`{{today}}` is always available). Use `prompt:` for one model call,
 or `render:` for a purely mechanical digest with **no model call at all**.
 *Output* is either a `block:` (AXON rewrites that one `axon:` section of the

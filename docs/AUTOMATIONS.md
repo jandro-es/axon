@@ -218,7 +218,8 @@ Enable with `axon configure automations eval-drift on`.
 
 The table above is AXON's built-in set. You can add your own without writing
 Go: a **recipe** is an automation declared as data in `config.yaml` — named
-inputs (a note, a search, recently-updated notes), optionally one model call,
+inputs (a note, a search, recently-updated notes, notes gone stale, or
+ingested sources), optionally one model call,
 and one sink (a managed block in a note, or proposals into the review queue).
 Recipes appear in `axon automations` beside the built-ins, are scheduled by an
 ordinary `automations.<name>` entry, and inherit every guarantee on this page:

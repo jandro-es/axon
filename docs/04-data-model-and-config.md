@@ -298,10 +298,17 @@ profiles:
     # a built-in automation's — that is refused at start/run/doctor), a
     # `purpose`, 1–8 named zero-model `inputs` (exactly one reader each:
     # note{path} | search{query,top_k≤20} | recent_notes{lookback_days 1–90,
-    # limit≤100}), exactly one of `prompt` (ONE chokepoint call, tier from the
-    # automations entry's model) or `render` (no model call), and exactly one
-    # `output` sink: block{note,block} (reserved built-in block names and
-    # .axon//.trash/ targets refused) or review{} (acknowledge-only proposals).
+    # limit≤100} | stale_notes{older_than_days 0–3650 (0→90), limit 0–100} |
+    # sources{older_than_days 0–3650 (0→no age filter), limit 0–100}), exactly
+    # one of `prompt` (ONE chokepoint call, tier from the automations entry's
+    # model) or `render` (no model call), and exactly one `output` sink:
+    # block{note,block} (reserved built-in block names and .axon//.trash/
+    # targets refused) or review{} (acknowledge-only proposals).
+    # Paths follow TWO rules (FR-202): the block sink never targets .axon/,
+    # while a note INPUT may read .axon/review-queue.md and
+    # .axon/review-queue-archive.md — and nothing else under .axon/. A
+    # review{}-sink recipe may not read the queue (its own output would be its
+    # next input); read the archive instead.
     # Templating is plain {{input-name}} / {{today}} substitution — no logic.
     # Scheduling/enablement/budget come from a normal automations.<name> entry.
     recipes: []

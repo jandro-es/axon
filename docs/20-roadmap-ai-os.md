@@ -88,7 +88,7 @@ sink; not agentic (one-shot `runModel` only); recipes live in `config.yaml`
 (outside every model write path — vault-portable sharing deferred), scheduled
 by ordinary `automations.<name>` entries.
 
-### C2 — Recipe vocabulary v2: let recipes read `.axon/`, then reach the derived tables (S) · candidate — not scheduled
+### C2 — Recipe vocabulary v2: let recipes read `.axon/`, then reach the derived tables (S) · **P1+P2 SHIPPED 2026-08-21 — FR-202, FR-203, ADR-039 amended** (spec: `docs/superpowers/specs/2026-08-21-recipe-vocabulary-v2-design.md`); P3 remains
 *Reframed 2026-08-21 after a second experiment; the first draft led with a
 `sources` reader, which the D3 result demoted.*
 
@@ -103,7 +103,7 @@ reader inherits overdue/next/someday without an actions reader existing.
 `project-pulse` works the same way. Recipes are meaningfully more capable than
 the three-reader vocabulary suggests, and the gaps that remain are narrow.
 
-**Priority 1 — split the path validator so recipes may READ `.axon/` (XS).**
+**Priority 1 — split the path validator so recipes may READ `.axon/` (XS). SHIPPED (FR-202).**
 Today one shared `validRecipePath` governs both inputs and the block sink, so
 the rule that stops recipes *writing* system files also stops them *reading*
 one. That blocks `.axon/review-queue.md` — plain Markdown the dashboard
@@ -112,8 +112,9 @@ Reading is not writing; the sink rule stays as-is. This is the cheapest, most
 enabling change on this page, and it corrects an over-broad rule rather than
 adding vocabulary.
 
-**Priority 2 — a `sources` reader and an age selector (S).** Still needed for
-E2, now second in line:
+**Priority 2 — a `sources` reader and an age selector (S). SHIPPED (FR-203)**
+— as `sources {older_than_days, limit}` and a sibling `stale_notes` reader
+(not an inverted `recent_notes`, so that reader keeps its honest 0–90 cap):
 - **`sources {older_than_days, limit}`** → the `sources` table as
   `[[note]] — url (fetched DATE, kind, status)` lines.
 - **`older_than_days`** (on `recent_notes`, or a sibling `stale_notes`) → the
@@ -121,7 +122,8 @@ E2, now second in line:
   is by definition about older material. `db.NotesUpdatedBefore` already
   exists — `actions-review` uses it — so this is nearly free.
 
-**Priority 3 — link topology / orphans.** D3's only genuinely unreachable
+**Priority 3 — link topology / orphans. STILL OPEN — the only remaining part
+of C2.** D3's only genuinely unreachable
 component. Unlike actions and pulse, no automation renders orphans into a
 note, so there is nothing to compose over. Worth doing only if `docs/19` E1
 (orphan & decay report) does not land first — if it does, it will render a
@@ -140,11 +142,17 @@ live: a review recipe reading `Actions.md` produced an intact block with the
 nested markers made inert). Any new reader must keep neutralizing, and the
 D3-shaped recipe belongs in the test suite as the regression that proves it.
 
-**Open decisions:** whether `.axon/` reads are allowed wholesale or only for
-an allow-listed set (review queue, archive); whether `sources` filters by
-status or renders it; one reader with `older_than_days` vs a separate
-`stale_notes`; whether the 90-day cap lifts generally or only for the
-age-selecting path.
+**Open decisions — all resolved 2026-08-21 when P1+P2 shipped:** `.axon/`
+reads are **allow-listed**, not wholesale (exactly `review-queue.md` and
+`review-queue-archive.md`; widening later is one line, narrowing later breaks
+configs). `sources` **renders** status and does not filter on it — a failed or
+redacted source is what a freshness recipe most wants to surface. Staleness is
+a **sibling `stale_notes` reader**, not a mode of `recent_notes`. The 90-day
+cap lifts **only** for the age-selecting path (`stale_notes` and `sources` get
+0–3650; `recent_notes` keeps 0–90). One decision emerged during the design
+that this section had not anticipated: a `review {}`-sink recipe may not read
+`.axon/review-queue.md`, because its own output would be its next input and
+the change-gate could never skip.
 
 ## Theme D — Local model fleet
 
@@ -227,20 +235,26 @@ belongs here or stays dashboard-only.
 
 ## Sequencing sketch *(not a commitment)*
 
-*Updated 2026-08-21, after A1 (v1.4.0) and C1 (v1.5.0) shipped.*
+*Updated 2026-08-21, after A1 (v1.4.0), C1 (v1.5.0) and C2 P1+P2 shipped.*
 
 **Shipped:** **A1** (as plain App Intents — the MCP half deferred until Apple
 makes it public) and **C1 recipes**, which was the largest and most
 platform-defining slice and did get its own release.
 
 **Recipes were dogfooded first, and the answer was useful.** `docs/19` E2
-(source freshness) was tried as a recipe on 2026-08-21 and does not fit: the
-staleness signal lives in the `sources` table, which no reader reaches, and
-the one reader with dates points at recently-*updated* notes with a 90-day
-cap. E2 stays Go; the reader gaps became **C2** above. The remaining
-candidates worth trying the same way are `docs/19`'s D3 (weekly review flow)
-and F2 (MOC materialisation) — both read notes rather than sources, so both
-may already be expressible today.
+(source freshness) was tried as a recipe on 2026-08-21 and did not fit: the
+staleness signal lives in the `sources` table, which no reader reached, and
+the one reader with dates pointed at recently-*updated* notes with a 90-day
+cap. `docs/19` D3 (weekly review) mostly did fit. Those two results became
+**C2**, whose Priorities 1–2 then shipped the same day (FR-202/FR-203) — so
+E2's aggregate-digest half is now expressible as a recipe, though its
+per-note advisory half still needs a fan-out sink and stays Go.
+
+**The dogfooding phase is over.** `docs/19` F2 (MOC materialisation) was
+listed here as the last recipe candidate, which was wrong: F2 needs a new
+review-queue *kind* plus a note `Create`, so by ADR-039's own boundary
+("anything needing a new sink is a Go automation") it is a Go slice, not a
+recipe experiment.
 
 **Then:** **G1** is the strongest remaining pick — cheap, it compounds trust,
 and recipes just widened what doctor can warn about (name collisions,

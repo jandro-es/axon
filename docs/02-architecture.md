@@ -744,6 +744,18 @@ FR-191 matrix names the state.
 `docs/superpowers/specs/2026-08-20-automation-recipes-design.md`. Graduates
 docs/20 C1.
 
+**Amended 2026-08-21** (FR-202, FR-203; spec
+`docs/superpowers/specs/2026-08-21-recipe-vocabulary-v2-design.md`;
+graduates docs/20 C2 P1+P2): the recipe path rule is **two** rules — reading
+is not writing, so note inputs may read an allow-listed pair of `.axon/`
+files (`review-queue.md`, `review-queue-archive.md`) while the block sink
+still refuses `.axon/` entirely; the reader vocabulary is **five**, not
+three (`stale_notes`, `sources`); and a `review {}`-sink recipe may not read
+the review queue, whose output would otherwise be its own next input. No
+architectural boundary moves — sinks, the chokepoint, config-not-vault, the
+registry story and "anything needing a new sink is a Go automation" all
+stand.
+
 **Context:** Every automation today is a Go type plus a registry entry —
 users cannot define their own without a fork. The 24 shipped automations
 decompose into a small vocabulary: zero-Claude readers (note body, hybrid
