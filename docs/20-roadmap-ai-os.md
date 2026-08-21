@@ -182,7 +182,7 @@ the change-gate could never skip.
 
 ## Theme D — Local model fleet
 
-### D1 — Multi-provider eval-gated routing (M) · candidate — not scheduled
+### D1 — Multi-provider eval-gated routing (M) · **CLOSED 2026-08-21 — substantially already delivered; the remaining gap fixed**
 **Value:** the local tier currently means Ollama. macOS 27 adds `apple-fm`
 (on-device + Private Cloud Compute — `docs/21` M2); MLX-served models are a
 plausible third. The eval harness + admission gate (1.2 R5) was built for
@@ -194,6 +194,33 @@ provider updates (once it is schedulable — `docs/ISSUES.md` #1).
 **Open decisions:** per-operation routing (classify→on-device, routine→Ollama)
 vs per-tier; whether the cascade-with-verification (ADR-031) judge may be a
 different provider than the answerer.
+
+**Most of this was already built, by FR-142/143 and ADR-038.** Reading the
+code before designing showed the eval-gated admission in `tokens/manager.go`
+is **provider-agnostic**: it gates on `ref.Provider != ProviderClaude`, so any
+non-Claude provider already has to earn its tier by passing evals.
+`config.ParseModelRef` already resolves `ollama:`, `apple:` and `apple-fm:`;
+`axon eval --model` already measures any candidate ref; and per-tier
+multi-provider routing already works — `classify: apple-fm:…` alongside
+`routine: ollama:…` is valid config today. "A provider earns a tier by passing
+evals, not by being new" is the shipped behaviour.
+
+**The one real gap, now closed.** Drift detection was Ollama-only: the doctor
+vetting check computed a current fingerprint solely for `ollama:` refs, so an
+fm-backed tier that passed evals stayed "vetted" forever — an OS update could
+swap the on-device model underneath it and the gate would keep admitting a
+model nobody had evaluated. The `eval-drift` automation already had this right
+(FR-194: the OS version is the drift key for fm-backed tiers); its logic is now
+`core.TierDriftKey`, shared by all three sites that compute or compare the key
+— the automation, the doctor check, and `axon eval` when it records a run.
+They have to agree, or every tier reports drift forever and none ever settles.
+
+**The two open decisions remain open, and are separate features**, not part of
+this entry: per-**operation** routing (an automation naming a provider rather
+than a tier) widens the chokepoint's model-resolution surface and would need
+its own ADR; and whether the ADR-031 cascade judge may be a different provider
+than the answerer is a question about verification independence, not routing.
+Either could be picked up on its own.
 
 ## Theme E — Continuous capture *(previously cut from 1.3)*
 
@@ -328,8 +355,9 @@ note, which is the surface a recipe reads.
 
 **G1 has now shipped** — and recipes did feed it exactly as predicted: the
 name-collision and unscheduled-recipe warnings both carry a `Fix`, so they
-became the first things `self-check` files. **E1 watch-folders and B1 notifications have both now shipped.** **D1** is the
-local-fleet play and the largest remaining piece here. As with
+became the first things `self-check` files. **E1 watch-folders and B1 notifications have both now shipped.** **D1** turned out to be substantially already delivered and is now closed;
+what remains in this theme are its two open decisions, each a separate
+feature. As with
 docs/19, these compete for the same build slots; the two roadmaps are
 deliberately separate lenses, not separate teams.
 

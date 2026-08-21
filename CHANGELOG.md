@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **The eval gate could go stale on Apple's on-device models.** (FR-143.)
+  `axon doctor`'s vetting check only looked for model drift on Ollama tiers, so
+  an `apple-fm` tier that had passed its evals stayed marked vetted even after
+  a macOS update replaced the on-device model underneath it — the gate kept
+  admitting a model nobody had evaluated. Drift is now computed the same way
+  for every gated provider, by one shared helper used at every point the key is
+  written or compared.
+
 ## [1.7.0] — 2026-08-21
 
 **Reach out, and take things in.** A minor release: no schema change (stays
