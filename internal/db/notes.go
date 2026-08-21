@@ -309,11 +309,17 @@ func NotesUpdatedSince(ctx context.Context, q Queryer2, sinceDate string, limit 
 }
 
 // NotesUpdatedBefore lists notes last updated strictly before beforeDate
-// (YYYY-MM-DD), excluding notes with no updated stamp.
-func NotesUpdatedBefore(ctx context.Context, q Queryer2, beforeDate string) ([]NoteStamp, error) {
-	rows, err := q.QueryContext(ctx,
-		`SELECT id, path, COALESCE(title,''), COALESCE(updated,'')
-		   FROM notes WHERE updated != '' AND updated IS NOT NULL AND updated < ? ORDER BY updated, path;`, beforeDate)
+// (YYYY-MM-DD), excluding notes with no updated stamp, oldest first.
+// limit <= 0 means unlimited.
+func NotesUpdatedBefore(ctx context.Context, q Queryer2, beforeDate string, limit int) ([]NoteStamp, error) {
+	query := `SELECT id, path, COALESCE(title,''), COALESCE(updated,'')
+		   FROM notes WHERE updated != '' AND updated IS NOT NULL AND updated < ? ORDER BY updated, path`
+	args := []any{beforeDate}
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
+	rows, err := q.QueryContext(ctx, query+";", args...)
 	if err != nil {
 		return nil, fmt.Errorf("notes updated before: %w", err)
 	}

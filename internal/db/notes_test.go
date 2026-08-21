@@ -98,3 +98,31 @@ func TestUpsertNoteByPathKeepsID(t *testing.T) {
 		t.Errorf("upsert created a duplicate: %d notes", n)
 	}
 }
+
+func TestNotesUpdatedBeforeLimit(t *testing.T) {
+	d := newMigratedDB(t)
+	ctx := context.Background()
+	for _, u := range []string{"2024-01-01", "2024-02-01", "2024-03-01"} {
+		if _, err := InsertNote(ctx, d, NoteRow{Path: "n-" + u + ".md", Title: u, Updated: u}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	all, err := NotesUpdatedBefore(ctx, d, "2025-01-01", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("limit 0 must be unlimited, got %d", len(all))
+	}
+	// Oldest first (existing ORDER BY updated, path).
+	if all[0].Updated != "2024-01-01" {
+		t.Fatalf("ordering changed: %+v", all[0])
+	}
+	two, err := NotesUpdatedBefore(ctx, d, "2025-01-01", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(two) != 2 || two[0].Updated != "2024-01-01" {
+		t.Fatalf("limit 2 wrong: %+v", two)
+	}
+}

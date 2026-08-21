@@ -29,7 +29,7 @@ const (
 // predates today − stale_after_days, plus the stale-note → updated map.
 func (ActionsReview) staleCandidates(ctx context.Context, rc RunCtx) ([]db.Action, map[string]string, error) {
 	cutoff := rc.now().UTC().AddDate(0, 0, -rc.Config.Actions.StaleAfterDaysOr()).Format("2006-01-02")
-	stale, err := db.NotesUpdatedBefore(ctx, rc.DB, cutoff)
+	stale, err := db.NotesUpdatedBefore(ctx, rc.DB, cutoff, 0)
 	if err != nil {
 		return nil, nil, err
 	}

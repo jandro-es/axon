@@ -45,7 +45,7 @@ func TestNotesUpdatedSinceAndBefore(t *testing.T) {
 		t.Fatalf("recent = %+v, want [new.md]", recent)
 	}
 
-	dormant, err := NotesUpdatedBefore(ctx, d, "2026-04-05")
+	dormant, err := NotesUpdatedBefore(ctx, d, "2026-04-05", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

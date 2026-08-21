@@ -181,7 +181,7 @@ func (Resurfacer) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 	if err != nil {
 		return RunResult{}, err
 	}
-	dormant, err := db.NotesUpdatedBefore(ctx, rc.DB, now.AddDate(0, 0, -resurfaceDormantDays).Format("2006-01-02"))
+	dormant, err := db.NotesUpdatedBefore(ctx, rc.DB, now.AddDate(0, 0, -resurfaceDormantDays).Format("2006-01-02"), 0)
 	if err != nil {
 		return RunResult{}, err
 	}
