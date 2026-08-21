@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"os"
 	"os/exec"
@@ -10,6 +11,7 @@ import (
 	"github.com/jandro-es/axon/internal/agent"
 	"github.com/jandro-es/axon/internal/automations"
 	"github.com/jandro-es/axon/internal/config"
+	"github.com/jandro-es/axon/internal/core"
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/embeddings"
 	"github.com/jandro-es/axon/internal/events"
@@ -198,6 +200,12 @@ func (d *profileDeps) buildServices(bus *events.Bus) services {
 	engine := automations.NewEngine(automations.EngineDeps{
 		Profile: d.name, Config: d.profile, DB: d.db, Vault: d.vault,
 		Manager: mgr, Searcher: searcher, Embedder: d.embedder, Pipeline: pipeline, Bus: bus,
+		// FR-206: the daemon sees exactly the report `axon doctor` prints —
+		// same assembly, same extras — so self-check cannot propose from a
+		// view of the system the owner has never seen.
+		SelfCheck: func(context.Context) []core.Check {
+			return core.Doctor(d.cfg, d.name, selfCheckExtras(d.cfg, d.name)...).Checks
+		},
 	})
 	return services{manager: mgr, searcher: searcher, pipeline: pipeline, engine: engine}
 }

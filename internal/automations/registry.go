@@ -33,6 +33,7 @@ func builtins() map[string]Automation {
 		EvalDrift{}.Name():          EvalDrift{},
 		MergeProposals{}.Name():     MergeProposals{},
 		OrphanReport{}.Name():       OrphanReport{},
+		SelfCheck{}.Name():          SelfCheck{},
 		ActionsConsolidate{}.Name(): ActionsConsolidate{},
 		ActionsReview{}.Name():      ActionsReview{},
 		ActionExtract{}.Name():      ActionExtract{},

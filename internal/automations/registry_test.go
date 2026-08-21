@@ -13,7 +13,7 @@ func TestRegistryHasAllStandardAutomations(t *testing.T) {
 		"memory-distill", "capture", "briefing", "resurfacer", "subscriptions", "session-distill",
 		"research-questions", "deep-research", "entity-pages", "project-pulse", "eval-drift",
 		"merge-proposals", "actions-consolidate", "actions-review", "action-extract",
-		"orphan-report",
+		"orphan-report", "self-check",
 	}
 	reg := Registry(config.Profile{})
 	if len(reg) != len(want) {
