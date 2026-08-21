@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/jandro-es/axon/internal/config"
@@ -25,5 +26,20 @@ func TestCheckEgressPolicy(t *testing.T) {
 		if err := CheckEgressPolicy(config.PolicyConfig{EgressAllowlist: []string{"*"}}, h); err != nil {
 			t.Errorf("self-hosted target %q must be permitted: %v", h, err)
 		}
+	}
+}
+
+// An egress refusal must not say "ingest denied" — it appears verbatim in
+// doctor output and in the daemon log.
+func TestEgressPolicyErrorSaysEgress(t *testing.T) {
+	err := CheckEgressPolicy(config.PolicyConfig{EgressAllowlist: []string{"localhost"}}, "ntfy.sh")
+	if err == nil {
+		t.Fatal("expected a refusal")
+	}
+	if strings.Contains(err.Error(), "ingest") {
+		t.Fatalf("an egress refusal must not mention ingest: %v", err)
+	}
+	if !strings.Contains(err.Error(), "egress denied") {
+		t.Fatalf("want an egress-worded error, got %v", err)
 	}
 }

@@ -13,10 +13,19 @@ import (
 type PolicyError struct {
 	Host   string
 	Reason string
+	// Direction names what was refused: "ingest" (the default, so existing
+	// callers are unchanged) or "egress" for an outbound push (ADR-041).
+	// Without it a notification refusal reads as "ingest denied", which is
+	// actively misleading in doctor output.
+	Direction string
 }
 
 func (e *PolicyError) Error() string {
-	return fmt.Sprintf("ingest denied for host %q: %s", e.Host, e.Reason)
+	dir := e.Direction
+	if dir == "" {
+		dir = "ingest"
+	}
+	return fmt.Sprintf("%s denied for host %q: %s", dir, e.Host, e.Reason)
 }
 
 // CheckIngestPolicy enforces the profile's ingestion egress controls for a host,
@@ -134,10 +143,10 @@ func hasWildcard(patterns []string) bool {
 // that cannot occur on that path.
 func CheckEgressPolicy(p config.PolicyConfig, host string) error {
 	if host == "" {
-		return &PolicyError{Host: host, Reason: "empty host"}
+		return &PolicyError{Host: host, Reason: "empty host", Direction: "egress"}
 	}
 	if len(p.EgressAllowlist) > 0 && !hasWildcard(p.EgressAllowlist) && !matchesAny(p.EgressAllowlist, host) {
-		return &PolicyError{Host: host, Reason: "not in egress_allowlist"}
+		return &PolicyError{Host: host, Reason: "not in egress_allowlist", Direction: "egress"}
 	}
 	return nil
 }
