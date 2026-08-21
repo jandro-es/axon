@@ -1024,7 +1024,8 @@ a third perception provider gets its own record rather than riding one of
 theirs.
 
 **Decision:** (1) **A detected binary first, a helper later.** `whisper:<model>`
-resolves a `whisper` binary on PATH exactly as OCR resolves tesseract and the
+resolves `whisper-cli` (whisper.cpp's actual binary name; `whisper` is the
+unrelated Python package) on PATH exactly as OCR resolves tesseract and the
 media path resolves yt-dlp: absent means the feature stays off with an
 actionable message, never a crash. Apple Speech lands later behind the same
 `STTFor` seam, the way ADR-038 filled ADR-035's Apple slot — cross-platform

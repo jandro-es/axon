@@ -99,6 +99,15 @@ second consequence: the byte cap and the duration cap are *unaligned* (120
 minutes of `.wav` is ~1.2 GB, so size refuses first for lossless audio), which
 is why the flagged note names which cap refused it.
 
+**Verified against a real whisper.cpp 1.9.2 install, which found four bugs no
+test could have caught:** the binary is `whisper-cli`, not `whisper`;
+`--output-txt` writes a sibling file next to the source (forbidden in a watched
+folder by ADR-040); the doctor check resolved the binary differently from the
+pipeline; and `axon ingest` builds its own pipeline and had not been wired at
+all, so the CLI path silently captured instead of transcribing. **The lesson:
+a provider seam whose provider is never executed is not verified, however
+green the suite is.**
+
 **B2 (meeting notes with action extraction) is now unblocked** — it rides this
 seam.
 
