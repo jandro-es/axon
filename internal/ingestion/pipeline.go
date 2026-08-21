@@ -2,12 +2,9 @@ package ingestion
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -378,7 +375,15 @@ func (p *Pipeline) writeNote(ctx context.Context, path string, enr Enrichment, c
 	// Archive the source audio by STREAMING — never as a string, which would
 	// hold the whole recording in memory (ADR-042).
 	if in.Kind == KindAudio {
-		if err := p.Vault.CopyFile(attachmentPath(hash, in.Path), in.Path); err != nil {
+		// Keyed on the AUDIO's bytes, not the note hash — which for audio is
+		// the transcript's. Matches the image intent above ("stable across
+		// re-ingests"): swapping whisper models changes the transcript, and
+		// that must not re-archive the same recording under a new name.
+		ab, rerr := os.ReadFile(in.Path)
+		if rerr != nil {
+			return fmt.Errorf("archive audio %q: %w", filepath.Base(in.Path), rerr)
+		}
+		if err := p.Vault.CopyFile(attachmentPath(config.ContentHash(string(ab)), in.Path), in.Path); err != nil {
 			return err
 		}
 	}
@@ -577,29 +582,16 @@ func (p *Pipeline) writeCapturedNote(in Input, reason, prefix string) (IngestRes
 	// A captured local file is archived too, so the recording is never lost
 	// just because it could not be transcribed (ADR-042, archive-never-delete).
 	if in.Path != "" {
-		if hash, herr := fileSHA256(in.Path); herr == nil {
-			_ = p.Vault.CopyFile(attachmentPath(hash, in.Path), in.Path)
+		if b, rerr := os.ReadFile(in.Path); rerr == nil {
+			// config.ContentHash, the same function the transcribed path uses,
+			// so one recording archives to ONE filename whichever route ran.
+			_ = p.Vault.CopyFile(attachmentPath(config.ContentHash(string(b)), in.Path), in.Path)
 		}
 	}
 	res.NotePath = notePath
 	p.emit(events.LevelInfo, "ingest.done",
 		fmt.Sprintf("captured %s -> %s (%s)", in.Raw, notePath, reason), res)
 	return res, nil
-}
-
-// fileSHA256 hashes a file by streaming it, so an attachment key never
-// requires holding the file in memory.
-func fileSHA256(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // buildCapturedNote renders the flagged capture note.

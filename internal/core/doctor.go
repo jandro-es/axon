@@ -1132,15 +1132,13 @@ func sttCheck(p config.Profile) Check {
 		return Check{Name: name, Status: StatusOK,
 			Detail: "off (set ingestion.stt.mode to whisper:<model> to transcribe audio files)"}
 	}
-	bin := strings.TrimSpace(s.Binary)
-	if bin == "" {
-		bin = "whisper"
-	}
-	resolved, err := lookPath(bin)
+	// Resolved by the SAME helper the pipeline uses, so the check can never
+	// look for a different binary than the one that would actually run.
+	resolved, err := ingestion.ResolveWhisperBinary(s.Binary)
 	if err != nil {
 		return Check{Name: name, Status: StatusWarn,
-			Detail: fmt.Sprintf("stt is %s but %q was not found — audio files will be captured untranscribed", s.ModeOr(), bin),
-			Fix:    "install whisper.cpp and put its binary on PATH, or set ingestion.stt.binary"}
+			Detail: fmt.Sprintf("stt is %s but whisper.cpp was not found (%v) — audio files will be captured untranscribed", s.ModeOr(), err),
+			Fix:    "brew install whisper-cpp (or put whisper-cli on PATH), or set ingestion.stt.binary"}
 	}
 	return Check{Name: name, Status: StatusOK,
 		Detail: fmt.Sprintf("%s ready (%s), max %d min", s.ModeOr(), resolved, s.MaxMinutesOr())}

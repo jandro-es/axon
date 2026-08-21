@@ -44,6 +44,36 @@ type STT interface {
 	Transcribe(ctx context.Context, path string) (Transcript, error)
 }
 
+// whisperBinaryNames are tried in order when ingestion.stt.binary is unset.
+// "whisper-cli" is what whisper.cpp actually installs as; "whisper" is kept as
+// a fallback for a hand-built or symlinked binary.
+var whisperBinaryNames = []string{"whisper-cli", "whisper"}
+
+// ResolveWhisperBinary returns the executable to run for a configured
+// ingestion.stt.binary (empty = search the known names).
+//
+// Exported because the doctor `stt` check must resolve it EXACTLY as STTFor
+// does — a check that looks for a different binary than the pipeline runs
+// reports a healthy install as broken, or worse, the reverse.
+func ResolveWhisperBinary(configured string) (string, error) {
+	if b := strings.TrimSpace(configured); b != "" {
+		resolved, err := sttLookPath(b)
+		if err != nil {
+			return "", fmt.Errorf("whisper binary %q not executable: %w", b, err)
+		}
+		return resolved, nil
+	}
+	var lastErr error
+	for _, candidate := range whisperBinaryNames {
+		if resolved, err := sttLookPath(candidate); err == nil {
+			return resolved, nil
+		} else {
+			lastErr = err
+		}
+	}
+	return "", fmt.Errorf("whisper.cpp not on PATH — looked for %s (%v)", strings.Join(whisperBinaryNames, ", "), lastErr)
+}
+
 // sttLookPath is indirected so tests can stub binary discovery, matching the
 // vision/OCR seams.
 var sttLookPath = exec.LookPath
@@ -61,26 +91,21 @@ func STTFor(cfg config.IngestionConfig, goos string) (STT, error) {
 	if model == "" {
 		return nil, fmt.Errorf("ingestion.stt: mode %q names no model — use whisper:<model>", mode)
 	}
-	bin := strings.TrimSpace(s.Binary)
-	if bin == "" {
-		resolved, err := sttLookPath("whisper")
-		if err != nil {
-			return nil, fmt.Errorf("ingestion.stt: %q needs the whisper binary on PATH (not found) — install whisper.cpp, set ingestion.stt.binary, or use off", mode)
-		}
-		bin = resolved
-	} else if _, err := sttLookPath(bin); err != nil {
-		return nil, fmt.Errorf("ingestion.stt: whisper binary %q not executable: %w", bin, err)
+	bin, err := ResolveWhisperBinary(s.Binary)
+	if err != nil {
+		return nil, fmt.Errorf("ingestion.stt: %q: %w — install it (brew install whisper-cpp), set ingestion.stt.binary, or use off", mode, err)
 	}
 	return &whisperSTT{bin: bin, model: model}, nil
 }
 
 // whisperSTT shells out to whisper.cpp.
 //
-// UNVERIFIED: the flags below are whisper.cpp's common CLI shape, but builds
-// differ and no test executes the binary — it was not installed when this
-// landed. The first person to run this against a real whisper should check
-// `whisper --help` and correct them; nothing else in the slice depends on
-// their exact form.
+// Verified against whisper.cpp 1.9.2 (Homebrew) on 2026-08-21 with a real
+// recording: the transcript arrives on stdout, and the run leaves no files
+// behind. `--output-txt` is deliberately NOT used — it writes a sibling
+// "<input>.txt" next to the source, which for a watched folder would mean
+// writing into the owner's directory (ADR-040 forbids that). `--no-prints`
+// keeps the model-loading chatter off stdout.
 type whisperSTT struct {
 	bin   string
 	model string
@@ -95,9 +120,15 @@ func (w *whisperSTT) Probe(ctx context.Context, path string) (time.Duration, err
 	return 0, nil
 }
 
+// args builds the whisper.cpp invocation. Extracted so a test can assert no
+// output-file flag creeps back in without executing the binary.
+func (w *whisperSTT) args(path string) []string {
+	return []string{"-m", w.model, "-f", path, "--no-timestamps", "--no-prints"}
+}
+
 func (w *whisperSTT) Transcribe(ctx context.Context, path string) (Transcript, error) {
 	var out, errBuf bytes.Buffer
-	cmd := exec.CommandContext(ctx, w.bin, "-m", w.model, "-f", path, "--output-txt", "--no-timestamps")
+	cmd := exec.CommandContext(ctx, w.bin, w.args(path)...)
 	cmd.Stdout = &out
 	cmd.Stderr = &errBuf
 	if err := cmd.Run(); err != nil {

@@ -57,18 +57,21 @@ func newIngestCmd(gf *globalFlags) *cobra.Command {
 
 			ocr, _ := ingestion.OCRFor(deps.profile.Ingestion, runtime.GOOS)
 			vision, _ := ingestion.VisionFor(deps.profile.Ingestion, runtime.GOOS) // off/misconfig → nil; doctor surfaces it
+			stt, _ := ingestion.STTFor(deps.profile.Ingestion, runtime.GOOS)       // off/misconfig → nil; doctor surfaces it
 			pipeline := &ingestion.Pipeline{
-				Vault:        deps.vault,
-				DB:           deps.db,
-				Embedder:     deps.embedder,
-				Enricher:     enricher,
-				Fetcher:      ingestion.NewHTTPFetcher(deps.profile.Policy, authRules...),
-				Policy:       deps.profile.Policy,
-				Profile:      deps.name,
-				OCR:          ocr,
-				Vision:       vision,
-				MediaHosts:   deps.profile.Ingestion.MediaHosts,
-				CaptionLangs: deps.profile.Ingestion.CaptionLangs,
+				Vault:         deps.vault,
+				DB:            deps.db,
+				Embedder:      deps.embedder,
+				Enricher:      enricher,
+				Fetcher:       ingestion.NewHTTPFetcher(deps.profile.Policy, authRules...),
+				Policy:        deps.profile.Policy,
+				Profile:       deps.name,
+				OCR:           ocr,
+				Vision:        vision,
+				STT:           stt,
+				STTMaxMinutes: deps.profile.Ingestion.STT.MaxMinutesOr(),
+				MediaHosts:    deps.profile.Ingestion.MediaHosts,
+				CaptionLangs:  deps.profile.Ingestion.CaptionLangs,
 			}
 			_ = noApplyLinks
 			opts := ingestion.IngestOptions{
