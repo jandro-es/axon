@@ -8,6 +8,12 @@ import UniformTypeIdentifiers
 /// `attributedTitle`, and any selection as `attributedContentText`. A text
 /// selection from most other apps arrives as a plain-text attachment with no
 /// title. Both shapes, and everything between, fold into the same three fields.
+///
+/// `@MainActor` on the whole enum on purpose: neither `NSExtensionItem` nor
+/// `NSItemProvider` is `Sendable`, and the only caller reads them off a
+/// `@MainActor` view controller. Staying on the main actor means there is no
+/// boundary for them to cross — the awaits inside suspend, they do not block.
+@MainActor
 public enum ShareExtraction {
     public static func payload(from items: [NSExtensionItem]) async -> SharePayload {
         var payload = SharePayload()

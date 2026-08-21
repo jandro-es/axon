@@ -26,6 +26,21 @@ let package = Package(
             dependencies: ["AxonKit", .product(name: "Sparkle", package: "Sparkle")]
         ),
 
+        // The share extension's appex executable (CFR-96). Views only — every
+        // testable part lives in AxonKit.
+        //
+        // The linker flag is load-bearing: an appex's entry point is
+        // NSExtensionMain, not main(), which is why this target has no
+        // main.swift. It MUST be spelled through -Xlinker; passing "-e" to
+        // swiftc directly makes it evaluate the symbol name as Swift source
+        // ("cannot find '_NSExtensionMain' in scope"). unsafeFlags is legal
+        // because Companion is a root package, never a dependency.
+        .executableTarget(
+            name: "AxonShare",
+            dependencies: ["AxonKit"],
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-e", "-Xlinker", "_NSExtensionMain"])]
+        ),
+
         .testTarget(
             name: "AxonKitTests",
             dependencies: ["AxonKit"],
