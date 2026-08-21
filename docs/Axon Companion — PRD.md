@@ -189,5 +189,31 @@ extracts `Metadata.appintents` explicitly (`appintentsmetadataprocessor` over
 the Swift Build backend's const-values — the legacy SwiftPM backend emits
 none and Siri would silently see no intents).
 
+## 0.3.0 addendum — the share extension (CFR-96…99, 2026-08-21)
+
+Graduates `docs/20` E2 (spec:
+`docs/superpowers/specs/2026-08-21-share-extension-design.md`). Zero daemon
+change: the extension is a fourth caller of `POST /api/capture` (ADR-024),
+after the inbox folder, the bookmarklet page and `CaptureThoughtIntent`.
+
+- **CFR-96 AxonShare.appex** — a SwiftPM-built share extension
+  (`com.apple.share-services`; URL, web page and text activation rules only),
+  sandboxed inside the unsandboxed app, assembled and signed by
+  `package_app.sh` before the container.
+- **CFR-97 Payload and panel** — `ShareExtraction` reduces the shared items to
+  `SharePayload(url,title,text)` in AxonKit (unit-tested); the panel shows
+  title and URL, pre-fills an editable note with the selection, and posts
+  through the widened `capture(url:title:text:)`.
+- **CFR-98 Failures are shown** — daemon down, capture disabled, guard refusal
+  and any other status each get their own sentence in the panel; the request
+  is completed only on success or cancel, so **Capture** can be retried.
+- **CFR-99 Enablement is visible** — a Settings row reads `pluginkit` and,
+  when the extension is registered but off, offers System Settings →
+  Extensions. Companion never enables it on the user's behalf.
+
+Files are deliberately out of scope: they have a door already (watch-folders,
+FR-208/209). Like the App Intents, the extension talks to `127.0.0.1:7777` and
+cannot follow a custom `dashboard.port`.
+
 <!-- axon:links:start -->
 <!-- axon:links:end -->

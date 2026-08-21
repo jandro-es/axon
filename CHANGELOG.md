@@ -8,6 +8,17 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **macOS share extension (Companion, CFR-96…99)** — "Axon" in the system
+  Share sheet: share a page, link or selection from any app into `00-Inbox`.
+  A sandboxed `AxonShare.appex` inside `Axon.app` posts to the existing
+  guarded `/api/capture` (ADR-024) — **no new daemon surface, no schema
+  change**; the daemon binary is untouched by this entry. The panel shows the
+  page title and URL with an editable note pre-filled from your selection, and
+  says plainly when the daemon is down or the profile has capture switched
+  off, keeping your text so you can retry. Enable it under System Settings →
+  Login Items & Extensions → Sharing; Companion Settings shows whether it is
+  on. Files are not shared this way — watch-folders (FR-208/209) already cover
+  those. Ships as `companion-v0.3.0`; graduates `docs/20` E2.
 - **A recorded meeting can now become tracked commitments** (`docs/19` B2; no
   code — the chain was already complete once audio ingestion shipped). Enable
   `action-extract` alongside STT and a transcribed standup yields proposals
