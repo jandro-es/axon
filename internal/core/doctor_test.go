@@ -671,3 +671,26 @@ func TestNotifyCheck(t *testing.T) {
 		t.Fatal("the kind warning must carry a Fix so self-check files it")
 	}
 }
+
+func TestSTTCheck(t *testing.T) {
+	off := sttCheck(config.Profile{})
+	if off.Status != StatusOK || !strings.Contains(off.Detail, "off") {
+		t.Fatalf("default should read as off: %+v", off)
+	}
+	if off.Fix != "" {
+		t.Fatalf("an off check has nothing to fix: %+v", off)
+	}
+
+	missing := config.Profile{Ingestion: config.IngestionConfig{
+		STT: config.STTConfig{Mode: "whisper:base", Binary: "/nonexistent/whisper"}}}
+	warn := sttCheck(missing)
+	if warn.Status != StatusWarn {
+		t.Fatalf("a missing binary must warn: %+v", warn)
+	}
+	if warn.Fix == "" {
+		t.Fatal("the warning must carry a Fix so self-check files it")
+	}
+	if !strings.Contains(warn.Detail, "base") {
+		t.Fatalf("the detail should name the model: %+v", warn)
+	}
+}

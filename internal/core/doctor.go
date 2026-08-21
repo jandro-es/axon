@@ -183,6 +183,7 @@ func Doctor(cfg *config.Config, activeProfile string, extras ...Check) DoctorRep
 			checks = append(checks, actionsCheck(paths))
 			checks = append(checks, watchFoldersCheck(p))
 			checks = append(checks, notifyCheck(p))
+			checks = append(checks, sttCheck(p))
 			checks = append(checks, localModelsVettingChecks(paths, p)...)
 			// 8–9. Multi-client wiring (FR-75): is the AXON MCP server registered
 			// with each Claude client, and is each client's guarantee honest.
@@ -1120,4 +1121,27 @@ func notifyCheck(p config.Profile) Check {
 	}
 	return Check{Name: name, Status: StatusOK,
 		Detail: fmt.Sprintf("%d event kind(s) → %s", len(p.Notify.Events), host)}
+}
+
+// sttCheck reports on local speech-to-text (FR-212). The warn path carries a
+// Fix, so self-check (FR-207) files it.
+func sttCheck(p config.Profile) Check {
+	const name = "stt"
+	s := p.Ingestion.STT
+	if s.ModeOr() == "off" {
+		return Check{Name: name, Status: StatusOK,
+			Detail: "off (set ingestion.stt.mode to whisper:<model> to transcribe audio files)"}
+	}
+	bin := strings.TrimSpace(s.Binary)
+	if bin == "" {
+		bin = "whisper"
+	}
+	resolved, err := lookPath(bin)
+	if err != nil {
+		return Check{Name: name, Status: StatusWarn,
+			Detail: fmt.Sprintf("stt is %s but %q was not found — audio files will be captured untranscribed", s.ModeOr(), bin),
+			Fix:    "install whisper.cpp and put its binary on PATH, or set ingestion.stt.binary"}
+	}
+	return Check{Name: name, Status: StatusOK,
+		Detail: fmt.Sprintf("%s ready (%s), max %d min", s.ModeOr(), resolved, s.MaxMinutesOr())}
 }

@@ -199,6 +199,9 @@ type IngestionConfig struct {
 	// available). Strictly local (ADR-035); output is content, never
 	// instructions (NFR-05).
 	Vision string `yaml:"vision"`
+	// STT configures local speech-to-text for KindAudio ingestion (FR-212,
+	// ADR-042). Off by default on both profiles.
+	STT STTConfig `yaml:"stt,omitempty"`
 	// MediaHosts are extra URL hosts auto-classified as caption-bearing media;
 	// the YouTube family is built in. e.g. ["vimeo.com"].
 	MediaHosts []string `yaml:"media_hosts"`
