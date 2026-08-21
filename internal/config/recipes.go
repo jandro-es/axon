@@ -26,10 +26,12 @@ type Recipe struct {
 
 // RecipeInput names one reader; exactly one of the reader fields is set.
 type RecipeInput struct {
-	Name        string             `yaml:"name"`
-	Note        *RecipeNoteInput   `yaml:"note,omitempty"`
-	Search      *RecipeSearchInput `yaml:"search,omitempty"`
-	RecentNotes *RecipeRecentInput `yaml:"recent_notes,omitempty"`
+	Name        string              `yaml:"name"`
+	Note        *RecipeNoteInput    `yaml:"note,omitempty"`
+	Search      *RecipeSearchInput  `yaml:"search,omitempty"`
+	RecentNotes *RecipeRecentInput  `yaml:"recent_notes,omitempty"`
+	StaleNotes  *RecipeStaleInput   `yaml:"stale_notes,omitempty"`
+	Sources     *RecipeSourcesInput `yaml:"sources,omitempty"`
 }
 
 // RecipeNoteInput reads one note's body.
@@ -49,6 +51,21 @@ type RecipeRecentInput struct {
 	Limit        int `yaml:"limit,omitempty"`
 }
 
+// RecipeStaleInput renders notes untouched since a cutoff as
+// "[[path]] (updated D)" — the inverse of RecipeRecentInput, with its own
+// wider range because staleness is by definition about older material.
+type RecipeStaleInput struct {
+	OlderThanDays int `yaml:"older_than_days,omitempty"` // 0 → default 90
+	Limit         int `yaml:"limit,omitempty"`           // 0 → default 20
+}
+
+// RecipeSourcesInput renders ingested sources as
+// "[[note]] — url (fetched D, kind, status)".
+type RecipeSourcesInput struct {
+	OlderThanDays int `yaml:"older_than_days,omitempty"` // 0 → no age filter
+	Limit         int `yaml:"limit,omitempty"`           // 0 → default 20
+}
+
 // RecipeOutput is the sink; exactly one field is set.
 type RecipeOutput struct {
 	Block  *RecipeBlockSink  `yaml:"block,omitempty"`
@@ -64,7 +81,10 @@ type RecipeBlockSink struct {
 // RecipeReviewSink proposes output lines to the review queue.
 type RecipeReviewSink struct{}
 
-const maxRecipeInputs = 8
+const (
+	maxRecipeInputs  = 8
+	maxRecipeAgeDays = 3650 // stale_notes / sources lookback ceiling (~10 years)
+)
 
 var (
 	recipeNameRe      = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,40}$`)
@@ -201,8 +221,26 @@ func validateRecipes(p Profile) error {
 					return fmt.Errorf("%s input %q: limit must be 0–100", where, in.Name)
 				}
 			}
+			if in.StaleNotes != nil {
+				readers++
+				if in.StaleNotes.OlderThanDays < 0 || in.StaleNotes.OlderThanDays > maxRecipeAgeDays {
+					return fmt.Errorf("%s input %q: older_than_days must be 0–%d", where, in.Name, maxRecipeAgeDays)
+				}
+				if in.StaleNotes.Limit < 0 || in.StaleNotes.Limit > 100 {
+					return fmt.Errorf("%s input %q: limit must be 0–100", where, in.Name)
+				}
+			}
+			if in.Sources != nil {
+				readers++
+				if in.Sources.OlderThanDays < 0 || in.Sources.OlderThanDays > maxRecipeAgeDays {
+					return fmt.Errorf("%s input %q: older_than_days must be 0–%d", where, in.Name, maxRecipeAgeDays)
+				}
+				if in.Sources.Limit < 0 || in.Sources.Limit > 100 {
+					return fmt.Errorf("%s input %q: limit must be 0–100", where, in.Name)
+				}
+			}
 			if readers != 1 {
-				return fmt.Errorf("%s input %q: exactly one of note, search, recent_notes required", where, in.Name)
+				return fmt.Errorf("%s input %q: exactly one of note, search, recent_notes, stale_notes, sources required", where, in.Name)
 			}
 		}
 		hasPrompt := strings.TrimSpace(r.Prompt) != ""
@@ -248,6 +286,19 @@ func validateRecipes(p Profile) error {
 		}
 		if sinks != 1 {
 			return fmt.Errorf("%s: exactly one sink (output.block or output.review) required", where)
+		}
+		// A review-sink recipe reading its own queue would feed on its own
+		// output: the input hash changes every run, so the change-gate can
+		// never skip and a prompt recipe burns a model call per tick forever
+		// (FR-202). The archive is safe — a human must accept or dismiss
+		// before anything lands there.
+		if r.Output.Review != nil {
+			for _, in := range r.Inputs {
+				if in.Note != nil && in.Note.Path == reviewQueueRecipePath {
+					return fmt.Errorf("%s: a review-sink recipe may not read %s (its own output would be its next input); read %s instead",
+						where, reviewQueueRecipePath, reviewArchiveRecipePath)
+				}
+			}
 		}
 	}
 	return nil

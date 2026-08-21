@@ -115,3 +115,78 @@ func TestValidateRecipesAllowsReviewQueueRead(t *testing.T) {
 		t.Fatalf("block-sink recipe reading the review queue must be legal: %v", err)
 	}
 }
+
+func TestValidateRecipesNewReaders(t *testing.T) {
+	base := func() Recipe {
+		r := validRecipe()
+		r.Inputs = []RecipeInput{
+			{Name: "dormant", StaleNotes: &RecipeStaleInput{OlderThanDays: 365, Limit: 20}},
+			{Name: "old", Sources: &RecipeSourcesInput{OlderThanDays: 180, Limit: 30}},
+		}
+		r.Prompt = "Stale: {{dormant}} Sources: {{old}}"
+		return r
+	}
+	if err := validateRecipes(Profile{Recipes: []Recipe{base()}}); err != nil {
+		t.Fatalf("valid new readers rejected: %v", err)
+	}
+	// Zero means "apply the default" for both, so an all-zero reader is legal.
+	z := base()
+	z.Inputs[0].StaleNotes = &RecipeStaleInput{}
+	z.Inputs[1].Sources = &RecipeSourcesInput{}
+	if err := validateRecipes(Profile{Recipes: []Recipe{z}}); err != nil {
+		t.Fatalf("zero-valued new readers rejected: %v", err)
+	}
+
+	cases := []struct {
+		name string
+		mut  func(*Recipe)
+		want string
+	}{
+		{"stale days too big", func(r *Recipe) { r.Inputs[0].StaleNotes.OlderThanDays = 3651 }, "older_than_days"},
+		{"stale days negative", func(r *Recipe) { r.Inputs[0].StaleNotes.OlderThanDays = -1 }, "older_than_days"},
+		{"stale limit too big", func(r *Recipe) { r.Inputs[0].StaleNotes.Limit = 101 }, "limit"},
+		{"sources days too big", func(r *Recipe) { r.Inputs[1].Sources.OlderThanDays = 3651 }, "older_than_days"},
+		{"sources limit negative", func(r *Recipe) { r.Inputs[1].Sources.Limit = -1 }, "limit"},
+		{"stale plus note is two readers", func(r *Recipe) {
+			r.Inputs[0].Note = &RecipeNoteInput{Path: "a.md"}
+		}, "exactly one"},
+		{"sources plus search is two readers", func(r *Recipe) {
+			r.Inputs[1].Search = &RecipeSearchInput{Query: "x"}
+		}, "exactly one"},
+	}
+	for _, c := range cases {
+		r := base()
+		c.mut(&r)
+		err := validateRecipes(Profile{Recipes: []Recipe{r}})
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: want error containing %q, got %v", c.name, c.want, err)
+		}
+	}
+}
+
+func TestValidateRecipesRefusesSelfFeedingReviewRecipe(t *testing.T) {
+	// review sink + reads its own queue => the change-gate can never skip.
+	bad := validRecipe()
+	bad.Inputs[1].Note.Path = ".axon/review-queue.md"
+	bad.Output = RecipeOutput{Review: &RecipeReviewSink{}}
+	err := validateRecipes(Profile{Recipes: []Recipe{bad}})
+	if err == nil || !strings.Contains(err.Error(), "own output") {
+		t.Fatalf("self-feeding review recipe must be refused, got %v", err)
+	}
+
+	// Legal neighbour 1: review sink reading the ARCHIVE (a human must act
+	// before anything lands there).
+	okArchive := validRecipe()
+	okArchive.Inputs[1].Note.Path = ".axon/review-queue-archive.md"
+	okArchive.Output = RecipeOutput{Review: &RecipeReviewSink{}}
+	if err := validateRecipes(Profile{Recipes: []Recipe{okArchive}}); err != nil {
+		t.Fatalf("review sink reading the archive must be legal: %v", err)
+	}
+
+	// Legal neighbour 2: BLOCK sink reading the queue — D3's actual case.
+	okBlock := validRecipe()
+	okBlock.Inputs[1].Note.Path = ".axon/review-queue.md"
+	if err := validateRecipes(Profile{Recipes: []Recipe{okBlock}}); err != nil {
+		t.Fatalf("block sink reading the queue must be legal: %v", err)
+	}
+}
