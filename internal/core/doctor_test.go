@@ -578,3 +578,26 @@ func splitHostPort(t *testing.T, addr string) (string, int) {
 	}
 	return host, port
 }
+
+func TestDoctorAppendsExtrasInOrder(t *testing.T) {
+	base := Doctor(nil, "personal")
+	withExtras := Doctor(nil, "personal",
+		Check{Name: "update-available", Status: StatusOK, Detail: "up to date"},
+		Check{Name: "recipes", Status: StatusWarn, Detail: "one unscheduled", Fix: "schedule it"},
+	)
+	if len(withExtras.Checks) != len(base.Checks)+2 {
+		t.Fatalf("want %d checks, got %d", len(base.Checks)+2, len(withExtras.Checks))
+	}
+	last := withExtras.Checks[len(withExtras.Checks)-2:]
+	if last[0].Name != "update-available" || last[1].Name != "recipes" {
+		t.Fatalf("extras must be appended in order, got %+v", last)
+	}
+	if last[1].Fix != "schedule it" {
+		t.Fatalf("extras must pass through unchanged, got %+v", last[1])
+	}
+	// A failing extra must count toward the overall verdict.
+	failing := Doctor(nil, "personal", Check{Name: "x", Status: StatusFail, Detail: "broken"})
+	if !failing.HasFailure() {
+		t.Fatal("a failing extra must make the report fail")
+	}
+}

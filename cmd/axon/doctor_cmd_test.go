@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/jandro-es/axon/internal/config"
+	"github.com/jandro-es/axon/internal/core"
 )
 
 func TestDoctorCommandJSON(t *testing.T) {
@@ -58,5 +61,42 @@ func TestDoctorCommandJSON(t *testing.T) {
 	// A JSON run must not leak the styled human report onto stdout.
 	if strings.Contains(out, "axon doctor") {
 		t.Errorf("doctor --json leaked human output:\n%s", out)
+	}
+}
+
+// FR-206: the CLI and the daemon must assemble the SAME report. Both build
+// their extras from this one helper, so this test is the regression that stops
+// the two drifting apart again.
+func TestSelfCheckExtrasNamesTheTwoCLIOnlyChecks(t *testing.T) {
+	cfg := &config.Config{
+		ActiveProfile: "personal",
+		Profiles:      map[string]config.Profile{"personal": {}},
+	}
+	extras := selfCheckExtras(cfg, "personal")
+	var names []string
+	for _, c := range extras {
+		names = append(names, c.Name)
+	}
+	want := []string{"update-available", "recipes"}
+	if len(names) != len(want) {
+		t.Fatalf("want %v, got %v", want, names)
+	}
+	for i := range want {
+		if names[i] != want[i] {
+			t.Fatalf("want %v, got %v", want, names)
+		}
+	}
+
+	// A nil config still yields the update check — doctor must work when the
+	// config failed to load.
+	if got := selfCheckExtras(nil, "personal"); len(got) != 1 || got[0].Name != "update-available" {
+		t.Fatalf("nil cfg: want just update-available, got %+v", got)
+	}
+
+	// The full report ends with exactly these, in this order.
+	report := core.Doctor(cfg, "personal", selfCheckExtras(cfg, "personal")...)
+	tail := report.Checks[len(report.Checks)-2:]
+	if tail[0].Name != "update-available" || tail[1].Name != "recipes" {
+		t.Fatalf("report tail wrong: %+v", tail)
 	}
 }

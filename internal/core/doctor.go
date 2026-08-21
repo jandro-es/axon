@@ -74,7 +74,14 @@ var lookupEnv = os.LookupEnv
 // config failed to load); the relevant checks degrade to warnings/failures
 // rather than panicking. activeProfile is the resolved profile name, used to
 // pick the profile whose auth_mode governs the ANTHROPIC_API_KEY check.
-func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
+//
+// extras are caller-supplied checks appended after the built-ins, in order.
+// They exist because two checks cannot live here: `update-available` needs the
+// build version (a main-package linker variable), and `recipes` lives in
+// internal/automations, which imports core — so core importing it back would
+// be an import cycle. Routing them through this parameter keeps ONE assembly
+// path, so the CLI and the daemon cannot disagree about the report (FR-206).
+func Doctor(cfg *config.Config, activeProfile string, extras ...Check) DoctorReport {
 	var checks []Check
 
 	// 1. Config presence/validity.
@@ -180,6 +187,7 @@ func Doctor(cfg *config.Config, activeProfile string) DoctorReport {
 		}
 	}
 
+	checks = append(checks, extras...)
 	return DoctorReport{Checks: checks}
 }
 

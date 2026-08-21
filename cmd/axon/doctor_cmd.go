@@ -54,15 +54,7 @@ func newDoctorCmd(gf *globalFlags) *cobra.Command {
 				activeProfile = cfg.ResolveProfileName(gf.profile)
 			}
 
-			report := core.Doctor(cfg, activeProfile)
-			report.Checks = append(report.Checks, updateAvailabilityCheck())
-			// User-defined recipes (FR-201): built in automations, which core
-			// cannot import (automations→core already exists).
-			if cfg != nil {
-				if p, ok := cfg.Profiles[activeProfile]; ok {
-					report.Checks = append(report.Checks, automations.RecipesCheck(p))
-				}
-			}
+			report := core.Doctor(cfg, activeProfile, selfCheckExtras(cfg, activeProfile)...)
 
 			out := cmd.OutOrStdout()
 
@@ -145,6 +137,21 @@ func newDoctorCmd(gf *globalFlags) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&asJSON, "json", false, "emit the doctor report as JSON")
 	return cmd
+}
+
+// selfCheckExtras builds the two checks core cannot compute: update
+// availability (needs the build version) and recipes (lives in automations,
+// which core cannot import). Both the `axon doctor` command and the daemon's
+// self-check seam call this, so the two reports are identical by construction
+// (FR-206) rather than by two lists someone has to keep in sync.
+func selfCheckExtras(cfg *config.Config, activeProfile string) []core.Check {
+	extras := []core.Check{updateAvailabilityCheck()}
+	if cfg != nil {
+		if p, ok := cfg.Profiles[activeProfile]; ok {
+			extras = append(extras, automations.RecipesCheck(p))
+		}
+	}
+	return extras
 }
 
 // updateAvailabilityCheck reads ONLY the daily update-check cache (written by
