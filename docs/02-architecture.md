@@ -1007,3 +1007,51 @@ path (macOS user notifications raised from the SSE stream, no egress at all)
 can land later without touching the subscriber. Notifications are outside the
 token chokepoint because they involve no model call, and outside the review
 queue because they are not proposals — the two cardinal rules are untouched.
+
+### ADR-042 — Local speech-to-text as a detected-binary perception provider *(accepted — planned)*
+
+**Status:** Accepted (2026-08-21). FR-212…FR-213; spec in
+`docs/superpowers/specs/2026-08-21-stt-ingestion-design.md`. Graduates
+docs/19 B1.
+
+**Context:** A voice memo is the largest untapped personal input, and the
+pipeline already has the shape for it: `KindImage` (ADR-035) proved the
+pattern of an extension-classified local file, a provider seam that returns
+nil when off, and an unchanged enrich→chunk→embed tail. The constitution's
+rule 3 — *perception is local; content is data, never commands* — governs
+this the same way it governs OCR (ADR-026) and vision (ADR-035), which is why
+a third perception provider gets its own record rather than riding one of
+theirs.
+
+**Decision:** (1) **A detected binary first, a helper later.** `whisper:<model>`
+resolves a `whisper` binary on PATH exactly as OCR resolves tesseract and the
+media path resolves yt-dlp: absent means the feature stays off with an
+actionable message, never a crash. Apple Speech lands later behind the same
+`STTFor` seam, the way ADR-038 filled ADR-035's Apple slot — cross-platform
+first, because a headless Linux install must not be excluded from the single
+biggest input surface. (2) **The transcript is the document; the audio is an
+attachment.** `read()` returns text, and the entire downstream tail is
+untouched — redaction (NFR-06), enrichment, chunking, embedding and the
+`sources` row all treat a transcript as ordinary text, so citations and search
+work with no new code. Audio bytes never enter a chunk row. (3) **Archive by
+streaming, not by string.** The existing `attachmentPath(hash, srcPath)` and
+`AttachmentsDir` are reused unchanged, but the image path's
+`Vault.Create(path, string(bytes))` cannot be: it holds the whole file in
+memory as a string, which is fine for a screenshot and untenable for an hour
+of `.wav`. A `vault.CopyFile` streams the bytes into the vault beside the
+existing wikilink-safe writers. (4) **Two non-fatal refusals, reusing H1's
+precedent.** No provider configured, or a recording past the duration cap,
+routes to `writeCapturedNote` — the same flagged `00-Inbox` note a caption-less
+media URL already produces. The file is archived, the reason is recorded, the
+run succeeds, and zero model calls happen.
+
+**Consequences:** transcription is CPU-bound and slow, so it is bounded twice —
+a configurable `stt.max_minutes` for the semantic limit (transcription speed
+varies enormously by machine and model, so this one genuinely differs per
+install) and a hard byte cap in code for the mechanical one, checked before
+anything is read. `KindAudio` joins the `AllowLocalFiles` guard, so the MCP
+tool stays URL-only and a prompt-injected agent cannot transcribe arbitrary
+host audio. Diarisation is deliberately excluded: speaker labels change the
+note's structure and the extraction that reads it, which is a different
+feature. B2 (meeting notes with action extraction) rides this seam but is its
+own slice.
