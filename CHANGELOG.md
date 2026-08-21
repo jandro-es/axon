@@ -6,7 +6,29 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-08-21
+
+**Second brain, self-maintaining.** A minor release: no schema change (stays
+v7), no new MCP tool, no new ADR. Three slices that all cost nothing to run —
+every addition is zero-model — and two of them are off by default. Built-in
+automations go 24 → 26.
+
 ### Added
+
+- **Recipes can read the review queue, and reach note staleness and ingested
+  sources.** (FR-202, FR-203; **ADR-039 amended**, no new ADR, no schema
+  change; graduating `docs/20` C2 Priorities 1–2.) The recipe path rule is now
+  **two** rules: the block sink still refuses `.axon/` entirely, but a note
+  *input* may read `.axon/review-queue.md` and `.axon/review-queue-archive.md`
+  — reading is not writing, and a weekly-review recipe needs the queue.
+  Nothing else under `.axon/` opened up. Two new zero-model readers join the
+  three existing ones: `stale_notes {older_than_days, limit}` (notes untouched
+  before a cutoff, up to 10 years back — a sibling of `recent_notes`, which
+  keeps its honest 90-day cap) and `sources {older_than_days, limit}`
+  (`[[note]] — url (fetched DATE, kind, status)` from the ingest table, status
+  rendered and never filtered). One combination is refused: a `review {}`-sink
+  recipe may not read its own queue, because its output would be its next
+  input and the change-gate could never skip — read the archive instead.
 
 - **Orphaned and dormant notes now have a place in the vault.** (FR-204,
   FR-205; no ADR, no schema change; graduating `docs/19` E1 and closing
@@ -33,20 +55,13 @@ All notable changes to this project are documented here. The format is based on
   to receive suggestions. Same budget, same proposals, spent where the graph is
   actually broken.
 
-- **Recipes can read the review queue, and reach note staleness and ingested
-  sources.** (FR-202, FR-203; **ADR-039 amended**, no new ADR, no schema
-  change; graduating `docs/20` C2 Priorities 1–2.) The recipe path rule is now
-  **two** rules: the block sink still refuses `.axon/` entirely, but a note
-  *input* may read `.axon/review-queue.md` and `.axon/review-queue-archive.md`
-  — reading is not writing, and a weekly-review recipe needs the queue.
-  Nothing else under `.axon/` opened up. Two new zero-model readers join the
-  three existing ones: `stale_notes {older_than_days, limit}` (notes untouched
-  before a cutoff, up to 10 years back — a sibling of `recent_notes`, which
-  keeps its honest 90-day cap) and `sources {older_than_days, limit}`
-  (`[[note]] — url (fetched DATE, kind, status)` from the ingest table, status
-  rendered and never filtered). One combination is refused: a `review {}`-sink
-  recipe may not read its own queue, because its output would be its next
-  input and the change-gate could never skip — read the archive instead.
+- **The daemon and the CLI could have disagreed about `axon doctor`.** (FR-206.)
+  The full report was assembled in `cmd/axon/doctor_cmd.go`, which appended
+  `update-available` and `recipes` *after* `core.Doctor` returned — so anything
+  calling `core.Doctor` in-process saw a smaller report than the one you read.
+  Nothing did yet, which is why this surfaced as a latent problem rather than a
+  bug; `self-check` would have been the first. Both paths now assemble through
+  one helper, pinned by a regression test.
 
 ## [1.5.0] — 2026-08-21
 
@@ -1141,7 +1156,8 @@ The initial feature-complete build, implemented in phases against
   `config get/set`. *(PDF ingestion, the api_key adapter and `config get/set`
   were implemented in 0.10.0.)*
 
-[Unreleased]: https://github.com/jandro-es/axon/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/jandro-es/axon/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/jandro-es/axon/releases/tag/v1.6.0
 [1.5.0]: https://github.com/jandro-es/axon/releases/tag/v1.5.0
 [1.4.0]: https://github.com/jandro-es/axon/releases/tag/v1.4.0
 [1.3.10]: https://github.com/jandro-es/axon/releases/tag/v1.3.10

@@ -183,7 +183,7 @@ rather than a built-in.
 `axon health` scores the vault; 1.3.8's Hubs & orphans made link topology
 visible. The gap is *acting* on health, not seeing it.
 
-### E1 — Orphan & decay report with proposals (S) · **SHIPPED 2026-08-21 — FR-204/FR-205** (spec: `docs/superpowers/specs/2026-08-21-orphan-decay-report-design.md`)
+### E1 — Orphan & decay report with proposals (S) · **SHIPPED 2026-08-21 in v1.6.0 — FR-204/FR-205** (spec: `docs/superpowers/specs/2026-08-21-orphan-decay-report-design.md`)
 **Value:** orphans and dormant clusters are visible but inert; the fix (link it,
 merge it, archive it) still requires the owner to notice.
 **Shape:** a zero-model weekly sweep pairing each orphan with its nearest

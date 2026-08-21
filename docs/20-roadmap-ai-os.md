@@ -88,7 +88,7 @@ sink; not agentic (one-shot `runModel` only); recipes live in `config.yaml`
 (outside every model write path — vault-portable sharing deferred), scheduled
 by ordinary `automations.<name>` entries.
 
-### C2 — Recipe vocabulary v2: let recipes read `.axon/`, then reach the derived tables (S) · **COMPLETE 2026-08-21** — P1+P2 shipped (FR-202, FR-203, ADR-039 amended; spec: `docs/superpowers/specs/2026-08-21-recipe-vocabulary-v2-design.md`), P3 closed by composition via `docs/19` E1
+### C2 — Recipe vocabulary v2: let recipes read `.axon/`, then reach the derived tables (S) · **COMPLETE 2026-08-21 in v1.6.0** — P1+P2 shipped (FR-202, FR-203, ADR-039 amended; spec: `docs/superpowers/specs/2026-08-21-recipe-vocabulary-v2-design.md`), P3 closed by composition via `docs/19` E1
 *Reframed 2026-08-21 after a second experiment; the first draft led with a
 `sources` reader, which the D3 result demoted.*
 
@@ -222,7 +222,7 @@ replaces the Dataview dashboards in the scaffold.
 
 ## Theme G — Self-maintenance
 
-### G1 — The daemon proposes its own fixes (M) · **SHIPPED 2026-08-21 — FR-206/FR-207** (spec: `docs/superpowers/specs/2026-08-21-self-maintenance-design.md`)
+### G1 — The daemon proposes its own fixes (M) · **SHIPPED 2026-08-21 in v1.6.0 — FR-206/FR-207** (spec: `docs/superpowers/specs/2026-08-21-self-maintenance-design.md`)
 **Value:** doctor already knows what's wrong *and* the fix (FR-185
 remediations); the "Needs you" panel shows it. The last step is AXON filing the
 work where the owner already reviews work: the review queue. A failing

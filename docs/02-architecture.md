@@ -587,7 +587,7 @@ or migration, no new automation, no new MCP tool. (Spec:
 `docs/superpowers/specs/2026-07-10-h1-multimodal-ingestion-design.md`; FR-171,
 FR-172, FR-173.)
 
-### ADR-036 — Deep research: bounded, budgeted, closed-book web research over curated sources *(accepted — planned)*
+### ADR-036 — Deep research: bounded, budgeted, closed-book web research over curated sources *(accepted — built)*
 
 **Status:** Accepted (2026-07-10, roadmap 1.3 H2). The decision surface for the
 `deep-research` automation — AXON's first outbound *research* egress.
