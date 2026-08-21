@@ -13,7 +13,8 @@ All notable changes to this project are documented here. The format is based on
   `action-extract` alongside STT and a transcribed standup yields proposals
   like `action "Send the migration plan by Friday"`, each citing the transcript
   it came from; accepting one writes a real checkbox into that note.
-  `docs/GUIDE.md` walks through it.
+  `docs/GUIDE.md` walks through it. *Documentation only — the enabling code
+  shipped in v1.8.0, so this entry adds no binary change.*
 
 ## [1.8.0] — 2026-08-21
 
