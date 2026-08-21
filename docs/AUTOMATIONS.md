@@ -55,6 +55,9 @@ ingested through the pipeline; originals are **archived, never deleted**.
 Makes no model call of its own — enrichment only happens when
 `capture.enrich: claude`, and then through the chokepoint on the routine tier.
 
+It also sweeps any folders listed in `capture.watch_folders` — absolute paths **outside** the vault. Their top-level files are moved into `00-Inbox` and then ingested and archived exactly like an inbox drop, so you can drop a PDF in `~/Downloads/axon` without opening Obsidian. Off by default (an empty list is the off state). Symlinks are never followed, a file still being written is left until it settles, and system and home roots are refused at config load.
+
+
 ### `inbox-triage` — on, classify tier, every 30 min
 Classifies new inbox items and proposes filing destinations to the **review
 queue**. **Does not** move anything itself — every move is your accept.

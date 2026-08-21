@@ -180,7 +180,7 @@ platform of importers. The re-proposal is one primitive: **watch-folders**. The
 capture funnel (FR-26) already turns files-in-a-folder into captures — this
 merely widens *which* folders, reusing every downstream guarantee.
 
-### E1 — Watch-folders (S) · candidate — not scheduled
+### E1 — Watch-folders (S) · **SHIPPED 2026-08-21 — FR-208/FR-209, ADR-040** (spec: `docs/superpowers/specs/2026-08-21-watch-folders-design.md`)
 **Value:** drop a PDF in `~/Downloads/axon`, screenshot to a watched folder,
 export from any app — it flows into the inbox without opening Obsidian.
 **Shape:** config-listed external folders polled by the capture automation
@@ -189,6 +189,28 @@ kind-classification); off by default; each folder explicitly listed (no home-dir
 scanning, ever).
 **Open decisions:** copy vs move semantics from watched folders; per-folder
 kind hints (e.g. a screenshots folder defaulting to image ingestion).
+
+**Open decisions resolved.** **Move, not copy** — it matches the drop-box
+model this entry describes, self-dedups (a moved file cannot be reprocessed,
+so there is no seen-ledger to keep), and destroys nothing: the file lands in
+`00-Inbox` and then the vault archive. Copy would have needed persistent
+per-folder state and left the watched folder growing forever. **No per-folder
+kind hints** — extension classification is shipped and tested, and a hint
+would be a second source of truth that can disagree with the first.
+
+**Two refusals this entry did not anticipate, both found while designing.**
+**Symlinks are skipped:** `os.ReadDir` reports one as not-a-directory, so it
+would have passed capture's existing filter, been moved in, and then `Ingest`
+would have *followed* it — a link to `~/.ssh/id_rsa` becoming a vault note and
+model context. The inbox never carried that exposure because it holds what the
+owner put there. **Files still being written are skipped** for 30 seconds:
+capture has no settle check because dragging a file into `00-Inbox` is atomic
+from the owner's side, but a browser writing into a watched folder is not.
+
+**And one trap that would have shipped a feature that does nothing:**
+`DetectChange` runs before `Run`, so the capture cursor had to cover the
+watched folders as well as the inbox — otherwise a new file outside the vault
+leaves the inbox unchanged, the tick is skipped, and the sweep never runs.
 
 ### E2 — macOS share extension (S, Companion) · candidate — not scheduled
 **Value:** the system Share sheet becomes a capture path from every app.
@@ -284,8 +306,8 @@ note, which is the surface a recipe reads.
 
 **G1 has now shipped** — and recipes did feed it exactly as predicted: the
 name-collision and unscheduled-recipe warnings both carry a `Fix`, so they
-became the first things `self-check` files. **E1 watch-folders** and **B1
-notifications** remain the small
+became the first things `self-check` files. **E1 watch-folders has now shipped too.** **B1
+notifications** remains the small
 high-leverage starts of their themes; **D1** is the local-fleet play. As with
 docs/19, these compete for the same build slots; the two roadmaps are
 deliberately separate lenses, not separate teams.

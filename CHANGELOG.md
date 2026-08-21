@@ -18,6 +18,13 @@ All notable changes to this project are documented here. The format is based on
   the whole note, and a recipe idles while any input note is missing.
 - The shipped recipe examples are now validated by a test, so a renamed field
   can no longer rot them silently.
+- **Drop a file in a folder outside your vault and it flows in.** (FR-208,
+  FR-209, **ADR-040**; no schema change.) List absolute paths under
+  `capture.watch_folders` and their top-level files are moved into `00-Inbox`
+  on the existing capture tick, then ingested and archived exactly as inbox
+  drops are. Off by default — an empty list is the off state. Symlinks are
+  never followed, files still being written are left until they settle, and
+  system and home roots are refused at config load.
 
 ## [1.6.0] — 2026-08-21
 

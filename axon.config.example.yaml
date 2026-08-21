@@ -95,6 +95,13 @@ profiles:
     capture:                                  # inbox capture funnel (ADR-016)
       enrich: heuristic                       # heuristic (default, zero tokens) | claude (chokepoint, routine tier)
       archive_dir: "04-Archive/Capture"       # where ingested inbox originals are moved (never deleted)
+      # watch_folders:                        # drop-in capture from OUTSIDE the vault (ADR-040)
+      #   - "/Users/me/Downloads/axon"        # absolute paths only; top-level files only, no recursion
+      #   - "/Users/me/Pictures/Screenshots"  # files are MOVED into 00-Inbox, then ingested + archived
+      # Empty/absent = off (the default, both profiles). Refused at load:
+      # relative paths, paths inside the vault, and system/home roots
+      # ($HOME, /, /etc, ~/.ssh, ~/.aws, ~/.config, ~/Library). Symlinks are
+      # never moved, and a file is left alone until it stops changing for 30s.
 
     # subscriptions:                          # RSS/Atom feeds polled hourly (ADR-019); manage with axon subscribe
     #   enrich: heuristic                     # heuristic (default, zero tokens) | claude (chokepoint, routine tier)

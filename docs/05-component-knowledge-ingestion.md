@@ -102,3 +102,21 @@ sqlite-vec brute-force is fine to ~10^5–10^6 chunks on commodity hardware, esp
 - Re-running the same URL with unchanged content makes **no** model call and logs a skip (FR-24, FR-31).
 - A denied domain (work profile) fails before any fetch (NFR-05).
 - `reindex` rebuilds all chunks/vectors from the vault notes (ADR-006 / S9).
+
+## Entry points for local files
+
+Local-file ingestion (`AllowLocalFiles`) has three entry points, and all of
+them funnel through `00-Inbox`:
+
+1. **`axon ingest <path>`** — owner-initiated, from the CLI.
+2. **The `capture` automation** — files the owner drops into `00-Inbox`.
+3. **Watched folders (FR-208/209, ADR-040)** — absolute paths outside the
+   vault listed in `capture.watch_folders`, whose top-level files `capture`
+   *moves* into `00-Inbox` before its own sweep, so everything downstream is
+   identical to (2). Symlinks are never moved, so a link in a watched folder
+   cannot be followed to its target.
+
+The agent-driven path (the `knowledge_ingest` MCP tool) sets
+`AllowLocalFiles: false` and stays URL-only, so a prompt-injected agent
+cannot read arbitrary host files into the vault — watched folders do not
+change that: they are config, and config is outside every model write path.

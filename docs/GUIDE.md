@@ -731,6 +731,28 @@ half-review.
 
 ---
 
+### Drop files in from anywhere
+
+You do not have to open Obsidian to file something. List a folder under
+`capture.watch_folders` and anything you drop there is pulled in on the next
+capture tick (every five minutes by default):
+
+```yaml
+capture:
+  watch_folders:
+    - "/Users/me/Downloads/axon"
+```
+
+Make the folder, drop a PDF in it, and within five minutes the content is in
+your knowledge base and the original file is in `04-Archive/Capture/` — the
+file is moved, so the folder empties itself and nothing is ever processed
+twice. Paths must be absolute and outside the vault; AXON refuses system and
+home roots (`$HOME`, `/`, `/etc`, `~/.ssh`, …) at config load, because a
+watch folder is a drop-box, not a place to point at your whole disk. Symlinks
+are never followed, and a file that is still being written is left alone until
+it stops changing. `axon doctor` tells you if a watched folder has gone
+missing.
+
 ## 9. Token budgeting
 
 Every Claude call passes through the token manager — and there is exactly one
