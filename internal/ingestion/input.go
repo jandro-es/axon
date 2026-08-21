@@ -14,6 +14,7 @@ const (
 	KindFile  InputKind = "file"
 	KindImage InputKind = "image"
 	KindMedia InputKind = "media"
+	KindAudio InputKind = "audio"
 )
 
 // Input is a classified, normalised ingest target.
@@ -26,6 +27,13 @@ type Input struct {
 }
 
 // imageExts are the lowercase extensions classified as KindImage.
+// audioExts are the lowercase extensions classified as KindAudio (FR-212).
+// filepathExt lowercases, so an uppercase extension matches too.
+var audioExts = map[string]bool{
+	".m4a": true, ".mp3": true, ".wav": true, ".aac": true,
+	".flac": true, ".ogg": true, ".opus": true,
+}
+
 var imageExts = map[string]bool{
 	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true,
 	".heic": true, ".heif": true, ".tiff": true, ".tif": true, ".bmp": true,
@@ -57,6 +65,8 @@ func ClassifyInput(arg string, mediaHosts []string, forceMedia bool) Input {
 		kind = KindPDF
 	case imageExts[ext]:
 		kind = KindImage
+	case audioExts[ext]:
+		kind = KindAudio
 	}
 	return Input{Kind: kind, Raw: arg, URL: "file://" + path, Path: path}
 }

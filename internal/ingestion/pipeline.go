@@ -104,7 +104,7 @@ func (p *Pipeline) Ingest(ctx context.Context, arg string, opts IngestOptions) (
 		if err := CheckIngestPolicy(p.Policy, in.Host); err != nil {
 			return res, err
 		}
-	case KindFile, KindPDF, KindImage:
+	case KindFile, KindPDF, KindImage, KindAudio:
 		if !opts.AllowLocalFiles {
 			return res, fmt.Errorf("local-file ingestion of %q is not permitted on this path (agent-driven ingestion is URL-only)", arg)
 		}

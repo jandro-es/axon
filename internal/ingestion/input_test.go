@@ -1,6 +1,12 @@
 package ingestion
 
-import "testing"
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"github.com/jandro-es/axon/internal/config"
+)
 
 func TestClassifyInput(t *testing.T) {
 	tests := []struct {
@@ -34,5 +40,37 @@ func TestClassifyInput(t *testing.T) {
 				t.Fatalf("host = %q, want %q", got.Host, tt.wantHost)
 			}
 		})
+	}
+}
+
+func TestClassifyInputAudio(t *testing.T) {
+	for _, ext := range []string{".m4a", ".mp3", ".wav", ".aac", ".flac", ".ogg", ".opus"} {
+		in := ClassifyInput("/tmp/recording"+ext, nil, false)
+		if in.Kind != KindAudio {
+			t.Errorf("%s classified as %q, want audio", ext, in.Kind)
+		}
+	}
+	// filepathExt lowercases, so uppercase extensions classify too.
+	if got := ClassifyInput("/tmp/Recording.M4A", nil, false); got.Kind != KindAudio {
+		t.Errorf("uppercase extension classified as %q, want audio", got.Kind)
+	}
+	if got := ClassifyInput("/tmp/notes.txt", nil, false); got.Kind != KindFile {
+		t.Errorf("txt classified as %q, want file", got.Kind)
+	}
+	if got := ClassifyInput("/tmp/scan.png", nil, false); got.Kind != KindImage {
+		t.Errorf("png classified as %q, want image", got.Kind)
+	}
+	if got := ClassifyInput("https://example.com/ep.mp3", nil, false); got.Kind != KindURL {
+		t.Errorf("http url classified as %q, want url", got.Kind)
+	}
+}
+
+// The security-relevant half: the knowledge_ingest MCP tool exists to be
+// called by a model, so it must never be able to transcribe host audio.
+func TestAudioIngestRefusedWithoutAllowLocalFiles(t *testing.T) {
+	p, _, _ := newTestPipeline(t, config.PolicyConfig{})
+	_, err := p.Ingest(context.Background(), "/tmp/secret.m4a", IngestOptions{AllowLocalFiles: false})
+	if err == nil || !strings.Contains(err.Error(), "not permitted") {
+		t.Fatalf("agent-driven audio ingestion must be refused, got %v", err)
 	}
 }
