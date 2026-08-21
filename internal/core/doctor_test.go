@@ -633,3 +633,41 @@ func TestWatchFoldersCheck(t *testing.T) {
 		t.Fatal("the warning must carry a Fix — self-check only proposes checks that have one")
 	}
 }
+
+func TestNotifyCheck(t *testing.T) {
+	off := notifyCheck(config.Profile{})
+	if off.Status != StatusOK || !strings.Contains(off.Detail, "off") {
+		t.Fatalf("empty config should read as off: %+v", off)
+	}
+	if off.Fix != "" {
+		t.Fatalf("an off check has nothing to fix: %+v", off)
+	}
+
+	okProf := config.Profile{
+		Notify: config.NotifyConfig{URL: "https://ntfy.sh/x", Events: []string{"automation.fail"}},
+		Policy: config.PolicyConfig{EgressAllowlist: []string{"*"}},
+	}
+	good := notifyCheck(okProf)
+	if good.Status != StatusOK || !strings.Contains(good.Detail, "ntfy.sh") {
+		t.Fatalf("a permitted destination should pass and name the host: %+v", good)
+	}
+
+	blocked := okProf
+	blocked.Policy = config.PolicyConfig{EgressAllowlist: []string{"localhost"}}
+	warn := notifyCheck(blocked)
+	if warn.Status != StatusWarn || warn.Fix == "" {
+		t.Fatalf("a destination outside the egress allowlist must warn with a Fix: %+v", warn)
+	}
+
+	// An unrecognised kind warns here rather than being refused at config
+	// load — kinds are not statically enumerable (ADR-041).
+	typo := okProf
+	typo.Notify.Events = []string{"automation.failed"}
+	kindWarn := notifyCheck(typo)
+	if kindWarn.Status != StatusWarn || !strings.Contains(kindWarn.Detail, "automation.failed") {
+		t.Fatalf("an unrecognised kind must warn and name itself: %+v", kindWarn)
+	}
+	if kindWarn.Fix == "" {
+		t.Fatal("the kind warning must carry a Fix so self-check files it")
+	}
+}

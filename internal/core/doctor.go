@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,7 +24,9 @@ import (
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/embeddings"
+	"github.com/jandro-es/axon/internal/events"
 	"github.com/jandro-es/axon/internal/identity"
+	"github.com/jandro-es/axon/internal/ingestion"
 	"github.com/jandro-es/axon/internal/service"
 	"github.com/jandro-es/axon/internal/vault"
 )
@@ -179,6 +182,7 @@ func Doctor(cfg *config.Config, activeProfile string, extras ...Check) DoctorRep
 			checks = append(checks, memoryFactsCheck(paths))
 			checks = append(checks, actionsCheck(paths))
 			checks = append(checks, watchFoldersCheck(p))
+			checks = append(checks, notifyCheck(p))
 			checks = append(checks, localModelsVettingChecks(paths, p)...)
 			// 8–9. Multi-client wiring (FR-75): is the AXON MCP server registered
 			// with each Claude client, and is each client's guarantee honest.
@@ -1079,4 +1083,43 @@ func watchFoldersCheck(p config.Profile) Check {
 	}
 	return Check{Name: name, Status: StatusOK,
 		Detail: fmt.Sprintf("%d watched folder(s) readable — files dropped there are captured on the capture tick", len(folders))}
+}
+
+// notifyCheck reports on outbound notifications (FR-210). Both warn paths
+// carry a Fix, so self-check (FR-207) files them.
+//
+// The unrecognised-kind warning lives HERE rather than in config validation
+// because event kinds are not statically enumerable — they are literals at
+// some emitters, parameters at others, and built at runtime from user input
+// ("review." + action). A stale list refusing valid config would be a worse
+// failure than the typo it prevents (ADR-041).
+func notifyCheck(p config.Profile) Check {
+	const name = "notify"
+	if !p.Notify.Enabled() {
+		return Check{Name: name, Status: StatusOK,
+			Detail: "off (set notify.url and notify.events to be told when something happens)"}
+	}
+	host := ""
+	if u, err := url.Parse(p.Notify.URL); err == nil {
+		host = u.Hostname()
+	}
+	if err := ingestion.CheckEgressPolicy(p.Policy, host); err != nil {
+		return Check{Name: name, Status: StatusWarn,
+			Detail: fmt.Sprintf("destination %s is refused by the egress policy — no notifications will be sent (%v)", host, err),
+			Fix:    "add the host to policy.egress_allowlist, or clear notify.url"}
+	}
+	var unknown []string
+	for _, k := range p.Notify.Events {
+		if !events.IsKnownKind(strings.TrimSpace(k)) {
+			unknown = append(unknown, k)
+		}
+	}
+	if len(unknown) > 0 {
+		return Check{Name: name, Status: StatusWarn,
+			Detail: fmt.Sprintf("%d event kind(s) → %s, but these are not kinds AXON is known to publish and will never fire: %s",
+				len(p.Notify.Events), host, strings.Join(unknown, ", ")),
+			Fix: "check the spelling against `axon doctor --json` output, or remove them from notify.events"}
+	}
+	return Check{Name: name, Status: StatusOK,
+		Detail: fmt.Sprintf("%d event kind(s) → %s", len(p.Notify.Events), host)}
 }
