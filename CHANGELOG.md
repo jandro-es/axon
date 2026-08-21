@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Voice memos become searchable notes.** (FR-212, FR-213, **ADR-042**; no
+  schema change.) Point `ingestion.stt.mode` at a local whisper.cpp model and
+  `axon ingest memo.m4a` — or a recording dropped in a watched folder —
+  transcribes on your machine and becomes an ordinary source note: searchable,
+  citable, redacted like any other text. The recording is archived beside it.
+  Off by default; with STT off, or a recording past a cap, the file is archived
+  and a flagged inbox note records why, rather than failing.
+
 ### Fixed
 
 - **The eval gate could go stale on Apple's on-device models.** (FR-143.)

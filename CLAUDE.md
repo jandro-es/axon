@@ -12,8 +12,8 @@ Detail is in `@docs/`. Do not duplicate it here; reference it.
 
 - `@docs/00-research-and-best-practices.md` — the "why" behind every decision.
 - `@docs/01-prd.md` — vision, goals (G1–G7), users, success criteria (S1–S9).
-- `@docs/02-architecture.md` — module boundaries, data flow, **ADR-001…041**.
-- `@docs/03-requirements.md` — **FR-01…FR-211 / NFR-01…NFR-14**. The contract. Trace your work to these IDs.
+- `@docs/02-architecture.md` — module boundaries, data flow, **ADR-001…042**.
+- `@docs/03-requirements.md` — **FR-01…FR-213 / NFR-01…NFR-14**. The contract. Trace your work to these IDs.
 - `@docs/04-data-model-and-config.md` — vault layout, SQLite DDL, frontmatter, full config reference.
 - `@docs/05…09` — component specs (ingestion, automation, token manager, agent bridge/MCP, dashboard).
 - `@docs/10-component-installer-bootstrap.md` — `axon init`, prereq checks, idempotency, profiles.

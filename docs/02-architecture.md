@@ -1008,7 +1008,7 @@ can land later without touching the subscriber. Notifications are outside the
 token chokepoint because they involve no model call, and outside the review
 queue because they are not proposals — the two cardinal rules are untouched.
 
-### ADR-042 — Local speech-to-text as a detected-binary perception provider *(accepted — planned)*
+### ADR-042 — Local speech-to-text as a detected-binary perception provider *(accepted — built)*
 
 **Status:** Accepted (2026-08-21). FR-212…FR-213; spec in
 `docs/superpowers/specs/2026-08-21-stt-ingestion-design.md`. Graduates

@@ -135,6 +135,16 @@ profiles:
     ingestion:
       ocr: off                                # off | apple (macOS on-device Vision) | tesseract (needs pdftoppm+tesseract) — OCR fallback for scanned PDFs
       # ocr_helper: "~/.axon/bin/axon-apple-ocr"  # apple: override the compiled OCR helper path
+      # stt:                                  # local speech-to-text (ADR-042)
+      #   mode: "whisper:base"                # off (default) | whisper:<model>
+      #   max_minutes: 120                    # refuse longer recordings
+      #   binary: ""                          # optional path; empty = "whisper" on PATH
+      # Off by default. Audio files (.m4a .mp3 .wav .aac .flac .ogg .opus) are
+      # transcribed locally and the transcript becomes an ordinary source note;
+      # the recording is archived under Knowledge/attachments. With stt off, or
+      # a recording over a cap, the file is archived and a flagged 00-Inbox note
+      # records why — never a failure.
+
       vision: off                             # off | ollama:<vision-model> (e.g. ollama:qwen2.5vl) | apple (macOS 27 on-device via fm)
       #                                       # | apple:pcc — Private Cloud Compute vision; needs models.pcc_enabled and sends
       #                                       #   UNREDACTED image bytes to Apple-operated compute (FR-197); explicit opt-in only

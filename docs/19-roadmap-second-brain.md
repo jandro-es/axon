@@ -69,7 +69,7 @@ be **cheap, private, and behind the same provider seam pattern** as OCR/vision.
 The constitution line is unchanged and non-negotiable: **AXON never records.**
 It transcribes audio files the owner already has.
 
-### B1 — Audio-file ingestion via local STT (M) · candidate — not scheduled
+### B1 — Audio-file ingestion via local STT (M) · **SHIPPED 2026-08-21 — FR-212/FR-213, ADR-042** (spec: `docs/superpowers/specs/2026-08-21-stt-ingestion-design.md`)
 **Value:** a voice memo or downloaded recording becomes a searchable, citable
 source note — the single biggest untapped personal input.
 **Shape:** a `KindAudio` in the ingestion pipeline (H1's `KindImage` pattern):
@@ -80,6 +80,27 @@ enrich→chunk→embed tail; source audio archived to `attachments/<hash>`
 (archive-never-delete), zero model calls when no provider.
 **Open decisions:** whisper.cpp vs Apple STT as the first provider; diarisation
 (probably out of v1); max duration guard.
+
+**All three open decisions resolved.** **whisper.cpp first**, as a detected
+binary — cross-platform, no OS floor, and a headless Linux install is not
+excluded from the biggest input surface; Apple Speech lands later behind the
+same `STTFor` seam, the way ADR-038 filled ADR-035's Apple slot.
+**Diarisation is out**, as this entry suspected: speaker labels change the
+note's structure *and* the extraction that reads it. **A config duration cap**
+(`stt.max_minutes`, default 120) rather than a Go const, because transcription
+speed varies enormously by machine and model.
+
+**One finding the entry did not anticipate: the `KindImage` archive pattern
+does not transfer.** `pipeline.go` archives an image with
+`Vault.Create(path, string(bytes))` — the whole file, in memory, as a string.
+Fine for a screenshot, untenable for an hour of `.wav`. The slice adds a
+streaming `vault.CopyFile` and deliberately leaves the image path alone. A
+second consequence: the byte cap and the duration cap are *unaligned* (120
+minutes of `.wav` is ~1.2 GB, so size refuses first for lossless audio), which
+is why the flagged note names which cap refused it.
+
+**B2 (meeting notes with action extraction) is now unblocked** — it rides this
+seam.
 
 ### B2 — Meeting notes with action extraction (S, rides B1) · candidate — not scheduled
 **Value:** a transcribed meeting yields decisions and commitments, not just

@@ -780,6 +780,30 @@ LAN address is accepted — https is only required for public hosts. `axon
 doctor` tells you if the destination is blocked by your egress policy, or if
 you subscribed to an event kind that will never fire.
 
+### Ingest a voice memo
+
+Install [whisper.cpp](https://github.com/ggerganov/whisper.cpp), point AXON at
+a model, and audio becomes an ordinary note:
+
+```yaml
+ingestion:
+  stt:
+    mode: "whisper:base"
+    max_minutes: 120
+```
+
+Then `axon ingest ~/Recordings/standup.m4a` — or just drop the file in a
+watched folder. The transcript becomes a source note you can search and cite
+like anything else, redacted by your `redaction_rules` on the way in, and the
+recording itself is archived beside it under `Knowledge/attachments` (copied,
+never moved out of your way).
+
+Transcription runs entirely on your machine — no audio leaves it. It is also
+slow and CPU-bound, so recordings longer than `max_minutes` are refused, as are
+very large files. In that case, and when STT is switched off entirely, the
+recording is still archived and a flagged note lands in `00-Inbox` tagged
+`#needs-transcript` explaining why — nothing is lost and nothing fails.
+
 ## 9. Token budgeting
 
 Every Claude call passes through the token manager — and there is exactly one

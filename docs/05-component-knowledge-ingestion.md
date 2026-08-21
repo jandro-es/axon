@@ -110,7 +110,13 @@ them funnel through `00-Inbox`:
 
 1. **`axon ingest <path>`** — owner-initiated, from the CLI.
 2. **The `capture` automation** — files the owner drops into `00-Inbox`.
-3. **Watched folders (FR-208/209, ADR-040)** — absolute paths outside the
+3. **Audio files (FR-212/213, ADR-042)** — `.m4a .mp3 .wav …` classified as
+   `KindAudio`, transcribed locally by the `STT` seam. The **transcript** is the
+   document, so everything downstream is identical to a text file; the
+   recording is archived under `Knowledge/attachments` by a streaming copy. No
+   provider, or a recording past a cap, writes a flagged `00-Inbox` note rather
+   than failing.
+4. **Watched folders (FR-208/209, ADR-040)** — absolute paths outside the
    vault listed in `capture.watch_folders`, whose top-level files `capture`
    *moves* into `00-Inbox` before its own sweep, so everything downstream is
    identical to (2). Symlinks are never moved, so a link in a watched folder
