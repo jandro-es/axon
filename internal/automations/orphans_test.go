@@ -153,3 +153,34 @@ func TestLinkSuggesterVisitsOrphansFirst(t *testing.T) {
 		t.Fatalf("the orphan must be proposed first, got:\n%s\nsummary=%s", joined, res.Summary)
 	}
 }
+
+// The report note links to every note it lists. Without excluding its own
+// edges, the second run would find zero orphans, empty the block, and the
+// notes would become orphans again — an oscillation. Found in live smoke.
+func TestOrphanReportDoesNotHideItsOwnSubjects(t *testing.T) {
+	rc, _ := newRC(t, map[string]string{
+		"03-Resources/Zzz Orphan.md": "nothing points here\n",
+		"03-Resources/Hub.md":        "see [[Spoke]]\n",
+		"03-Resources/Spoke.md":      "back to [[Hub]]\n",
+	})
+	ctx := context.Background()
+	mustReindex(t, rc)
+	if _, err := (OrphanReport{}).Run(ctx, rc); err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+	// Reindex so the report note's own wikilinks enter the link graph.
+	mustReindex(t, rc)
+	if _, err := (OrphanReport{}).Run(ctx, rc); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	n, err := rc.Vault.Read(ctx, "03-Resources/Vault Health.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(n.Body, "Zzz Orphan") {
+		t.Fatalf("the orphan vanished on the second run — the report hid its own subject:\n%s", n.Body)
+	}
+	if strings.Contains(n.Body, "## Orphans (0)") {
+		t.Fatalf("report emptied itself:\n%s", n.Body)
+	}
+}

@@ -264,7 +264,7 @@ func (l LinkSuggester) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 // out the run: link suggestions are advisory.
 func orphansFirst(ctx context.Context, rc RunCtx, paths []string) []string {
 	sort.Strings(paths)
-	orphans, err := db.OrphanNotes(ctx, rc.DB, 0)
+	orphans, err := db.OrphanNotes(ctx, rc.DB, 0, orphanReportNote)
 	if err != nil || len(orphans) == 0 {
 		return paths
 	}

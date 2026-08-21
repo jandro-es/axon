@@ -184,3 +184,43 @@ func TestOrphanNotes(t *testing.T) {
 		t.Fatalf("limit 1: want [Z Orphan.md], got %+v", one)
 	}
 }
+
+// A note whose only inbound link comes from an ignored source is still an
+// orphan: the orphan report itself links to everything it lists, which would
+// otherwise rescue every note from orphanhood on the next run.
+func TestOrphanNotesIgnoresLinksFromReportNote(t *testing.T) {
+	d := newMigratedDB(t)
+	ctx := context.Background()
+	orphan, err := InsertNote(ctx, d, NoteRow{Path: "Lonely.md", Title: "Lonely", Updated: "2026-08-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := InsertNote(ctx, d, NoteRow{Path: "03-Resources/Vault Health.md", Title: "Vault Health", Updated: "2026-08-02"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := InsertLink(ctx, d, LinkRow{SrcNoteID: report, DstPath: "Lonely", DstNoteID: &orphan, Kind: "wikilink"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Without the ignore list the report note hides its own subject.
+	got, err := OrphanNotes(ctx, d, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range got {
+		if n.Path == "Lonely.md" {
+			t.Fatal("precondition: without an ignore list the note should look connected")
+		}
+	}
+
+	// With it, the note is correctly still an orphan — and the report note
+	// itself is not one (it has an outbound link).
+	got, err = OrphanNotes(ctx, d, 0, "03-Resources/Vault Health.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Path != "Lonely.md" {
+		t.Fatalf("want [Lonely.md], got %+v", got)
+	}
+}

@@ -29,7 +29,10 @@ func (OrphanReport) Essential() bool { return false }
 // render builds the report body. Both sections query one past the cap so
 // truncation is detectable and never reads as a complete list.
 func (OrphanReport) render(ctx context.Context, rc RunCtx) (string, int, int, error) {
-	orphans, err := db.OrphanNotes(ctx, rc.DB, orphanListMax+1)
+	// The report links to every note it lists, so its own edges must be
+	// invisible here — otherwise the report rescues its own subjects from
+	// orphanhood and oscillates between full and empty on alternate runs.
+	orphans, err := db.OrphanNotes(ctx, rc.DB, orphanListMax+1, orphanReportNote)
 	if err != nil {
 		return "", 0, 0, err
 	}

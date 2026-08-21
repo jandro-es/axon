@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // NoteRow is a row in the derived notes mirror. It is rebuildable from the vault
@@ -331,19 +332,35 @@ func NotesUpdatedBefore(ctx context.Context, q Queryer2, beforeDate string, limi
 // no resolved inbound link and no resolved outbound link, newest first.
 // limit <= 0 means unlimited.
 //
-// Two deliberate rules. Tag edges (kind = 'tag') do not count — a tag is not
+// Three deliberate rules. Tag edges (kind = 'tag') do not count — a tag is not
 // a link to a note, and counting them would empty the report. A broken
 // outbound link (dst_note_id IS NULL) does not rescue a note from orphanhood:
-// it points at nothing that exists, so the note is still disconnected.
-func OrphanNotes(ctx context.Context, q Queryer2, limit int) ([]NoteStamp, error) {
+// it points at nothing that exists, so the note is still disconnected. And
+// links originating from any path in ignoreSrcPaths are invisible to both
+// directions, because a note that *reports* orphans links to every one it
+// lists — without this, the report would rescue its own subjects from
+// orphanhood and oscillate between full and empty on alternate runs.
+func OrphanNotes(ctx context.Context, q Queryer2, limit int, ignoreSrcPaths ...string) ([]NoteStamp, error) {
+	// The ignore clause applies to the inbound test only: an ignored note's
+	// own outbound links still make IT non-orphan, which is correct — the
+	// report note is not an orphan.
+	var ignore string
+	var args []any
+	if len(ignoreSrcPaths) > 0 {
+		marks := make([]string, len(ignoreSrcPaths))
+		for i, p := range ignoreSrcPaths {
+			marks[i] = "?"
+			args = append(args, p)
+		}
+		ignore = " AND l.src_note_id NOT IN (SELECT id FROM notes WHERE path IN (" + strings.Join(marks, ",") + "))"
+	}
 	query := `SELECT id, path, COALESCE(title,''), COALESCE(updated,'') FROM notes n
 	           WHERE NOT EXISTS (SELECT 1 FROM links l
 	                              WHERE l.src_note_id = n.id AND l.kind <> 'tag'
 	                                AND l.dst_note_id IS NOT NULL)
 	             AND NOT EXISTS (SELECT 1 FROM links l
-	                              WHERE l.dst_note_id = n.id AND l.kind <> 'tag')
+	                              WHERE l.dst_note_id = n.id AND l.kind <> 'tag'` + ignore + `)
 	           ORDER BY updated DESC, path`
-	var args []any
 	if limit > 0 {
 		query += ` LIMIT ?`
 		args = append(args, limit)
