@@ -7,6 +7,7 @@ struct GeneralPane: View {
 
     @Environment(\.openWindow) private var openWindow
     @State private var daemonStartsAtLogin = false
+    @State private var shareExtension: ShareExtensionState = .unknown
     @State private var isTogglingService = false
 
     var body: some View {
@@ -54,6 +55,25 @@ struct GeneralPane: View {
                 NotificationToggles(settings: settings)
             }
 
+            // CFR-99: a registered extension stays out of the Share menu until
+            // the user switches it on. Without this row the failure mode is
+            // silence.
+            Section("Share extension") {
+                ReadOnlyRow(
+                    title: "Share menu",
+                    value: shareExtensionLabel,
+                    actionTitle: shareExtension == .enabled ? nil : "Open Extensions Settings…",
+                    action: shareExtension == .enabled ? nil : {
+                        if let url = OpenAction.extensionsSettings.url() {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                )
+                Text("Adds Axon to the Share menu in Safari and other apps. Shared links and selections land in your inbox.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section {
                 Button("Run Setup Again…") {
                     openWindow(id: WindowID.onboarding)
@@ -71,6 +91,16 @@ struct GeneralPane: View {
         .formStyle(.grouped)
         .task {
             daemonStartsAtLogin = await settings.daemonServiceInstalled()
+            shareExtension = await ShareExtensionProbe().state()
+        }
+    }
+
+    private var shareExtensionLabel: String {
+        switch shareExtension {
+        case .enabled: "Enabled"
+        case .registeredButDisabled: "Not enabled"
+        case .notRegistered: "Not installed — launch Axon from /Applications once"
+        case .unknown: "Unknown"
         }
     }
 }

@@ -95,6 +95,11 @@ import Testing
         #expect(!OpenAction.dashboard.isFileURL)
         #expect(!OpenAction.vaultInObsidian(vaultPath: "/x").isFileURL)
     }
+
+    @Test func extensionsSettingsOpensTheSharingPane() throws {
+        let url = try #require(OpenAction.extensionsSettings.url())
+        #expect(url.absoluteString == "x-apple.systempreferences:com.apple.ExtensionsPreferences")
+    }
 }
 
 // MARK: - formatting
