@@ -1,4 +1,4 @@
-# Known issues & triage *(living — last swept 2026-08-21, at the v1.7.0 cut)*
+# Known issues & triage *(living — last swept 2026-08-21, at the v1.8.0 cut)*
 
 Issues found by audit, kept here until each graduates into a fix slice through
 the normal cycle (brainstorm → spec where warranted → TDD → merge). **This file

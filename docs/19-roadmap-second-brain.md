@@ -69,7 +69,7 @@ be **cheap, private, and behind the same provider seam pattern** as OCR/vision.
 The constitution line is unchanged and non-negotiable: **AXON never records.**
 It transcribes audio files the owner already has.
 
-### B1 — Audio-file ingestion via local STT (M) · **SHIPPED 2026-08-21 — FR-212/FR-213, ADR-042** (spec: `docs/superpowers/specs/2026-08-21-stt-ingestion-design.md`)
+### B1 — Audio-file ingestion via local STT (M) · **SHIPPED 2026-08-21 in v1.8.0 — FR-212/FR-213, ADR-042** (spec: `docs/superpowers/specs/2026-08-21-stt-ingestion-design.md`)
 **Value:** a voice memo or downloaded recording becomes a searchable, citable
 source note — the single biggest untapped personal input.
 **Shape:** a `KindAudio` in the ingestion pipeline (H1's `KindImage` pattern):

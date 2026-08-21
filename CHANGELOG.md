@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-08-21
+
+**Say it, and AXON files it.** A minor release: no schema change (stays v7),
+no new MCP tool, no new built-in automation. One new **ADR** (042) — local
+speech-to-text joins OCR and vision as a third *perception* provider, and like
+both of those it runs entirely on your machine and ships switched off.
+
 ### Added
 
 - **Voice memos become searchable notes.** (FR-212, FR-213, **ADR-042**; no
@@ -14,7 +21,9 @@ All notable changes to this project are documented here. The format is based on
   transcribes on your machine and becomes an ordinary source note: searchable,
   citable, redacted like any other text. The recording is archived beside it.
   Off by default; with STT off, or a recording past a cap, the file is archived
-  and a flagged inbox note records why, rather than failing.
+  and a flagged inbox note records why, rather than failing. Install with
+  `brew install whisper-cpp` (the binary is `whisper-cli`) plus a GGML model
+  file; `axon doctor` tells you if either is missing.
 
 ### Fixed
 
@@ -1234,7 +1243,8 @@ The initial feature-complete build, implemented in phases against
   `config get/set`. *(PDF ingestion, the api_key adapter and `config get/set`
   were implemented in 0.10.0.)*
 
-[Unreleased]: https://github.com/jandro-es/axon/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/jandro-es/axon/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/jandro-es/axon/releases/tag/v1.8.0
 [1.7.0]: https://github.com/jandro-es/axon/releases/tag/v1.7.0
 [1.6.0]: https://github.com/jandro-es/axon/releases/tag/v1.6.0
 [1.5.0]: https://github.com/jandro-es/axon/releases/tag/v1.5.0
