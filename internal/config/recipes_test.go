@@ -51,7 +51,7 @@ func TestValidateRecipesRejects(t *testing.T) {
 		}, "top_k"},
 		{"lookback too big", func(r *Recipe) { r.Inputs[0].RecentNotes.LookbackDays = 91 }, "lookback"},
 		{"note path traversal", func(r *Recipe) { r.Inputs[1].Note.Path = "../etc/passwd.md" }, "path"},
-		{"note path .axon", func(r *Recipe) { r.Inputs[1].Note.Path = ".axon/review-queue.md" }, "path"},
+		{"note path .axon non-allowlisted", func(r *Recipe) { r.Inputs[1].Note.Path = ".axon/logs/run.md" }, "path"},
 		{"both prompt+render", func(r *Recipe) { r.Render = "x {{recent}} {{list}}" }, "exactly one of"},
 		{"neither prompt/render", func(r *Recipe) { r.Prompt = "" }, "exactly one of"},
 		{"unknown placeholder", func(r *Recipe) { r.Prompt = "{{recent}} {{list}} {{nope}}" }, "nope"},
@@ -78,5 +78,40 @@ func TestValidateRecipesRejectsDuplicateNames(t *testing.T) {
 	err := validateRecipes(Profile{Recipes: []Recipe{validRecipe(), validRecipe()}})
 	if err == nil || !strings.Contains(err.Error(), "duplicate") {
 		t.Fatalf("want duplicate-name error, got %v", err)
+	}
+}
+
+func TestRecipePathReadWriteSplit(t *testing.T) {
+	cases := []struct {
+		path            string
+		readOK, writeOK bool
+	}{
+		{"03-Resources/Notes.md", true, true},
+		{".axon/review-queue.md", true, false},         // FR-202: reading is not writing
+		{".axon/review-queue-archive.md", true, false}, // the second allow-listed file
+		{".axon/logs/run.md", false, false},            // everything else under .axon/ stays closed
+		{".axon/exports/2026/bundle.md", false, false},
+		{".axon/snapshots/s.md", false, false},
+		{".trash/gone.md", false, false},
+		{"../etc/passwd.md", false, false},
+		{"/abs/path.md", false, false},
+		{"notes.txt", false, false}, // non-.md
+		{"   ", false, false},       // empty
+	}
+	for _, c := range cases {
+		if got := validRecipeReadPath(c.path) == nil; got != c.readOK {
+			t.Errorf("read %q: allowed=%v want %v", c.path, got, c.readOK)
+		}
+		if got := validRecipeWritePath(c.path) == nil; got != c.writeOK {
+			t.Errorf("write %q: allowed=%v want %v", c.path, got, c.writeOK)
+		}
+	}
+}
+
+func TestValidateRecipesAllowsReviewQueueRead(t *testing.T) {
+	r := validRecipe()
+	r.Inputs[1].Note.Path = ".axon/review-queue.md"
+	if err := validateRecipes(Profile{Recipes: []Recipe{r}}); err != nil {
+		t.Fatalf("block-sink recipe reading the review queue must be legal: %v", err)
 	}
 }

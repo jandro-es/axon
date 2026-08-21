@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -80,9 +81,23 @@ var reservedRecipeBlocks = map[string]bool{
 	"tasks": true, "summary": true, "report": true, "deep": true, "links": true,
 }
 
-// validRecipePath enforces the vault-relative note-path rules shared by note
-// inputs and block sinks.
-func validRecipePath(p string) error {
+const (
+	reviewQueueRecipePath   = ".axon/review-queue.md"
+	reviewArchiveRecipePath = ".axon/review-queue-archive.md"
+)
+
+// readableAxonFiles are the only .axon/ files a recipe input may read
+// (FR-202). Reading is not writing, but the exception stays narrow: logs/,
+// exports/, snapshots/ and dashboards/ hold material never written to be
+// read back into a model call.
+var readableAxonFiles = map[string]bool{
+	reviewQueueRecipePath:   true,
+	reviewArchiveRecipePath: true,
+}
+
+// validRecipeBasePath enforces the vault-relative note-path rules shared by
+// recipe inputs and block sinks.
+func validRecipeBasePath(p string) error {
 	switch {
 	case strings.TrimSpace(p) == "":
 		return fmt.Errorf("path is required")
@@ -90,10 +105,44 @@ func validRecipePath(p string) error {
 		return fmt.Errorf("path %q must end in .md", p)
 	case strings.HasPrefix(p, "/") || strings.Contains(p, ".."):
 		return fmt.Errorf("path %q must be vault-relative without '..'", p)
-	case strings.HasPrefix(p, ".axon/") || strings.HasPrefix(p, ".trash/"):
+	case strings.HasPrefix(p, ".trash/"):
+		return fmt.Errorf("path %q may not target .trash/", p)
+	}
+	return nil
+}
+
+// validRecipeWritePath governs the block sink: no system files, ever
+// (ADR-039 — the sink boundary does not move).
+func validRecipeWritePath(p string) error {
+	if err := validRecipeBasePath(p); err != nil {
+		return err
+	}
+	if strings.HasPrefix(p, ".axon/") {
 		return fmt.Errorf("path %q may not target .axon/ or .trash/", p)
 	}
 	return nil
+}
+
+// validRecipeReadPath governs note inputs: .axon/ stays closed except the
+// allow-listed files (FR-202).
+func validRecipeReadPath(p string) error {
+	if err := validRecipeBasePath(p); err != nil {
+		return err
+	}
+	if strings.HasPrefix(p, ".axon/") && !readableAxonFiles[p] {
+		return fmt.Errorf("path %q is not a readable .axon/ file (only %s)", p, readableAxonList())
+	}
+	return nil
+}
+
+// readableAxonList renders the allow-list deterministically for error text.
+func readableAxonList() string {
+	names := make([]string, 0, len(readableAxonFiles))
+	for n := range readableAxonFiles {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
 }
 
 // validateRecipes is the FR-199 cross-field pass (the validateVision
@@ -130,7 +179,7 @@ func validateRecipes(p Profile) error {
 			readers := 0
 			if in.Note != nil {
 				readers++
-				if err := validRecipePath(in.Note.Path); err != nil {
+				if err := validRecipeReadPath(in.Note.Path); err != nil {
 					return fmt.Errorf("%s input %q: %w", where, in.Name, err)
 				}
 			}
@@ -184,7 +233,7 @@ func validateRecipes(p Profile) error {
 		sinks := 0
 		if b := r.Output.Block; b != nil {
 			sinks++
-			if err := validRecipePath(b.Note); err != nil {
+			if err := validRecipeWritePath(b.Note); err != nil {
 				return fmt.Errorf("%s output: %w", where, err)
 			}
 			if !recipeBlockRe.MatchString(b.Block) {
