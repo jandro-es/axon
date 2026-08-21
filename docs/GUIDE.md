@@ -804,6 +804,33 @@ very large files. In that case, and when STT is switched off entirely, the
 recording is still archived and a flagged note lands in `00-Inbox` tagged
 `#needs-transcript` explaining why — nothing is lost and nothing fails.
 
+### Turn a meeting recording into commitments
+
+Once a recording is a note, the machinery you already have does the rest. Turn
+on `action-extract` alongside STT:
+
+```yaml
+automations:
+  action-extract: { enabled: true, schedule: "0 6 * * *", model: routine, budget_tokens: 60_000 }
+```
+
+Then:
+
+1. `axon ingest standup.m4a` — the transcript becomes a source note.
+2. `action-extract` reads recently-changed notes and proposes the commitments
+   it finds: `action "Send the migration plan by Friday" from [[…/standup]]`.
+3. Accept it in the dashboard's review queue, and a real checkbox appears in
+   that note's `axon:tasks` block.
+
+Nothing is written to your notes until you accept. The proposal cites the
+transcript, so the commitment stays one click from what was actually said.
+
+Two things worth knowing. **`action-extract` is the one GTD automation that
+spends tokens** — one routine-tier call per changed note, bounded by its
+`budget_tokens` — which is why it ships off. And it reads *every* recently
+changed note, not just transcripts; that is the point, but it means turning it
+on for meetings also turns it on for everything else you edit.
+
 ## 9. Token budgeting
 
 Every Claude call passes through the token manager — and there is exactly one

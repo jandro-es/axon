@@ -111,7 +111,7 @@ green the suite is.**
 **B2 (meeting notes with action extraction) is now unblocked** — it rides this
 seam.
 
-### B2 — Meeting notes with action extraction (S, rides B1) · candidate — not scheduled
+### B2 — Meeting notes with action extraction (S, rides B1) · **CLOSED 2026-08-21 — its value ships with no code; the frontmatter half deliberately not built**
 **Value:** a transcribed meeting yields decisions and commitments, not just
 text.
 **Shape:** pure composition — the transcript note flows through the existing
@@ -120,6 +120,25 @@ opt-in `action-extract` automation (routine tier, review-queue accept into
 attendees/decisions frontmatter.
 **Open decisions:** whether meeting-ness is inferred (filename/frontmatter) or
 flagged at ingest.
+
+**The action-extraction half needed no code at all, and was verified end to
+end.** `action-extract` scans any recently-updated `.md` outside `entities/`
+and `.axon/` (`scannableNote`, `entities.go:99`), and a B1 transcript lands in
+`03-Resources/Knowledge/` — so it was already in scope the moment B1 shipped.
+Confirmed with real audio and a real model: `axon ingest standup.wav` →
+transcript note → `action-extract` proposed `action "Send the migration plan by
+Friday" from [[…/standup]]` → accept wrote `- [ ] Send the migration plan by
+Friday` into that note's `axon:tasks` block. Every link was already shipped —
+B1 (FR-212/213), `action-extract` (1.2.5 T6/FR-169), the accept path
+(ADR-034). Documented in `docs/GUIDE.md`; no FR, no ADR, no code.
+
+**The meeting-shaped frontmatter half was deliberately NOT built**, and its
+open decision therefore stays open. Attendees/decisions enrichment is not the
+"pure composition" this entry describes: it needs a third enrichment path
+beside `Heuristic` and `ClaudeEnricher`, a rule for inferring what counts as a
+meeting (or a flag at ingest), and a model call per transcript. If it is worth
+building it deserves its own slice and its own decision about inference vs
+flagging — not inclusion here because the entry mentioned it.
 
 ## Theme C — Calendar & email read-only context *(previously cut from 1.3)*
 

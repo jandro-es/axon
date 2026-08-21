@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **A recorded meeting can now become tracked commitments** (`docs/19` B2; no
+  code — the chain was already complete once audio ingestion shipped). Enable
+  `action-extract` alongside STT and a transcribed standup yields proposals
+  like `action "Send the migration plan by Friday"`, each citing the transcript
+  it came from; accepting one writes a real checkbox into that note.
+  `docs/GUIDE.md` walks through it.
+
 ## [1.8.0] — 2026-08-21
 
 **Say it, and AXON files it.** A minor release: no schema change (stays v7),
