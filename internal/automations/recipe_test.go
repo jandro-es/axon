@@ -389,3 +389,111 @@ func TestRecipeInputClip(t *testing.T) {
 		t.Fatalf("clip failed: len=%d", len(got))
 	}
 }
+
+// seedSourceRow inserts a note + source pair for the sources reader.
+func seedSourceRow(t *testing.T, rc RunCtx, path, url, kind, fetchedAt, status string) {
+	t.Helper()
+	ctx := context.Background()
+	var notePtr *int64
+	if path != "" {
+		id, err := db.InsertNote(ctx, rc.DB, db.NoteRow{Path: path, Title: path, Updated: "2026-01-01"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		notePtr = &id
+	}
+	if _, err := db.UpsertSource(ctx, rc.DB, db.SourceRow{
+		NoteID: notePtr, URL: url, Kind: kind, FetchedAt: fetchedAt, ContentHash: "h", Status: status,
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRecipeStaleNotesReader(t *testing.T) {
+	rc, _ := newRC(t, nil)
+	seedNote(t, rc, "03-Resources/Dormant.md", "Dormant", "2020-01-01")
+	seedNote(t, rc, "03-Resources/Fresh.md", "Fresh", "2026-06-27")
+
+	def := testRecipe()
+	def.Inputs = []config.RecipeInput{
+		{Name: "dormant", StaleNotes: &config.RecipeStaleInput{OlderThanDays: 365, Limit: 10}},
+	}
+	def.Render = "{{dormant}}"
+	vals, reason, err := RecipeRun{def: def}.resolveInputs(context.Background(), rc)
+	if err != nil || reason != "" {
+		t.Fatalf("resolve: reason=%q err=%v", reason, err)
+	}
+	got := vals["dormant"]
+	if !strings.Contains(got, "[[03-Resources/Dormant]] (updated 2020-01-01)") {
+		t.Fatalf("stale line shape wrong: %q", got)
+	}
+	if strings.Contains(got, "Fresh") {
+		t.Fatalf("a note inside the window leaked into stale_notes: %q", got)
+	}
+}
+
+func TestRecipeSourcesReader(t *testing.T) {
+	rc, _ := newRC(t, nil)
+	seedSourceRow(t, rc, "03-Resources/Knowledge/Old.md", "https://old.example/a", "url", "2020-01-01T00:00:00Z", "ok")
+	seedSourceRow(t, rc, "", "https://orphan.example/c", "pdf", "2020-02-01T00:00:00Z", "failed")
+
+	def := testRecipe()
+	def.Inputs = []config.RecipeInput{
+		{Name: "old", Sources: &config.RecipeSourcesInput{OlderThanDays: 30, Limit: 10}},
+	}
+	def.Render = "{{old}}"
+	vals, reason, err := RecipeRun{def: def}.resolveInputs(context.Background(), rc)
+	if err != nil || reason != "" {
+		t.Fatalf("resolve: reason=%q err=%v", reason, err)
+	}
+	got := vals["old"]
+	if !strings.Contains(got, "[[03-Resources/Knowledge/Old]] — https://old.example/a (fetched 2020-01-01, url, ok)") {
+		t.Fatalf("source line shape wrong: %q", got)
+	}
+	// A source with no note row renders without a wikilink.
+	if !strings.Contains(got, "https://orphan.example/c (fetched 2020-02-01, pdf, failed)") ||
+		strings.Contains(got, "[[]]") {
+		t.Fatalf("orphan source line wrong: %q", got)
+	}
+}
+
+// The D3-shaped regression docs/20 C2 asks for by name: composing over
+// another automation's output plus the review queue must produce ONE intact
+// managed block, with the nested markers it swallowed made inert.
+func TestRecipeComposesOverAutomationOutputAndReviewQueue(t *testing.T) {
+	actions := "# Actions\n\n<!-- axon:actions:start -->\n- [ ] overdue thing\n<!-- axon:actions:end -->\n"
+	queue := "# Review queue\n\n- [ ] abc123 link \"A\" -> \"B\"\n"
+	rc, _ := newRC(t, map[string]string{
+		"01-Projects/Actions.md": actions,
+		".axon/review-queue.md":  queue,
+		"01-Projects/Weekly.md":  "# Weekly\n\nMy own prose.\n",
+	})
+	def := config.Recipe{
+		Name: "weekly-review", Purpose: "Weekly review.",
+		Inputs: []config.RecipeInput{
+			{Name: "board", Note: &config.RecipeNoteInput{Path: "01-Projects/Actions.md"}},
+			{Name: "pending", Note: &config.RecipeNoteInput{Path: ".axon/review-queue.md"}},
+		},
+		Render: "Board:\n{{board}}\n\nPending:\n{{pending}}",
+		Output: config.RecipeOutput{Block: &config.RecipeBlockSink{Note: "01-Projects/Weekly.md", Block: "weekly"}},
+	}
+	if _, err := (RecipeRun{def: def}).Run(context.Background(), rc); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	n, err := rc.Vault.Read(context.Background(), "01-Projects/Weekly.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(n.Body, "<!-- axon:weekly:end -->"); got != 1 {
+		t.Fatalf("want exactly 1 end marker for the recipe's own block, got %d:\n%s", got, n.Body)
+	}
+	if strings.Contains(n.Body, "<!-- axon:actions:end -->") {
+		t.Fatalf("nested marker survived un-neutralized:\n%s", n.Body)
+	}
+	if !strings.Contains(n.Body, "overdue thing") || !strings.Contains(n.Body, "abc123") {
+		t.Fatalf("composed content missing:\n%s", n.Body)
+	}
+	if !strings.Contains(n.Body, "My own prose.") {
+		t.Fatalf("human prose clobbered:\n%s", n.Body)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/core"
@@ -21,6 +22,9 @@ const (
 	recipeSearchTopKDef  = 5
 	recipeRecentDaysDef  = 7
 	recipeRecentLimitDef = 20
+	recipeStaleDaysDef   = 90
+	recipeStaleLimitDef  = 20
+	recipeSourcesLimit   = 20
 )
 
 // RecipeRun is the one generic Automation behind every config-defined recipe
@@ -91,9 +95,60 @@ func (r RecipeRun) resolveInputs(ctx context.Context, rc RunCtx) (map[string]str
 				fmt.Fprintf(&b, "[[%s]] (updated %s)\n", stripExt(s.Path), s.Updated)
 			}
 			vals[in.Name] = clipInput(strings.TrimSpace(b.String()))
+		case in.StaleNotes != nil:
+			days := in.StaleNotes.OlderThanDays
+			if days <= 0 {
+				days = recipeStaleDaysDef
+			}
+			limit := in.StaleNotes.Limit
+			if limit <= 0 {
+				limit = recipeStaleLimitDef
+			}
+			before := rc.now().UTC().AddDate(0, 0, -days).Format("2006-01-02")
+			stamps, err := db.NotesUpdatedBefore(ctx, rc.DB, before, limit)
+			if err != nil {
+				return nil, "", err
+			}
+			var b strings.Builder
+			for _, s := range stamps {
+				fmt.Fprintf(&b, "[[%s]] (updated %s)\n", stripExt(s.Path), s.Updated)
+			}
+			vals[in.Name] = clipInput(strings.TrimSpace(b.String()))
+		case in.Sources != nil:
+			limit := in.Sources.Limit
+			if limit <= 0 {
+				limit = recipeSourcesLimit
+			}
+			// 0 means "no age filter" for sources, so an empty cutoff is a
+			// legitimate value here — unlike stale_notes.
+			cutoff := ""
+			if d := in.Sources.OlderThanDays; d > 0 {
+				cutoff = rc.now().UTC().AddDate(0, 0, -d).Format(time.RFC3339)
+			}
+			rows, err := db.SourcesOlderThan(ctx, rc.DB, cutoff, limit)
+			if err != nil {
+				return nil, "", err
+			}
+			var b strings.Builder
+			for _, s := range rows {
+				line := fmt.Sprintf("%s (fetched %s, %s, %s)", s.URL, dateOnly(s.FetchedAt), s.Kind, s.Status)
+				if s.Path != "" {
+					line = "[[" + stripExt(s.Path) + "]] — " + line
+				}
+				b.WriteString(line + "\n")
+			}
+			vals[in.Name] = clipInput(strings.TrimSpace(b.String()))
 		}
 	}
 	return vals, "", nil
+}
+
+// dateOnly trims an RFC3339 stamp to its date for rendered source lines.
+func dateOnly(ts string) string {
+	if len(ts) >= 10 {
+		return ts[:10]
+	}
+	return ts
 }
 
 // substitute performs the plain placeholder substitution — no template
