@@ -88,7 +88,7 @@ sink; not agentic (one-shot `runModel` only); recipes live in `config.yaml`
 (outside every model write path — vault-portable sharing deferred), scheduled
 by ordinary `automations.<name>` entries.
 
-### C2 — Recipe vocabulary v2: let recipes read `.axon/`, then reach the derived tables (S) · **P1+P2 SHIPPED 2026-08-21 — FR-202, FR-203, ADR-039 amended** (spec: `docs/superpowers/specs/2026-08-21-recipe-vocabulary-v2-design.md`); P3 remains
+### C2 — Recipe vocabulary v2: let recipes read `.axon/`, then reach the derived tables (S) · **COMPLETE 2026-08-21** — P1+P2 shipped (FR-202, FR-203, ADR-039 amended; spec: `docs/superpowers/specs/2026-08-21-recipe-vocabulary-v2-design.md`), P3 closed by composition via `docs/19` E1
 *Reframed 2026-08-21 after a second experiment; the first draft led with a
 `sources` reader, which the D3 result demoted.*
 
@@ -122,8 +122,12 @@ adding vocabulary.
   is by definition about older material. `db.NotesUpdatedBefore` already
   exists — `actions-review` uses it — so this is nearly free.
 
-**Priority 3 — link topology / orphans. STILL OPEN — the only remaining part
-of C2.** D3's only genuinely unreachable
+**Priority 3 — link topology / orphans. CLOSED 2026-08-21 by composition, not
+built.** This priority existed only because nothing rendered orphans into a
+note. `docs/19` E1 now does: `orphan-report` maintains an `axon:orphans` block
+in `03-Resources/Vault Health.md`, so a recipe reaches orphans today with an
+ordinary `note` reader and no new vocabulary. That was this section's own
+stated preference ("Prefer that order"). D3's only genuinely unreachable
 component. Unlike actions and pulse, no automation renders orphans into a
 note, so there is nothing to compose over. Worth doing only if `docs/19` E1
 (orphan & decay report) does not land first — if it does, it will render a
@@ -255,6 +259,10 @@ listed here as the last recipe candidate, which was wrong: F2 needs a new
 review-queue *kind* plus a note `Create`, so by ADR-039's own boundary
 ("anything needing a new sink is a Go automation") it is a Go slice, not a
 recipe experiment.
+
+**C2 is now complete.** P1+P2 shipped as recipe vocabulary v2, and P3 closed
+without being built — `docs/19` E1's `orphan-report` renders orphans into a
+note, which is the surface a recipe reads.
 
 **Then:** **G1** is the strongest remaining pick — cheap, it compounds trust,
 and recipes just widened what doctor can warn about (name collisions,

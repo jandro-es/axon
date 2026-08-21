@@ -179,7 +179,7 @@ is enforced.
 | [**Setup & Usage Guide**](docs/GUIDE.md) | **Start here.** End-to-end: install, configure, run, and use every feature. |
 | [Installation](INSTALL.md) | Step-by-step install for everyone; developer fast path; update/uninstall; Windows. |
 | [Command reference](docs/COMMANDS.md) | Every CLI command: what it does, what it doesn't, key flags, examples. |
-| [Automations reference](docs/AUTOMATIONS.md) | All 24 automations: purpose, schedule, cost tier, and explicit non-goals. |
+| [Automations reference](docs/AUTOMATIONS.md) | All 25 automations: purpose, schedule, cost tier, and explicit non-goals. |
 | [Profiles](docs/PROFILES.md) | Personal vs work: auth, budgets, egress, redaction, memory — and where each difference is enforced. |
 | [Architecture](docs/02-architecture.md) | System design, module boundaries, data flow, ADR-001…039. |
 | [Requirements](docs/03-requirements.md) | The numbered contract: FR-01…201, NFR-01…14. |

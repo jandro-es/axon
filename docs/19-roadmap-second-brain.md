@@ -183,7 +183,7 @@ rather than a built-in.
 `axon health` scores the vault; 1.3.8's Hubs & orphans made link topology
 visible. The gap is *acting* on health, not seeing it.
 
-### E1 — Orphan & decay report with proposals (S) · candidate — not scheduled
+### E1 — Orphan & decay report with proposals (S) · **SHIPPED 2026-08-21 — FR-204/FR-205** (spec: `docs/superpowers/specs/2026-08-21-orphan-decay-report-design.md`)
 **Value:** orphans and dormant clusters are visible but inert; the fix (link it,
 merge it, archive it) still requires the owner to notice.
 **Shape:** a zero-model weekly sweep pairing each orphan with its nearest
@@ -191,6 +191,21 @@ vector neighbours and proposing `link` items (link-suggester's accept path) or
 `merge` items (R7's) — pure composition of two shipped accept paths.
 **Open decisions:** proposal budget per week; whether "archive candidate" is a
 proposal kind at all (it edges toward delete-shaped territory — likely no).
+
+**Shipped smaller than specified, on purpose.** Reading the code first showed
+the proposal half was already built: `link-suggester` proposes `pair` items
+from search neighbours and `merge-proposals` proposes `merge` items from
+cosine similarity, both with proposal memory and both accepting through
+shipped paths. A third proposer would have meant three dedup stores that can
+disagree about the same pair. What was actually missing was (a) any Go-side
+notion of an orphan — they were computed only in the SPA's Graph panel — and
+(b) that `link-suggester` scanned lexically and stopped at its budget, so
+orphans late in the alphabet were never reached. E1 therefore shipped as a
+zero-model **report** (`orphan-report`, the 25th automation, off by default)
+plus an **ordering fix**, not as a new proposal sweep. Both open decisions
+resolved: the proposal budget is unchanged (the fix was where it is spent, not
+how much), and the `archive candidate` kind was **rejected** exactly as this
+entry predicted — it is delete-shaped, and there is no `vault.delete`.
 
 ### E2 — Source freshness for research notes (S) · candidate — not scheduled *(partly unblocked 2026-08-21: the aggregate half is now a recipe, the per-note half stays Go)*
 **Value:** ingested sources go stale; a research report citing a 2024 page

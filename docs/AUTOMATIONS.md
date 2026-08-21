@@ -1,6 +1,6 @@
-# The 24 automations
+# The 25 automations
 
-AXON ships 24 automations. Five rules govern all of them:
+AXON ships 25 automations. Five rules govern all of them:
 
 1. **They run on new material, not on the clock for its own sake.** Every
    automation has a change gate (content hashes, cursors, "anything new since
@@ -93,7 +93,10 @@ call per session, each session tried once ever. Gated by
 ### `link-suggester` — on, daily 01:00
 Proposes Zettelkasten links between semantically close notes into the review
 queue. Candidate generation is **pure vector similarity — no model call**;
-proposal memory ensures a dismissed pair is never re-proposed.
+proposal memory ensures a dismissed pair is never re-proposed. It **visits
+orphans first** (FR-205): the scan stops once its proposal budget is spent, so
+it starts with the notes that have no links in or out rather than working
+through the vault alphabetically.
 
 ### `knowledge-digest` — on, synthesis tier, weekly Mon 08:00
 Weekly synthesis of newly ingested sources with MOC (map-of-content)
@@ -117,6 +120,15 @@ Near-duplicate sweep by vector cosine (≥ `merge.threshold`, default 0.92) into
 the review queue. Accepting merges wikilink-safely: every inbound link is
 retargeted, and the losing note is **archived to `.trash/merged/` — never
 deleted**.
+
+### `orphan-report` — off, zero-model, weekly Mon 10:00
+Renders the vault's disconnected and dormant notes into an `axon:orphans`
+managed block in `03-Resources/Vault Health.md`: notes with no links in or out,
+and notes untouched for 180 days. **Reports only** — it proposes nothing and
+spends nothing. Dormant-note proposals stay with `resurfacer`, which has its
+own spaced-repetition ladder; link proposals stay with `link-suggester`, which
+now visits those same orphans first. The note is created on first run with a
+preamble; your own prose outside the block is never touched.
 
 ---
 
@@ -203,6 +215,7 @@ Enable with `axon configure automations eval-drift on`.
 | `compaction` | on | synthesis | `0 3 * * 0` | Distil oversized notes |
 | `resurfacer` | on | none¹ | `0 7 * * 1` | Spaced-rep resurfacing |
 | `merge-proposals` | off | none | `0 11 * * 1` | Near-duplicate proposals |
+| `orphan-report` | off | none | `0 10 * * 1` | Orphan + dormant report (no proposals) |
 | `actions-consolidate` | on | none | `0 7 * * *` | Render GTD board |
 | `actions-review` | off | none | `0 8 * * 6` | Stale actions → #someday |
 | `action-extract` | off | routine | `0 6 * * *` | Implicit commitments → tasks |

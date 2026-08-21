@@ -8,6 +8,22 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **Orphaned and dormant notes now have a place in the vault.** (FR-204,
+  FR-205; no ADR, no schema change; graduating `docs/19` E1 and closing
+  `docs/20` C2 P3 by composition.) A new zero-model automation,
+  `orphan-report` (the 25th, disabled by default), maintains an `axon:orphans`
+  block in `03-Resources/Vault Health.md` listing notes with no links in or
+  out plus notes untouched for 180 days. It proposes nothing and spends
+  nothing — dormant-note proposals stay with the resurfacer.
+
+### Fixed
+
+- **`link-suggester` now visits orphans first.** (FR-205.) It previously
+  scanned the vault alphabetically and stopped at its proposal budget, so the
+  notes most in need of links — those with none at all — were the least likely
+  to receive suggestions. Same budget, same proposals, spent where the graph is
+  actually broken.
+
 - **Recipes can read the review queue, and reach note staleness and ingested
   sources.** (FR-202, FR-203; **ADR-039 amended**, no new ADR, no schema
   change; graduating `docs/20` C2 Priorities 1–2.) The recipe path rule is now
