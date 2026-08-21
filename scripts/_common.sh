@@ -234,6 +234,44 @@ axon_installed_version() {
   [ -x "$bin" ] && "$bin" version --short 2>/dev/null || true
 }
 
+# config_missing_automations BIN CONFIG — list automations the NEW binary knows
+# about that the user's CONFIG has no `automations.<name>` entry for.
+#
+# This exists because config_missing_keys cannot see them: it scans
+# `^ {0,4}[a-z_][a-z0-9_]*:`, while automation entries are indented six spaces
+# and are hyphenated (`      orphan-report:`). The gap matters — `Schedulables`
+# iterates the user's configured automations map, so an automation with no
+# entry is never scheduled, and `axon automations` renders it as "disabled",
+# which reads as "off" rather than "absent".
+#
+# The binary is the authority (`--json`), so this needs no example-file parsing
+# and survives any indentation change. Advisory only: never mutates the config.
+config_missing_automations() {
+  local bin="$1" config="$2"
+  [ -x "$bin" ] && [ -f "$config" ] || return 0
+  local known
+  known="$("$bin" --config "$config" automations --json 2>/dev/null \
+    | grep -oE '"name": "[a-z0-9-]+"' | sed 's/.*: "//;s/"//' | sort -u)"
+  [ -n "$known" ] || return 0
+  local name
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    # An entry is `<name>:` at any indent under automations:. Matching the bare
+    # key anywhere is deliberately loose — a false "already set" is silent,
+    # while a false "new!" would nag every update.
+    grep -qE "^[[:space:]]+${name}:" "$config" || printf '%s\n' "$name"
+  done <<< "$known"
+}
+
+# automation_purpose BIN CONFIG NAME — the first sentence of an automation's
+# catalog purpose, for one-line reporting. Empty if unknown.
+automation_purpose() {
+  local bin="$1" config="$2" name="$3"
+  [ -x "$bin" ] || return 0
+  "$bin" --config "$config" automations 2>/dev/null \
+    | grep -A1 "  ${name}$" | tail -1 | sed 's/^[[:space:]]*//' | cut -c1-100
+}
+
 # config_missing_keys EXAMPLE CONFIG — list top-level-ish keys present in the
 # shipped EXAMPLE but absent from the user's CONFIG, so an update can flag newly
 # introduced settings without ever mutating the user's file. Best-effort (a

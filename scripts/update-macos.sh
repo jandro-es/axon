@@ -128,6 +128,17 @@ if [ -n "$NEW_KEYS" ]; then
   info "compare with $REPO/axon.config.example.yaml and add any you want (optional)."
 fi
 
+NEW_AUTOS="$(config_missing_automations "$REPO/axon" "$CONFIG")"
+if [ -n "$NEW_AUTOS" ]; then
+  step "New automations available"
+  warn "this release ships automations your $CONFIG has no entry for:"
+  while IFS= read -r a; do
+    [ -n "$a" ] && info "• $a — $(automation_purpose "$REPO/axon" "$CONFIG" "$a")"
+  done <<< "$NEW_AUTOS"
+  info "without an automations.<name> entry the daemon never schedules them —"
+  info "copy the line for each from $REPO/axon.config.example.yaml (all ship disabled)."
+fi
+
 # ── 6. Refresh + restart the daemon so the new binary/dashboard take effect ─
 if [ "$DO_SERVICE" -eq 1 ]; then
   set_ctx "restarting the daemon"
@@ -165,3 +176,7 @@ else
 fi
 info "verify with: axon doctor   and   axon status"
 [ -n "$NEW_KEYS" ] && info "new config settings are listed above — adding them is optional"
+[ -n "$NEW_AUTOS" ] && info "new automations are listed above — add an entry for any you want scheduled"
+# A trailing `[ -n … ] && …` that tests false returns 1, and under `set -e`
+# that becomes the script's exit status — a clean update would report failure.
+exit 0
