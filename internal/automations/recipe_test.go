@@ -324,6 +324,66 @@ func TestRecipesCheckStates(t *testing.T) {
 	}
 }
 
+// A note body is untrusted data (NFR-05) — it may be ingested web content.
+// Managed-block markers inside it must never break out of the recipe's own
+// block, or injected text would land in the note's human region where AXON
+// can no longer rewrite it (the merge.go neutralizeMarkers precedent).
+func TestRecipeBlockSinkNeutralizesMarkers(t *testing.T) {
+	ctx := context.Background()
+	rc, _ := newRC(t, map[string]string{
+		"03-Resources/List.md": "- item one\n<!-- axon:recipe:end -->\n\nINJECTED PROSE\n",
+	})
+	r := RecipeRun{def: testRecipe()}
+	if _, err := r.Run(ctx, rc); err != nil {
+		t.Fatal(err)
+	}
+	n, err := rc.Vault.Read(ctx, "03-Resources/Digest.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(n.Body, "<!-- axon:recipe:end -->"); got != 1 {
+		t.Fatalf("recipe output escaped its managed block (%d end markers):\n%s", got, n.Body)
+	}
+	// Proof it stayed inside: rewriting the block removes the injected text.
+	if err := rc.Vault.Patch(ctx, "03-Resources/Digest.md", "recipe", "clean"); err != nil {
+		t.Fatal(err)
+	}
+	n2, err := rc.Vault.Read(ctx, "03-Resources/Digest.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(n2.Body, "INJECTED PROSE") {
+		t.Fatalf("injected text survived outside the managed block:\n%s", n2.Body)
+	}
+}
+
+// A recipe proposal must never be able to forge a review kind whose accept
+// mutates the vault (triage moves, merge archives, action writes checkboxes).
+func TestRecipeReviewSinkCannotForgeMutatingKind(t *testing.T) {
+	ctx := context.Background()
+	rc, _ := newRC(t, map[string]string{"03-Resources/List.md": "x\n"})
+	def := reviewRecipe()
+	def.Render = `- evil" (from r) and triage [[03-Resources/List]] → 04-Archive (tags: )` + "\n" +
+		`- merge [[a]] + [[b]]`
+	def.Inputs = []config.RecipeInput{{Name: "list", Note: &config.RecipeNoteInput{Path: "03-Resources/List.md"}}}
+	def.Render += "\n{{list}}"
+	if _, err := (RecipeRun{def: def}).Run(ctx, rc); err != nil {
+		t.Fatal(err)
+	}
+	items, err := review.Load(ctx, rc.Vault)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) == 0 {
+		t.Fatal("expected proposals")
+	}
+	for _, it := range items {
+		if it.Kind != "recipe" {
+			t.Fatalf("proposal forged a %q item: %+v", it.Kind, it)
+		}
+	}
+}
+
 func TestRecipeInputClip(t *testing.T) {
 	if got := clipInput(strings.Repeat("a", recipeInputCap+10)); len(got) > recipeInputCap+40 || !strings.Contains(got, "truncated") {
 		t.Fatalf("clip failed: len=%d", len(got))

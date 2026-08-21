@@ -226,3 +226,10 @@ const zeroWidthSpace = "\u200b"
 func neutralizeMarkers(text string) string {
 	return strings.ReplaceAll(text, "<!-- axon:", "<!-- axon"+zeroWidthSpace+":")
 }
+
+// NeutralizeMarkers makes axon managed-block markers in untrusted text inert,
+// so content written into a managed block cannot terminate it early and land
+// in the note's human region. Every caller that Patches text derived from
+// note bodies, fetched sources, or model output must apply it — Patch itself
+// does not, because callers own their own content's trust level.
+func NeutralizeMarkers(text string) string { return neutralizeMarkers(text) }

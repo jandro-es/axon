@@ -10,6 +10,7 @@ import (
 	"github.com/jandro-es/axon/internal/core"
 	"github.com/jandro-es/axon/internal/db"
 	"github.com/jandro-es/axon/internal/tokens"
+	"github.com/jandro-es/axon/internal/vault"
 )
 
 // Recipe caps are code, not config (ADR-039): recipes are deliberately
@@ -167,7 +168,10 @@ func (r RecipeRun) Run(ctx context.Context, rc RunCtx) (RunResult, error) {
 				return RunResult{}, cerr
 			}
 		}
-		if perr := rc.Vault.Patch(ctx, b.Note, b.Block, text); perr != nil {
+		// Note bodies, search snippets and model output are all untrusted
+		// (NFR-05): neutralize managed-block markers so recipe output cannot
+		// terminate its own block and leak into the note's human region.
+		if perr := rc.Vault.Patch(ctx, b.Note, b.Block, vault.NeutralizeMarkers(text)); perr != nil {
 			return RunResult{}, perr
 		}
 		return RunResult{Summary: "wrote axon:" + b.Block + " in " + b.Note, Changes: []string{b.Note}, EstimatedTokens: est}, nil
