@@ -128,6 +128,11 @@ type CaptureConfig struct {
 	// ArchiveDir is the vault-relative folder for ingested inbox originals.
 	// Default: 04-Archive/Capture.
 	ArchiveDir string `yaml:"archive_dir,omitempty"`
+	// WatchFolders are absolute paths outside the vault whose top-level files
+	// are moved into 00-Inbox on each capture tick (FR-208, ADR-040). Absent
+	// or empty means no watching at all — there is no separate toggle, and
+	// that is the default on both profiles.
+	WatchFolders []string `yaml:"watch_folders,omitempty"`
 }
 
 // EnrichMode returns the enrichment mode, defaulting to "heuristic".
