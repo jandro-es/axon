@@ -2,9 +2,13 @@ package ingestion
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -114,7 +118,7 @@ func (p *Pipeline) Ingest(ctx context.Context, arg string, opts IngestOptions) (
 	doc, err := p.read(ctx, in)
 	if err != nil {
 		if in.Kind == KindMedia && errors.Is(err, ErrNoCaptions) {
-			return p.writeCapturedNote(in)
+			return p.writeCapturedNote(in, "no captions available", "media")
 		}
 		return res, err
 	}
@@ -510,36 +514,66 @@ func buildSourceNote(enr Enrichment, cleaned string, ex Extracted, in Input, has
 // writeCapturedNote records a caption-less (or yt-dlp-absent) media URL as a
 // flagged 00-Inbox capture — zero model calls, never a failure. The flagged
 // note is the hook for a future STT pass.
-func (p *Pipeline) writeCapturedNote(in Input) (IngestResult, error) {
-	res := IngestResult{Input: in.Raw, Status: "captured", SkippedReason: "no captions available"}
+// reason is recorded in the note and the result; prefix names the note file
+// ("media" for a caption-less URL, "audio" for an untranscribable recording).
+func (p *Pipeline) writeCapturedNote(in Input, reason, prefix string) (IngestResult, error) {
+	res := IngestResult{Input: in.Raw, Status: "captured", SkippedReason: reason}
 	stamp := time.Now().UTC().Format("20060102-150405")
-	notePath := "00-Inbox/media-" + stamp + ".md"
+	notePath := fmt.Sprintf("00-Inbox/%s-%s.md", prefix, stamp)
 	for i := 2; p.Vault.Exists(notePath); i++ {
-		notePath = fmt.Sprintf("00-Inbox/media-%s-%d.md", stamp, i)
+		notePath = fmt.Sprintf("00-Inbox/%s-%s-%d.md", prefix, stamp, i)
 	}
-	if _, err := p.Vault.Create(notePath, buildCapturedNote(in)); err != nil {
+	if _, err := p.Vault.Create(notePath, buildCapturedNote(in, reason)); err != nil {
 		return res, err
+	}
+	// A captured local file is archived too, so the recording is never lost
+	// just because it could not be transcribed (ADR-042, archive-never-delete).
+	if in.Path != "" {
+		if hash, herr := fileSHA256(in.Path); herr == nil {
+			_ = p.Vault.CopyFile(attachmentPath(hash, in.Path), in.Path)
+		}
 	}
 	res.NotePath = notePath
 	p.emit(events.LevelInfo, "ingest.done",
-		fmt.Sprintf("captured %s -> %s (no captions)", in.Raw, notePath), res)
+		fmt.Sprintf("captured %s -> %s (%s)", in.Raw, notePath, reason), res)
 	return res, nil
 }
 
+// fileSHA256 hashes a file by streaming it, so an attachment key never
+// requires holding the file in memory.
+func fileSHA256(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
 // buildCapturedNote renders the flagged capture note.
-func buildCapturedNote(in Input) string {
+func buildCapturedNote(in Input, reason string) string {
 	now := time.Now().UTC().Format("2006-01-02")
+	// The tag names what is missing, so a "needs-captions" Dataview query keeps
+	// working while audio gets its own bucket.
+	tag := "needs-captions"
+	if in.Kind == KindAudio {
+		tag = "needs-transcript"
+	}
 	var b strings.Builder
 	b.WriteString("---\n")
 	b.WriteString("type: capture\n")
 	b.WriteString("status: captured\n")
 	fmt.Fprintf(&b, "created: %s\n", now)
 	fmt.Fprintf(&b, "source_url: %s\n", yamlString(in.URL))
-	b.WriteString("tags: [\"needs-captions\"]\n")
+	fmt.Fprintf(&b, "tags: [%s]\n", yamlString(tag))
 	b.WriteString("ingested_by: axon\n")
 	b.WriteString("---\n")
-	b.WriteString("#needs-captions\n\n")
-	b.WriteString("⚠ No captions available — transcript pending\n\n")
+	fmt.Fprintf(&b, "#%s\n\n", tag)
+	fmt.Fprintf(&b, "⚠ %s\n\n", reason)
 	fmt.Fprintf(&b, "%s\n", in.URL)
 	return b.String()
 }
