@@ -33,6 +33,9 @@ func newRunCmd(gf *globalFlags) *cobra.Command {
 			}
 			defer deps.close()
 
+			if err := automations.ValidateRecipes(deps.profile); err != nil {
+				return err
+			}
 			if !automations.AllowedByPolicy(deps.profile, name) {
 				return fmt.Errorf("automation %q is not permitted by policy.allowed_automations", name)
 			}
