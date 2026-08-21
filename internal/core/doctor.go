@@ -559,13 +559,11 @@ func localModelsVettingChecks(paths config.ResolvedPaths, p config.Profile) []Ch
 		if d != nil {
 			row, have, _ = db.LatestEvalRun(ctx, d, t.tier, t.ref)
 		}
-		var (
-			cur   string
-			known bool
-		)
-		if r.Provider == config.ProviderOllama {
-			cur, known = OllamaDigest(ctx, m.OllamaHost, r.Model)
-		}
+		// One drift key for every gated provider (TierDriftKey). This used to
+		// be Ollama-only, which meant an fm-backed tier that passed evals
+		// stayed "vetted" forever — even after an OS update swapped the
+		// on-device model underneath it.
+		cur, known := TierDriftKey(ctx, r, m.OllamaHost, DriftSeams{})
 		out = append(out, vettingCheck(name, t.tier, t.ref, m.EvalMinPass, row, have, cur, known))
 	}
 	return out

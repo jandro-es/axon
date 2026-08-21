@@ -31,13 +31,6 @@ func (EvalDrift) Name() string { return "eval-drift" }
 // Essential reports false: drift re-eval is never budget-critical.
 func (EvalDrift) Essential() bool { return false }
 
-func (a EvalDrift) digest(ctx context.Context, host, model string) (string, bool) {
-	if a.digestFn != nil {
-		return a.digestFn(ctx, host, model)
-	}
-	return core.OllamaDigest(ctx, host, model)
-}
-
 // gatedLocalTiers returns the (family, ref, provider, model) of each local
 // classify/routine tier the promotion gate governs (ollama + fm-backed).
 type gatedTier struct{ family, ref, provider, model string }
@@ -55,18 +48,13 @@ func gatedLocalTiers(m config.ModelsConfig) []gatedTier {
 // tierDigest is the drift key for one gated tier: the Ollama model digest, or
 // "macos:<version>" for fm-backed tiers.
 func (a EvalDrift) tierDigest(ctx context.Context, m config.ModelsConfig, t gatedTier) (string, bool) {
-	if t.provider == config.ProviderAppleFM {
-		fn := a.osVersionFn
-		if fn == nil {
-			fn = core.MacOSProductVersion
-		}
-		v, ok := fn(ctx)
-		if !ok {
-			return "", false
-		}
-		return "macos:" + v, true
-	}
-	return a.digest(ctx, m.OllamaHost, t.model)
+	// Delegates to the shared helper so this automation, the doctor vetting
+	// check and `axon eval` all compute the same key. The seams stay here so
+	// tests keep injecting probes.
+	return core.TierDriftKey(ctx,
+		config.ModelRef{Provider: t.provider, Model: t.model},
+		m.OllamaHost,
+		core.DriftSeams{OllamaDigestFn: a.digestFn, OSVersionFn: a.osVersionFn})
 }
 
 // DetectChange builds a cursor from the current digests of gated local tiers;

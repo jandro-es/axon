@@ -54,12 +54,12 @@ func newEvalCmd(gf *globalFlags) *cobra.Command {
 
 			if !noSave {
 				host := deps.profile.Models.OllamaHost
+				// The key stored here is compared later by the doctor vetting
+				// check and the eval-drift automation, so it MUST come from
+				// the same helper — a mismatch means every tier reports drift
+				// forever, or none ever does.
 				digestOf := func(ref string) string {
-					r := config.ParseModelRef(ref)
-					if r.Provider != config.ProviderOllama {
-						return ""
-					}
-					dg, _ := core.OllamaDigest(cmd.Context(), host, r.Model)
+					dg, _ := core.TierDriftKey(cmd.Context(), config.ParseModelRef(ref), host, core.DriftSeams{})
 					return dg
 				}
 				if err := persistEvalRuns(cmd.Context(), deps.db, rep, digestOf); err != nil {
