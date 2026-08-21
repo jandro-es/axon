@@ -57,9 +57,16 @@ missing them get **403 `forbidden`** (not 401).
 Everything else (`/health`, `/events`, `/api/tokens|usage|runs|ingestion|vault|graph|activity|review|export`)
 needs **no** guard header.
 
-**Companion v1 sends only `X-Axon-Actions`** (for the Actions badge count).
-It performs no review resolution, no ask, and no capture — those stay on the
-web dashboard (PRD §7 non-goals).
+**What Companion sends, by version.** v1 (0.1.0) sent only `X-Axon-Actions`
+(the Actions badge count). 0.2.0 added `X-Axon-Search`, `X-Axon-Ask` and
+`X-Axon-Capture` for the Siri/Shortcuts verbs (CFR-92…95), and 0.3.0 added a
+second `X-Axon-Capture` caller: the share extension (CFR-96…99), which sends
+the same `{url, title, text}` body — no contract change. **Review resolution
+stays on the web dashboard** (PRD §7 non-goals).
+
+`POST /api/capture` therefore has four callers in total: the vault's own
+`00-Inbox` folder, the served `/capture` page and its bookmarklet (ADR-024),
+`CaptureThoughtIntent` (CFR-95), and the share extension (CFR-96).
 
 ---
 

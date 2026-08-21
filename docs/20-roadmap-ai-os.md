@@ -261,11 +261,33 @@ from the owner's side, but a browser writing into a watched folder is not.
 watched folders as well as the inbox — otherwise a new file outside the vault
 leaves the inbox unchanged, the tick is skipped, and the sweep never runs.
 
-### E2 — macOS share extension (S, Companion) · candidate — not scheduled
+### E2 — macOS share extension (S, Companion) · **SHIPPED 2026-08-21 in companion-v0.3.0 — CFR-96…CFR-99** (spec: `docs/superpowers/specs/2026-08-21-share-extension-design.md`)
 **Value:** the system Share sheet becomes a capture path from every app.
-**Shape:** a Companion share extension writing through the daemon's existing
-guarded capture endpoint (ADR-024) — zero new daemon surface.
-**Open decisions:** none daemon-side; Companion packaging/entitlements work.
+**Shape:** an `AxonShare.appex` inside the Companion, sandboxed, POSTing to the
+existing guarded `/api/capture` (ADR-024) — zero new daemon surface, **no FR,
+no ADR, no migration**. The entry's own prediction held: all the work was
+Companion packaging and entitlements.
+
+**Open decisions resolved.** **URL, web page and text only** — files already
+have a door (E1 watch-folders), and a file-capable extension would need either
+vault paths inside a sandbox or a new daemon endpoint. A **compose panel**,
+not fire-and-forget: it is where an annotation is worth something, and where a
+failure has somewhere to appear.
+
+**What the feasibility spike settled before the spec was written** (the repo
+had never built an appex, and `package_app.sh` hand-assembles the bundle):
+SwiftPM *can* build one — `-Xlinker -e -Xlinker _NSExtensionMain`, because the
+bare `-e` form makes swiftc evaluate the symbol name as Swift source; a
+**non-sandboxed container app can host a sandboxed appex** (`codesign --deep
+--strict` accepts it); and the sandbox does not block the loopback POST.
+**And the trap:** a registered extension is *not* an enabled one — it stays out
+of the Share menu until the user switches it on in System Settings, which is
+why CFR-99 is a shipped Settings row rather than a future support thread.
+
+**One thing Swift 6 forced, worth recording:** extraction is `@MainActor`.
+Neither `NSExtensionItem` nor `NSItemProvider` is `Sendable`, and the items
+are read off a `@MainActor` view controller — staying on the actor removes the
+boundary instead of silencing it with `@unchecked Sendable`.
 
 ## Theme F — Interop
 

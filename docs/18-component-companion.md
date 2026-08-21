@@ -10,10 +10,13 @@
 ## What it is
 
 A SwiftPM-built (no Xcode project) macOS menu-bar app in `apps/companion/`,
-two targets:
+three targets:
 
 - **`AxonKit`** — models, dashboard REST client, SSE client, CLI wrapper, and
   the `DaemonController` state machine.
+- **`AxonShare`** — the share extension's appex (CFR-96…99, 0.3.0): views
+  only, its logic in `AxonKit/Share/`. Sandboxed inside the unsandboxed app;
+  `package_app.sh` assembles and signs it into `Contents/PlugIns/`.
 - **`Companion`** — MenuBar presence, Insights (Swift Charts), Settings,
   Doctor, Onboarding, and the Liquid-Glass support layer (`Glass.swift`, whose
   rules the web dashboard now mirrors — ADR-037).
@@ -30,7 +33,7 @@ remains the product UI, and the daemon is fully operable without the app.
 - `apps/companion/CONTRACT.md` freezes the daemon API surface the app consumes
   (with fixtures enforced as a CI regression net). Treat a contract change as a
   daemon API change, not an app detail.
-- The Companion carries its own requirement namespace, **CFR-01…CFR-91**, in
+- The Companion carries its own requirement namespace, **CFR-01…CFR-99**, in
   its PRD. This is deliberate: CFRs bind the *client*, FRs bind the *daemon*.
   Where a Companion need produced daemon behaviour, that behaviour has an FR
   (FR-184…FR-188) — CFRs are never cited as daemon requirements.

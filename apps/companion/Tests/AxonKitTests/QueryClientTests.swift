@@ -87,6 +87,39 @@ struct QueryClientTests {
         let sent = try #require(try JSONSerialization.jsonObject(with: body) as? [String: String])
         #expect(sent["text"] == "call the notary about the deed")
     }
+
+    @Test func capturePostsURLTitleAndTextAndOmitsEmptyFields() async throws {
+        stub.reset()
+        stub.routes["/api/capture"] = .init(body: Data("{}".utf8))
+
+        try await makeClient().capture(
+            url: "https://example.com/a", title: "A page", text: "the bit I selected")
+
+        let request = try #require(stub.recorded.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.value(forHTTPHeaderField: "X-Axon-Capture") == "1")
+        #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        let body = try #require(request.axonBodyData)
+        let sent = try #require(try JSONSerialization.jsonObject(with: body) as? [String: String])
+        #expect(sent["url"] == "https://example.com/a")
+        #expect(sent["title"] == "A page")
+        #expect(sent["text"] == "the bit I selected")
+    }
+
+    @Test func captureOmitsEmptyFieldsRatherThanSendingBlanks() async throws {
+        stub.reset()
+        stub.routes["/api/capture"] = .init(body: Data("{}".utf8))
+
+        try await makeClient().capture(url: "https://example.com/a")
+
+        let body = try #require(stub.recorded.first?.axonBodyData)
+        let sent = try #require(try JSONSerialization.jsonObject(with: body) as? [String: String])
+        #expect(sent["url"] == "https://example.com/a")
+        // An empty title would make the daemon write a blank H1 instead of
+        // falling back to "Captured note".
+        #expect(sent["title"] == nil)
+        #expect(sent["text"] == nil)
+    }
 }
 
 // URLProtocol turns httpBody into a stream before the request is recorded;

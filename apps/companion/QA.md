@@ -210,3 +210,42 @@ appcast (0.1.0 → 0.2.0), GitHub release published. Remaining, in order:
    Ask spends real tokens — point at a scratch profile if you'd rather not.
 3. **Standing MenuBarExtra items** (from 0.1.0, still open): glass rendering,
    keyboard traversal, VoiceOver, Reduce Transparency fallback, WCAG contrast.
+
+## Share extension (CFR-96…99, companion-v0.3.0)
+
+Extension launch is a registration property no unit test reaches, so this
+section is manual. Registering from `dist/` deliberately leaves the installed
+`/Applications/Axon.app` alone.
+
+**Setup** — `ARCHES=arm64 ./Scripts/package_app.sh release`, then
+`pluginkit -a "$PWD/dist/Axon.app/Contents/PlugIns/AxonShare.appex"` and
+`pluginkit -e use -i com.axon.companion.share`.
+Success = `pluginkit -mAvvv -i com.axon.companion.share` prints a leading `+`.
+Unregister when done with `pluginkit -r <same path>`.
+
+1. **It is in the Share menu: ✅ VERIFIED 2026-08-21** —
+   `NSSharingService.sharingServices(forItems:)` for a URL lists "Axon", and
+   performing the service launches
+   `AxonShare.appex/Contents/MacOS/AxonShare` with no crash or fault in
+   `log show`. The signed bundle passes `codesign --verify --deep --strict`.
+2. **The captured note's shape: ✅ VERIFIED 2026-08-21** — the payload the
+   extension sends (`{url,title,text}` + `X-Axon-Capture: 1`) against the live
+   daemon writes `00-Inbox/capture-<stamp>.md` with **the URL on its own first
+   line** (what makes the capture automation fetch it), the title as an H1 and
+   the selection as the body.
+3. **Share from Safari (needs a human):** select a paragraph on any article,
+   Share → Axon. Expect the panel to show the page title and URL, with the
+   note field pre-filled with the selection and focused. Press ⏎; expect a
+   fresh `capture-<stamp>.md` in `00-Inbox`.
+4. **Daemon down (needs a human):** `axon stop`, share again. Expect
+   **"Axon isn't running. Open Axon Companion to start it."**, the panel still
+   open. Start the daemon and press **Capture** again in the same panel — it
+   must succeed without re-sharing.
+5. **Capture switched off (needs a human):** set
+   `dashboard.capture_enabled: false`, restart the daemon, share again. Expect
+   **"Capture is switched off for this profile."** Restore the setting.
+6. **The Settings row (needs a human):** Companion Settings → General shows
+   **Share menu — Enabled** with no button. Run
+   `pluginkit -e ignore -i com.axon.companion.share`, reopen Settings: **Not
+   enabled**, with a working **Open Extensions Settings…** button. Re-enable
+   with `pluginkit -e use -i com.axon.companion.share`.

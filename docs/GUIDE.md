@@ -420,6 +420,18 @@ The bookmarklet opens AXON's own `/capture` page, which performs the actual
 guarded request same-origin — an arbitrary web page cannot POST to the endpoint
 itself (the guard requires a same-origin request carrying a custom header).
 
+**From the Share sheet (macOS, Companion 0.3.0+).** Install the Companion
+into `/Applications` and launch it once, then switch **Axon** on under System
+Settings → General → Login Items & Extensions → **Sharing**. (Companion
+Settings → General shows whether it is on, and offers a button that takes you
+there.) After that, **Share → Axon** from Safari or any other app opens a small
+panel with the page title, its URL and an editable note pre-filled with your
+selection; pressing ⏎ writes the note into `00-Inbox/`, and the `capture`
+automation ingests it on the next tick. If the daemon is stopped, or the
+profile has capture switched off, the panel says so and keeps your text so you
+can retry. Files and images are not shared this way — use watch-folders for
+those.
+
 **macOS Shortcuts / curl.** For a share-sheet Shortcut, add a *Get Contents of
 URL* action:
 

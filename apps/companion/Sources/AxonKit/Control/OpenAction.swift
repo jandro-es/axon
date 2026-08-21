@@ -10,6 +10,9 @@ public enum OpenAction: Equatable, Sendable {
     /// A dashboard tab, deep-linked through the URL fragment.
     case dashboardTab(String)
     case capturePage
+    /// System Settings → General → Login Items & Extensions → Sharing, where
+    /// the share extension is switched on (CFR-99).
+    case extensionsSettings
     case vaultInObsidian(vaultPath: String)
     case revealInFinder(path: String)
     case logsFolder(dataDir: String)
@@ -34,6 +37,9 @@ public enum OpenAction: Equatable, Sendable {
 
         case .capturePage:
             return baseURL.appending(path: "capture")
+
+        case .extensionsSettings:
+            return URL(string: "x-apple.systempreferences:com.apple.ExtensionsPreferences")
 
         case .vaultInObsidian(let vaultPath):
             return Self.obsidianURL(path: vaultPath)

@@ -51,3 +51,21 @@ variables`, `allow-unsigned-executable-memory`) are strictly broader and are
 not used.
 
 If Companion ever drops Sparkle, this entitlement goes with it.
+
+## AxonShare.entitlements — the share extension (CFR-96)
+
+The share extension is **sandboxed** (`com.apple.security.app-sandbox`) while
+the app that contains it is not. This is not an oversight and must not be
+"fixed" in either direction:
+
+- macOS requires app extensions to be sandboxed. There is no opt-out.
+- The container app cannot be sandboxed: Sparkle launches separately-signed
+  helper tools, which is also why it carries
+  `com.apple.security.cs.disable-library-validation`.
+- `codesign --verify --deep --strict` accepts the combination; it was verified
+  on macOS 27 before the design was written.
+
+The extension's only other entitlement is
+`com.apple.security.network.client` — outgoing connections, used for exactly
+one destination: `POST http://127.0.0.1:7777/api/capture`. Without it the
+sandboxed process cannot reach the daemon at all.
