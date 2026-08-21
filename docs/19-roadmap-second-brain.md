@@ -145,7 +145,7 @@ through the review queue instead of free-text nudges.
 frontmatter patch (new narrow mutation, needs its own design pass) or a manual
 step.
 
-### D3 — Weekly review flow (S) · candidate — not scheduled
+### D3 — Weekly review flow (S) · candidate — not scheduled *(mostly a recipe — tried 2026-08-21)*
 **Value:** GTD's weekly review is the habit AXON is best placed to scaffold —
 everything it needs (stale actions, someday list, pulse, orphans, pending
 proposals) already exists, just not in one place.
@@ -153,6 +153,28 @@ proposals) already exists, just not in one place.
 `axon:review` managed block (consolidate pattern); dashboard "Needs you" panel
 already deep-links the interactive halves.
 **Open decisions:** its own note vs a section of Actions.md; day/time default.
+
+**Tried as a recipe (ADR-039) and three of five components already work.** A
+real recipe was built and run: it produced a usable weekly review from the
+action board plus recently-touched notes. The enabling property — worth
+knowing before building anything here — is that **automation output is just a
+note, so a recipe composes over other automations**: reading
+`01-Projects/Actions.md` inherits the whole GTD board (overdue / next /
+someday) that `actions-consolidate` renders, with no actions reader involved,
+and `01-Projects/Project Pulse.md` supplies the pulse the same way.
+- ✅ stale actions, someday list — via `Actions.md`
+- ✅ project pulse — via `Project Pulse.md` (when `project-pulse` is enabled)
+- ❌ pending proposals — `.axon/review-queue.md` is refused as an input; the
+  rule that stops recipes *writing* system files is over-broad and blocks
+  reads too. `docs/20` **C2 priority 1** fixes exactly this.
+- ❌ orphans — link topology; nothing renders it into a note to compose over
+  (see `docs/20` C2 priority 3, and prefer shipping **E1** below first, which
+  would render one).
+
+**So D3 may not need a Go slice at all** — with C2's one-line read fix it is
+four-fifths a config block, and shipping E1 would close the fifth. Reassess
+before writing Go; if it does ship as a recipe, ship it as a documented
+example rather than a built-in.
 
 ## Theme E — Knowledge health
 

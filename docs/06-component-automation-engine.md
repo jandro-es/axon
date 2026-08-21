@@ -159,8 +159,21 @@ while writing only managed blocks. A recipe name colliding with a built-in is
 refused loudly at `axon start`, `axon run`, and in doctor (built-ins always
 win); recipes are never `Essential`, so budget-guard may pause them.
 
+**Recipes compose over other automations.** Not obvious from the reader list,
+but load-bearing in practice: an automation's output is an ordinary vault
+note, so a `note` input can read it. Reading `01-Projects/Actions.md` gives a
+recipe the entire GTD board `actions-consolidate` renders (overdue, next
+actions, waiting, someday) without any actions reader existing; the same holds
+for `Project Pulse.md`, `Actions.md`, research reports, and every other
+managed-block note. Prefer composing over an existing automation's output to
+asking for a new reader. Note that this makes **nested `axon:` markers the
+normal case** — the composed text carries the source note's own markers — and
+they are neutralized on write so they cannot terminate the recipe's block.
+
 **Caps** are code, not config: 32 KB per rendered input, ≤ 8 inputs, ≤ 10
-review proposals per run. Anything needing a new reader, a second model call,
+review proposals per run. Inputs may not read under `.axon/` or `.trash/`
+(shared with the sink rule; the read half is a known over-restriction —
+`docs/20` C2). Anything needing a new reader, a second model call,
 or a different sink is a Go automation, not a recipe stretch.
 
 ## 6. Acceptance checks

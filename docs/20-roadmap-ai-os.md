@@ -88,35 +88,63 @@ sink; not agentic (one-shot `runModel` only); recipes live in `config.yaml`
 (outside every model write path — vault-portable sharing deferred), scheduled
 by ordinary `automations.<name>` entries.
 
-### C2 — Recipe vocabulary v2: a sources reader and an age selector (S) · candidate — not scheduled
-**Why now:** the first real attempt to express an existing candidate as a
-recipe — `docs/19` **E2** (source freshness), tried 2026-08-21 — failed on
-three reader gaps that are not specific to E2. C1's premise was that the
-vocabulary should stay small until evidence says otherwise; this is the
-evidence.
-**Value:** unlocks the whole "what has gone stale?" class of recipes (stale
-sources, dormant projects, ageing research, untouched inbox items) without
-another Go automation each time.
-**Shape:** two additive readers, both read-only and zero-model, shaped exactly
-like the existing three so validation and the input-hash change-gate need no
-new concepts.
+### C2 — Recipe vocabulary v2: let recipes read `.axon/`, then reach the derived tables (S) · candidate — not scheduled
+*Reframed 2026-08-21 after a second experiment; the first draft led with a
+`sources` reader, which the D3 result demoted.*
+
+**Why now — two experiments, opposite results.** `docs/19` **E2** (source
+freshness) does not fit as a recipe at all: its signal lives in the `sources`
+table, which nothing reaches. `docs/19` **D3** (weekly review) mostly *does* —
+a working recipe composed a real weekly review from the GTD board and
+recently-touched notes. The difference is the finding: **automation output is
+just a note, so recipes compose over other automations.** `actions-consolidate`
+renders the whole action board into `01-Projects/Actions.md`, so a `note`
+reader inherits overdue/next/someday without an actions reader existing.
+`project-pulse` works the same way. Recipes are meaningfully more capable than
+the three-reader vocabulary suggests, and the gaps that remain are narrow.
+
+**Priority 1 — split the path validator so recipes may READ `.axon/` (XS).**
+Today one shared `validRecipePath` governs both inputs and the block sink, so
+the rule that stops recipes *writing* system files also stops them *reading*
+one. That blocks `.axon/review-queue.md` — plain Markdown the dashboard
+already serves — which is exactly what D3's "pending proposals" section needs.
+Reading is not writing; the sink rule stays as-is. This is the cheapest, most
+enabling change on this page, and it corrects an over-broad rule rather than
+adding vocabulary.
+
+**Priority 2 — a `sources` reader and an age selector (S).** Still needed for
+E2, now second in line:
 - **`sources {older_than_days, limit}`** → the `sources` table as
-  `[[note]] — url (fetched DATE, kind, status)` lines. The data E2 needs
-  already exists; nothing currently reaches it.
-- **`older_than_days` on `recent_notes`** (or a sibling `stale_notes` reader)
-  → the inverse of today's lookback, and lifting the 90-day cap for it, since
-  staleness is by definition about older material. `db.NotesUpdatedBefore`
-  already exists — `actions-review` uses it — so this is nearly free.
-**Deliberately rejected — a fan-out sink.** E2's fourth blocker was wanting an
-advisory line on *each* matched report note. That would take a recipe's blast
-radius from one named note to N discovered ones, which is exactly the boundary
-ADR-039 drew ("anything needing a new sink is a Go automation"). Per-note
-annotation stays Go; a recipe with these readers can still write one aggregate
-digest, which is the useful 80%.
-**Open decisions:** whether `sources` filters by status (`ok`/`failed`/
-`redacted`) or returns all with the status rendered; one reader with an
-`older_than_days` field vs a separate `stale_notes` reader; whether the 90-day
-cap is lifted generally or only for the age-selecting path.
+  `[[note]] — url (fetched DATE, kind, status)` lines.
+- **`older_than_days`** (on `recent_notes`, or a sibling `stale_notes`) → the
+  inverse of today's lookback, lifting the 90-day cap for it, since staleness
+  is by definition about older material. `db.NotesUpdatedBefore` already
+  exists — `actions-review` uses it — so this is nearly free.
+
+**Priority 3 — link topology / orphans.** D3's only genuinely unreachable
+component. Unlike actions and pulse, no automation renders orphans into a
+note, so there is nothing to compose over. Worth doing only if `docs/19` E1
+(orphan & decay report) does not land first — if it does, it will render a
+note that recipes can read, and this priority disappears. Prefer that order.
+
+**Deliberately rejected — a fan-out sink.** E2 wanted an advisory line on
+*each* matched report note. That takes a recipe's blast radius from one named
+note to N discovered ones, exactly the boundary ADR-039 drew ("anything
+needing a new sink is a Go automation"). Per-note annotation stays Go; an
+aggregate digest is the useful 80%.
+
+**Nested markers are now the common case, not an edge case.** Composing over
+automation output embeds *that* note's `axon:` markers in the recipe's own
+block. The v1.5.0 marker-neutralization fix already handles this (verified
+live: a review recipe reading `Actions.md` produced an intact block with the
+nested markers made inert). Any new reader must keep neutralizing, and the
+D3-shaped recipe belongs in the test suite as the regression that proves it.
+
+**Open decisions:** whether `.axon/` reads are allowed wholesale or only for
+an allow-listed set (review queue, archive); whether `sources` filters by
+status or renders it; one reader with `older_than_days` vs a separate
+`stale_notes`; whether the 90-day cap lifts generally or only for the
+age-selecting path.
 
 ## Theme D — Local model fleet
 
