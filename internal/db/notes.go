@@ -327,6 +327,35 @@ func NotesUpdatedBefore(ctx context.Context, q Queryer2, beforeDate string, limi
 	return scanNoteStamps(rows)
 }
 
+// OrphanNotes lists notes disconnected from the wikilink graph (FR-204):
+// no resolved inbound link and no resolved outbound link, newest first.
+// limit <= 0 means unlimited.
+//
+// Two deliberate rules. Tag edges (kind = 'tag') do not count — a tag is not
+// a link to a note, and counting them would empty the report. A broken
+// outbound link (dst_note_id IS NULL) does not rescue a note from orphanhood:
+// it points at nothing that exists, so the note is still disconnected.
+func OrphanNotes(ctx context.Context, q Queryer2, limit int) ([]NoteStamp, error) {
+	query := `SELECT id, path, COALESCE(title,''), COALESCE(updated,'') FROM notes n
+	           WHERE NOT EXISTS (SELECT 1 FROM links l
+	                              WHERE l.src_note_id = n.id AND l.kind <> 'tag'
+	                                AND l.dst_note_id IS NOT NULL)
+	             AND NOT EXISTS (SELECT 1 FROM links l
+	                              WHERE l.dst_note_id = n.id AND l.kind <> 'tag')
+	           ORDER BY updated DESC, path`
+	var args []any
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
+	rows, err := q.QueryContext(ctx, query+";", args...)
+	if err != nil {
+		return nil, fmt.Errorf("orphan notes: %w", err)
+	}
+	defer rows.Close()
+	return scanNoteStamps(rows)
+}
+
 func scanNoteStamps(rows *sql.Rows) ([]NoteStamp, error) {
 	var out []NoteStamp
 	for rows.Next() {

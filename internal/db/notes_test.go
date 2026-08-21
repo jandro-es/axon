@@ -126,3 +126,61 @@ func TestNotesUpdatedBeforeLimit(t *testing.T) {
 		t.Fatalf("limit 2 wrong: %+v", two)
 	}
 }
+
+func TestOrphanNotes(t *testing.T) {
+	d := newMigratedDB(t)
+	ctx := context.Background()
+	mk := func(path, updated string) int64 {
+		id, err := InsertNote(ctx, d, NoteRow{Path: path, Title: path, Updated: updated})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	link := func(src int64, dstPath string, dst *int64, kind string) {
+		if err := InsertLink(ctx, d, LinkRow{SrcNoteID: src, DstPath: dstPath, DstNoteID: dst, Kind: kind}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	mk("Z Orphan.md", "2026-08-01")
+	inboundOnly := mk("Inbound Only.md", "2026-07-01")
+	outboundOnly := mk("Outbound Only.md", "2026-06-01")
+	brokenOnly := mk("Broken Only.md", "2026-05-01")
+	taggedOnly := mk("Tagged Only.md", "2026-04-01")
+	hub := mk("Hub.md", "2026-03-01")
+
+	link(hub, "Inbound Only", &inboundOnly, "wikilink") // gives inboundOnly an inbound edge
+	link(outboundOnly, "Hub", &hub, "wikilink")         // gives outboundOnly a resolved outbound edge
+	link(brokenOnly, "Nonexistent", nil, "wikilink")    // broken: dst_note_id IS NULL
+	link(taggedOnly, "#some-tag", nil, "tag")           // a tag is not a link to a note
+
+	got, err := OrphanNotes(ctx, d, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := make([]string, len(got))
+	for i, n := range got {
+		paths[i] = n.Path
+	}
+	// Newest first. hub has an outbound edge; inboundOnly and outboundOnly are
+	// connected. Broken-only and tag-only are STILL orphans.
+	want := []string{"Z Orphan.md", "Broken Only.md", "Tagged Only.md"}
+	if len(paths) != len(want) {
+		t.Fatalf("want %v, got %v", want, paths)
+	}
+	for i := range want {
+		if paths[i] != want[i] {
+			t.Fatalf("want %v, got %v", want, paths)
+		}
+	}
+
+	// Limit caps the result, newest first.
+	one, err := OrphanNotes(ctx, d, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(one) != 1 || one[0].Path != "Z Orphan.md" {
+		t.Fatalf("limit 1: want [Z Orphan.md], got %+v", one)
+	}
+}
