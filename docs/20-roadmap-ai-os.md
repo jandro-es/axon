@@ -61,7 +61,7 @@ authentication; personal-only vs configurable.
 
 ## Theme C — User-defined automations
 
-### C1 — Declarative automation recipes (L) · candidate — not scheduled
+### C1 — Declarative automation recipes (L) · **graduated 2026-08-20 — FR-199…FR-201, ADR-039** (spec: `docs/superpowers/specs/2026-08-20-automation-recipes-design.md`)
 **Value:** today a new automation is a Go type, a registry entry, and three
 count-assertion bumps. The 24 shipped automations decompose into a small
 vocabulary — trigger (cron + change-gate), retrieval (search/list readers),
@@ -74,9 +74,11 @@ engine, so the chokepoint, change-gates, budgets, dry-run, catalog, and
 dashboard reliability table apply automatically. Sinks are restricted to the
 existing safe writers — a recipe can *propose* anything and *directly write*
 only managed blocks.
-**Open decisions:** recipe vocabulary v1 (how little is enough); whether
-recipes may be agentic (recommendation: no in v1 — one-shot `runModel` only);
-sharing format (a recipe is a file → vault-portable).
+**Decisions (2026-08-20, all recommended options picked):** vocabulary v1 =
+three readers (`note`/`search`/`recent_notes`) + `prompt`-or-`render` + one
+sink; not agentic (one-shot `runModel` only); recipes live in `config.yaml`
+(outside every model write path — vault-portable sharing deferred), scheduled
+by ordinary `automations.<name>` entries.
 
 ## Theme D — Local model fleet
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/jandro-es/axon/internal/automations"
 	"github.com/jandro-es/axon/internal/config"
 	"github.com/jandro-es/axon/internal/core"
 	"github.com/jandro-es/axon/internal/selfupdate"
@@ -55,6 +56,13 @@ func newDoctorCmd(gf *globalFlags) *cobra.Command {
 
 			report := core.Doctor(cfg, activeProfile)
 			report.Checks = append(report.Checks, updateAvailabilityCheck())
+			// User-defined recipes (FR-201): built in automations, which core
+			// cannot import (automations→core already exists).
+			if cfg != nil {
+				if p, ok := cfg.Profiles[activeProfile]; ok {
+					report.Checks = append(report.Checks, automations.RecipesCheck(p))
+				}
+			}
 
 			out := cmd.OutOrStdout()
 

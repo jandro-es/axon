@@ -89,7 +89,11 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 				dashboard.PersistEvents(ctx, bus, deps.db)
 			}()
 
-			// Schedule automations.
+			// Schedule automations. A recipe colliding with a built-in name
+			// refuses startup loudly (FR-201) rather than silently shadowing.
+			if err := automations.ValidateRecipes(deps.profile); err != nil {
+				return err
+			}
 			sched := scheduler.New(scheduler.Options{Log: logger, Jitter: 5 * time.Second})
 			for _, s := range automations.Schedulables(deps.profile) {
 				a := s.Automation
