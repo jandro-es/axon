@@ -168,7 +168,7 @@ vector neighbours and proposing `link` items (link-suggester's accept path) or
 **Open decisions:** proposal budget per week; whether "archive candidate" is a
 proposal kind at all (it edges toward delete-shaped territory — likely no).
 
-### E2 — Source freshness for research notes (S) · candidate — not scheduled
+### E2 — Source freshness for research notes (S) · candidate — not scheduled *(confirmed Go, not a recipe — 2026-08-21)*
 **Value:** ingested sources go stale; a research report citing a 2024 page
 presents as current.
 **Shape:** derived staleness from `source:`+ingest date already in the DB;
@@ -176,6 +176,27 @@ deep-research's currency-skip logic inverted into an advisory "stale sources"
 line on report notes and the health score. Re-fetch stays manual (egress is
 owner-initiated).
 **Open decisions:** staleness thresholds per source kind; health-score weight.
+
+**Tried as a recipe (ADR-039) and it does not fit — four independent
+blockers, found by building and running the closest possible recipe:**
+1. **The signal is unreachable.** Staleness lives in the `sources` table
+   (`url`, `fetched_at`, `kind`, `status`); no recipe reader touches it.
+   `recent_notes` surfaces the `notes` table, so the only dates a recipe sees
+   are `updated` — reindex/file-mtime, not when the source was fetched. Wrong
+   dates, not just missing ones.
+2. **The reader can't reach back far enough.** `lookback_days` is capped at
+   90 (validation refuses more), and staleness is by definition about older
+   material.
+3. **It points the wrong way.** `recent_notes` returns recently-*updated*
+   notes; E2 needs the inverse.
+4. **The sink is singular.** A recipe rebuilds one block in one named note;
+   E2 wants an advisory line on *each* report note, plus a health-score
+   contribution (Go regardless).
+
+Blockers 1–3 are addressed by the proposed **`docs/20` C2** reader additions,
+which would make a *partial* E2 (an aggregate "stale sources" digest note)
+expressible as a recipe. The per-report annotation in blocker 4 stays Go on
+purpose — see C2's rejected option.
 
 ## Theme F — Writing & synthesis
 

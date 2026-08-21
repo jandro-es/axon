@@ -88,6 +88,36 @@ sink; not agentic (one-shot `runModel` only); recipes live in `config.yaml`
 (outside every model write path — vault-portable sharing deferred), scheduled
 by ordinary `automations.<name>` entries.
 
+### C2 — Recipe vocabulary v2: a sources reader and an age selector (S) · candidate — not scheduled
+**Why now:** the first real attempt to express an existing candidate as a
+recipe — `docs/19` **E2** (source freshness), tried 2026-08-21 — failed on
+three reader gaps that are not specific to E2. C1's premise was that the
+vocabulary should stay small until evidence says otherwise; this is the
+evidence.
+**Value:** unlocks the whole "what has gone stale?" class of recipes (stale
+sources, dormant projects, ageing research, untouched inbox items) without
+another Go automation each time.
+**Shape:** two additive readers, both read-only and zero-model, shaped exactly
+like the existing three so validation and the input-hash change-gate need no
+new concepts.
+- **`sources {older_than_days, limit}`** → the `sources` table as
+  `[[note]] — url (fetched DATE, kind, status)` lines. The data E2 needs
+  already exists; nothing currently reaches it.
+- **`older_than_days` on `recent_notes`** (or a sibling `stale_notes` reader)
+  → the inverse of today's lookback, and lifting the 90-day cap for it, since
+  staleness is by definition about older material. `db.NotesUpdatedBefore`
+  already exists — `actions-review` uses it — so this is nearly free.
+**Deliberately rejected — a fan-out sink.** E2's fourth blocker was wanting an
+advisory line on *each* matched report note. That would take a recipe's blast
+radius from one named note to N discovered ones, which is exactly the boundary
+ADR-039 drew ("anything needing a new sink is a Go automation"). Per-note
+annotation stays Go; a recipe with these readers can still write one aggregate
+digest, which is the useful 80%.
+**Open decisions:** whether `sources` filters by status (`ok`/`failed`/
+`redacted`) or returns all with the status rendered; one reader with an
+`older_than_days` field vs a separate `stale_notes` reader; whether the 90-day
+cap is lifted generally or only for the age-selecting path.
+
 ## Theme D — Local model fleet
 
 ### D1 — Multi-provider eval-gated routing (M) · candidate — not scheduled
@@ -175,13 +205,14 @@ belongs here or stays dashboard-only.
 makes it public) and **C1 recipes**, which was the largest and most
 platform-defining slice and did get its own release.
 
-**Now that recipes exist, test them before writing more Go.** Several
-candidates on both roadmaps may already be expressible as a recipe rather
-than a new Go automation — `docs/19`'s E2 (source freshness), D3 (weekly
-review flow) and F2 (MOC materialisation) are the obvious ones. Trying one is
-the cheapest way to learn whether the v1 vocabulary is sufficient or needs a
-fourth reader or a second sink, while the design is still fresh. That answer
-should inform the next build slice rather than follow it.
+**Recipes were dogfooded first, and the answer was useful.** `docs/19` E2
+(source freshness) was tried as a recipe on 2026-08-21 and does not fit: the
+staleness signal lives in the `sources` table, which no reader reaches, and
+the one reader with dates points at recently-*updated* notes with a 90-day
+cap. E2 stays Go; the reader gaps became **C2** above. The remaining
+candidates worth trying the same way are `docs/19`'s D3 (weekly review flow)
+and F2 (MOC materialisation) — both read notes rather than sources, so both
+may already be expressible today.
 
 **Then:** **G1** is the strongest remaining pick — cheap, it compounds trust,
 and recipes just widened what doctor can warn about (name collisions,
