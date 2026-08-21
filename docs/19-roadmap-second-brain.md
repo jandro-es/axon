@@ -145,7 +145,7 @@ through the review queue instead of free-text nudges.
 frontmatter patch (new narrow mutation, needs its own design pass) or a manual
 step.
 
-### D3 — Weekly review flow (S) · **SHIPPED 2026-08-21 as a documented example recipe — no Go, no FR**
+### D3 — Weekly review flow (S) · **SHIPPED 2026-08-21 in v1.7.0 as a documented example recipe — no Go, no FR**
 **Value:** GTD's weekly review is the habit AXON is best placed to scaffold —
 everything it needs (stale actions, someday list, pulse, orphans, pending
 proposals) already exists, just not in one place.

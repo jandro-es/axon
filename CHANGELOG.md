@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-08-21
+
+**Reach out, and take things in.** A minor release: no schema change (stays
+v7), no new MCP tool, no new built-in automation. Two new **ADRs** (040, 041)
+because both new slices open a boundary the earlier ones did not — an ingress
+from folders outside the vault, and the daemon's first *outbound push*. Both
+are off by default and stay off until you name a folder or a destination.
+
 ### Added
 
 - **A weekly GTD review you can turn on by uncommenting it.** (`docs/19` D3;
@@ -34,6 +42,27 @@ All notable changes to this project are documented here. The format is based on
   a self-hosted ntfy on localhost or your LAN works, and https is required for
   anything public. Delivery is best-effort — capped at ten a minute, never
   retried, and never able to break the daemon.
+
+### Fixed
+
+- **The updater never told you about new automations.** The "new config
+  settings" check scanned only top-level keys, so it could not see
+  `automations.<name>` entries — and because the scheduler iterates *your*
+  configured automations, one with no entry is never scheduled while
+  `axon automations` shows it as merely "disabled". Upgrading to 1.6.0 would
+  have left `orphan-report` and `self-check` invisible. The updater now asks
+  the new binary for its automation list and names any your config lacks.
+- **A clean update exited non-zero.** Both update scripts ended with a
+  conditional whose false branch became the script's exit status under
+  `set -e`, so an update with no new config settings reported failure to any
+  caller that checked. Pre-existing; found while fixing the above.
+- **Watch-folder deny-listing missed the resolved form of a root.** On macOS
+  `/etc` is itself a symlink to `/private/etc`, so a deny-list holding only
+  literal paths would have accepted `watch_folders: ["/private/etc"]`. Both
+  forms are now compared.
+- **An egress refusal said "ingest denied".** `PolicyError` was ingest-worded,
+  so a blocked notification destination reported the wrong direction in
+  `axon doctor` and the daemon log.
 
 ## [1.6.0] — 2026-08-21
 
@@ -1185,7 +1214,8 @@ The initial feature-complete build, implemented in phases against
   `config get/set`. *(PDF ingestion, the api_key adapter and `config get/set`
   were implemented in 0.10.0.)*
 
-[Unreleased]: https://github.com/jandro-es/axon/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/jandro-es/axon/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/jandro-es/axon/releases/tag/v1.7.0
 [1.6.0]: https://github.com/jandro-es/axon/releases/tag/v1.6.0
 [1.5.0]: https://github.com/jandro-es/axon/releases/tag/v1.5.0
 [1.4.0]: https://github.com/jandro-es/axon/releases/tag/v1.4.0

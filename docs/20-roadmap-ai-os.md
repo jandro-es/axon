@@ -46,7 +46,7 @@ FR-26 funnel — never a command). ntfy-class topic push makes the outbound half
 nearly free; the D1 capture endpoint (ADR-024) already proved the guarded
 inbound pattern.
 
-### B1 — Outbound notifications (S) · **SHIPPED 2026-08-21 — FR-210/FR-211, ADR-041** (spec: `docs/superpowers/specs/2026-08-21-notifications-design.md`)
+### B1 — Outbound notifications (S) · **SHIPPED 2026-08-21 in v1.7.0 — FR-210/FR-211, ADR-041** (spec: `docs/superpowers/specs/2026-08-21-notifications-design.md`)
 **Value:** the briefing and "Needs you" panel reach the owner instead of
 waiting to be opened.
 **Shape:** a `notify` provider seam (ntfy topic first; the OS-native path is
@@ -202,7 +202,7 @@ platform of importers. The re-proposal is one primitive: **watch-folders**. The
 capture funnel (FR-26) already turns files-in-a-folder into captures — this
 merely widens *which* folders, reusing every downstream guarantee.
 
-### E1 — Watch-folders (S) · **SHIPPED 2026-08-21 — FR-208/FR-209, ADR-040** (spec: `docs/superpowers/specs/2026-08-21-watch-folders-design.md`)
+### E1 — Watch-folders (S) · **SHIPPED 2026-08-21 in v1.7.0 — FR-208/FR-209, ADR-040** (spec: `docs/superpowers/specs/2026-08-21-watch-folders-design.md`)
 **Value:** drop a PDF in `~/Downloads/axon`, screenshot to a watched folder,
 export from any app — it flows into the inbox without opening Obsidian.
 **Shape:** config-listed external folders polled by the capture automation
