@@ -125,3 +125,19 @@ func hasWildcard(patterns []string) bool {
 	}
 	return false
 }
+
+// CheckEgressPolicy applies ONLY the network-level egress allowlist to an
+// outbound host. Unlike CheckIngestPolicy it consults no ingest lists and
+// applies no IP guard: it exists for destinations the OWNER named in config
+// (ADR-041), where BlockedIPReason would block the self-hosted case while
+// defending against a threat — a prompt-injected agent choosing the URL —
+// that cannot occur on that path.
+func CheckEgressPolicy(p config.PolicyConfig, host string) error {
+	if host == "" {
+		return &PolicyError{Host: host, Reason: "empty host"}
+	}
+	if len(p.EgressAllowlist) > 0 && !hasWildcard(p.EgressAllowlist) && !matchesAny(p.EgressAllowlist, host) {
+		return &PolicyError{Host: host, Reason: "not in egress_allowlist"}
+	}
+	return nil
+}
