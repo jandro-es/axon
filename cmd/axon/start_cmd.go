@@ -47,6 +47,13 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 			st := ui.For(out)
 			fmt.Fprintln(out, st.Header(ui.IconRocket, fmt.Sprintf("axon start — profile %q", deps.name)))
 
+			// Refuse a recipe that shadows a built-in automation (FR-201).
+			// Checked with the other refusals, before the pidfile is claimed:
+			// a config error should cost nothing and leave nothing behind.
+			if err := automations.ValidateRecipes(deps.profile); err != nil {
+				return err
+			}
+
 			// Refuse to run as root over a user-owned vault: root-created notes
 			// come out 0600 root-owned and lock the real daemon out of them.
 			if err := checkNotRoot(deps.paths.DataDir, deps.paths.VaultPath); err != nil {
@@ -89,11 +96,7 @@ func newStartCmd(gf *globalFlags) *cobra.Command {
 				dashboard.PersistEvents(ctx, bus, deps.db)
 			}()
 
-			// Schedule automations. A recipe colliding with a built-in name
-			// refuses startup loudly (FR-201) rather than silently shadowing.
-			if err := automations.ValidateRecipes(deps.profile); err != nil {
-				return err
-			}
+			// Schedule automations.
 			sched := scheduler.New(scheduler.Options{Log: logger, Jitter: 5 * time.Second})
 			for _, s := range automations.Schedulables(deps.profile) {
 				a := s.Automation
