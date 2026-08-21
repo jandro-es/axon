@@ -601,3 +601,35 @@ func TestDoctorAppendsExtrasInOrder(t *testing.T) {
 		t.Fatal("a failing extra must make the report fail")
 	}
 }
+
+func TestWatchFoldersCheck(t *testing.T) {
+	// Off: no folders configured.
+	off := watchFoldersCheck(config.Profile{})
+	if off.Status != StatusOK || !strings.Contains(off.Detail, "no watched folders") {
+		t.Fatalf("empty list should read as off: %+v", off)
+	}
+	if off.Fix != "" {
+		t.Fatalf("an off check has nothing to fix: %+v", off)
+	}
+
+	// Healthy: a real directory.
+	good := t.TempDir()
+	okCheck := watchFoldersCheck(config.Profile{Capture: config.CaptureConfig{WatchFolders: []string{good}}})
+	if okCheck.Status != StatusOK || !strings.Contains(okCheck.Detail, "1") {
+		t.Fatalf("a readable folder should pass: %+v", okCheck)
+	}
+
+	// Warn: a missing directory, and it must carry a Fix so self-check
+	// (FR-207) can file it.
+	missing := filepath.Join(t.TempDir(), "not-mounted")
+	warn := watchFoldersCheck(config.Profile{Capture: config.CaptureConfig{WatchFolders: []string{good, missing}}})
+	if warn.Status != StatusWarn {
+		t.Fatalf("a missing folder should warn: %+v", warn)
+	}
+	if !strings.Contains(warn.Detail, missing) {
+		t.Fatalf("the warning should name the folder: %+v", warn)
+	}
+	if warn.Fix == "" {
+		t.Fatal("the warning must carry a Fix — self-check only proposes checks that have one")
+	}
+}

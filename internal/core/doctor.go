@@ -178,6 +178,7 @@ func Doctor(cfg *config.Config, activeProfile string, extras ...Check) DoctorRep
 			checks = append(checks, relatedCheck(p, paths))
 			checks = append(checks, memoryFactsCheck(paths))
 			checks = append(checks, actionsCheck(paths))
+			checks = append(checks, watchFoldersCheck(p))
 			checks = append(checks, localModelsVettingChecks(paths, p)...)
 			// 8–9. Multi-client wiring (FR-75): is the AXON MCP server registered
 			// with each Claude client, and is each client's guarantee honest.
@@ -1051,4 +1052,31 @@ func installHint(bin string) string {
 		return "sudo apt-get install -y tesseract-ocr poppler-utils"
 	}
 	return ""
+}
+
+// watchFoldersCheck reports on capture.watch_folders (FR-208). A folder that
+// is absent or unreadable is a warning rather than a config-load error, so an
+// unmounted volume cannot break `axon config validate` — this is where the
+// owner finds out. The Fix matters: self-check (FR-207) only proposes checks
+// that carry one.
+func watchFoldersCheck(p config.Profile) Check {
+	const name = "watch-folders"
+	folders := p.Capture.WatchFolders
+	if len(folders) == 0 {
+		return Check{Name: name, Status: StatusOK,
+			Detail: "no watched folders (drop-in capture from outside the vault is off; add capture.watch_folders to enable)"}
+	}
+	var bad []string
+	for _, f := range folders {
+		if err := config.WatchFolderReadable(f); err != nil {
+			bad = append(bad, fmt.Sprintf("%s (%v)", f, err))
+		}
+	}
+	if len(bad) > 0 {
+		return Check{Name: name, Status: StatusWarn,
+			Detail: fmt.Sprintf("%d of %d watched folder(s) unreadable: %s", len(bad), len(folders), strings.Join(bad, "; ")),
+			Fix:    "create the folder, or remove it from capture.watch_folders"}
+	}
+	return Check{Name: name, Status: StatusOK,
+		Detail: fmt.Sprintf("%d watched folder(s) readable — files dropped there are captured on the capture tick", len(folders))}
 }
