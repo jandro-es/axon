@@ -45,6 +45,54 @@ func GetSourceByURL(ctx context.Context, q Queryer, url string) (*SourceRow, err
 	return &s, nil
 }
 
+// SourceInfo is the read-layer projection of one ingested source joined to
+// its note (FR-203). Distinct from the write-side SourceRow: Path replaces
+// NoteID, and a source whose note is gone (ON DELETE SET NULL) carries an
+// empty Path.
+type SourceInfo struct {
+	Path      string
+	URL       string
+	Kind      string
+	FetchedAt string
+	Status    string
+}
+
+// SourcesOlderThan lists sources fetched strictly before beforeTS (RFC3339
+// UTC, so a lexicographic compare is chronological — the CountSourcesSince
+// precedent), newest first, capped at limit. An empty beforeTS applies no
+// age filter; limit <= 0 means unlimited. Status is returned, never filtered
+// on: a failed or redacted source is exactly what a freshness recipe wants
+// to surface.
+func SourcesOlderThan(ctx context.Context, q Queryer2, beforeTS string, limit int) ([]SourceInfo, error) {
+	query := `SELECT COALESCE(n.path,''), COALESCE(s.url,''), COALESCE(s.kind,''),
+	                 COALESCE(s.fetched_at,''), COALESCE(s.status,'')
+	            FROM sources s LEFT JOIN notes n ON n.id = s.note_id`
+	var args []any
+	if beforeTS != "" {
+		query += ` WHERE s.fetched_at != '' AND s.fetched_at IS NOT NULL AND s.fetched_at < ?`
+		args = append(args, beforeTS)
+	}
+	query += ` ORDER BY s.fetched_at DESC, s.url`
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
+	rows, err := q.QueryContext(ctx, query+";", args...)
+	if err != nil {
+		return nil, fmt.Errorf("sources older than %q: %w", beforeTS, err)
+	}
+	defer rows.Close()
+	var out []SourceInfo
+	for rows.Next() {
+		var s SourceInfo
+		if err := rows.Scan(&s.Path, &s.URL, &s.Kind, &s.FetchedAt, &s.Status); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
 // UpsertSource inserts or updates (by URL) a source row and returns its id.
 // `sources.url` carries no UNIQUE constraint in the schema, so this does an
 // explicit check-then-write rather than ON CONFLICT.
