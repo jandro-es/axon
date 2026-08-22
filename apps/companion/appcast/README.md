@@ -45,10 +45,13 @@ gh release create companion-v0.1.0 \
   apps/companion/dist/Axon-0.1.0.zip \
   --title "Axon Companion 0.1.0" --notes-file <notes> --latest=false
 
-# 4a. MANDATORY — verify the daemon still owns "Latest", and restore it if not.
+# 4a. Verify the daemon still owns "Latest", and restore it if not.
 #     `--latest=false` is NOT reliable: GitHub re-computes the latest release on
 #     publish and on any draft->published transition, and silently gave it to
-#     the Companion release during the 0.1.0 cut.
+#     the Companion release during the 0.1.0 AND 0.3.0 cuts. `axon update` no
+#     longer depends on this being right — it selects by tag shape, ignoring
+#     GitHub's "latest" entirely — but the Releases page still shows whatever
+#     GitHub picked, so a Companion build must not sit there as the headline.
 gh api repos/jandro-es/axon/releases/latest --jq .tag_name   # MUST print v<daemon>
 gh release edit v<daemon-version> --latest                   # if it does not
 

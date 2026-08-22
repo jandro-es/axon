@@ -22,10 +22,12 @@ func fakeReleaseServer(t *testing.T, version string, binary []byte) *httptest.Se
 	name := selfupdate.AssetName(version, runtime.GOOS, runtime.GOARCH)
 	sum := sha256.Sum256(binary)
 	checksums := fmt.Sprintf("%s  %s\n", hex.EncodeToString(sum[:]), name)
-	mux.HandleFunc("/repos/jandro-es/axon/releases/latest", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, `{"tag_name":"v%s","assets":[
+	mux.HandleFunc("/repos/jandro-es/axon/releases", func(w http.ResponseWriter, r *http.Request) {
+		// A Companion release rides in the same feed and must be ignored.
+		fmt.Fprintf(w, `[{"tag_name":"companion-v9.9.9","draft":false,"prerelease":false,"assets":[]},
+			{"tag_name":"v%s","draft":false,"prerelease":false,"assets":[
 			{"name":%q,"browser_download_url":"%s/dl/bin"},
-			{"name":"checksums.txt","browser_download_url":"%s/dl/sums"}]}`,
+			{"name":"checksums.txt","browser_download_url":"%s/dl/sums"}]}]`,
 			version, name, srv.URL, srv.URL)
 	})
 	mux.HandleFunc("/dl/bin", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write(binary) })
