@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -33,12 +34,33 @@ type Release struct {
 
 var httpClient = &http.Client{Timeout: 60 * time.Second}
 
-// CheckLatest queries the latest release of owner/repo.
+// daemonTagRE matches an axon release tag — v1.2.3 and nothing else. The same
+// Releases feed also carries the macOS Companion under companion-vX.Y.Z, and
+// GitHub's /releases/latest picks by creation time rather than tag shape: a
+// Companion release published after a daemon one becomes "latest", and its tag
+// parses as no version at all, so IsNewer reads it as "up to date" and the
+// update goes silent. Selecting by tag shape here is what keeps the two
+// release lines from being mistaken for each other.
+var daemonTagRE = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
+
+// maxReleasePage bounds the feed read. Every axon release is on the first page
+// by a wide margin; if that ever stops being true, CheckLatest says it found no
+// release rather than quietly offering a stale one.
+const maxReleasePage = 100
+
+// CheckLatest returns the highest-versioned axon release of owner/repo.
+//
+// It reads the release list rather than /releases/latest, because "latest" is
+// GitHub's own ordering and answers a different question than "the newest axon
+// version". Feed order is not authority either — the live feed sorts by neither
+// semver nor created_at — so every daemon tag is compared and the maximum wins.
+// Drafts and prereleases are skipped: `axon update` moves people between stable
+// releases only.
 func CheckLatest(ctx context.Context, baseURL, owner, repo string) (Release, error) {
 	if baseURL == "" {
 		baseURL = DefaultBaseURL
 	}
-	url := fmt.Sprintf("%s/repos/%s/%s/releases/latest", strings.TrimRight(baseURL, "/"), owner, repo)
+	url := fmt.Sprintf("%s/repos/%s/%s/releases?per_page=%d", strings.TrimRight(baseURL, "/"), owner, repo, maxReleasePage)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return Release{}, err
@@ -53,24 +75,56 @@ func CheckLatest(ctx context.Context, baseURL, owner, repo string) (Release, err
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return Release{}, fmt.Errorf("check latest release: status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
-	var payload struct {
-		TagName string `json:"tag_name"`
-		Assets  []struct {
+	var payload []struct {
+		TagName    string `json:"tag_name"`
+		Draft      bool   `json:"draft"`
+		Prerelease bool   `json:"prerelease"`
+		Assets     []struct {
 			Name string `json:"name"`
 			URL  string `json:"browser_download_url"`
 		} `json:"assets"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return Release{}, fmt.Errorf("decode release: %w", err)
+		return Release{}, fmt.Errorf("decode releases: %w", err)
 	}
+
+	best := -1
+	var bestVer [3]int
+	for i, r := range payload {
+		if r.Draft || r.Prerelease || !daemonTagRE.MatchString(r.TagName) {
+			continue
+		}
+		ver, ok := parseSemver(r.TagName)
+		if !ok {
+			continue
+		}
+		if best < 0 || greater(ver, bestVer) {
+			best, bestVer = i, ver
+		}
+	}
+	if best < 0 {
+		return Release{}, fmt.Errorf("no axon release found in %s/%s (checked %d entries for a vX.Y.Z tag)", owner, repo, len(payload))
+	}
+
+	chosen := payload[best]
 	rel := Release{
-		Version: strings.TrimPrefix(payload.TagName, "v"),
-		Assets:  make(map[string]string, len(payload.Assets)),
+		Version: strings.TrimPrefix(chosen.TagName, "v"),
+		Assets:  make(map[string]string, len(chosen.Assets)),
 	}
-	for _, a := range payload.Assets {
+	for _, a := range chosen.Assets {
 		rel.Assets[a.Name] = a.URL
 	}
 	return rel, nil
+}
+
+// greater reports whether a sorts above b.
+func greater(a, b [3]int) bool {
+	for i := 0; i < 3; i++ {
+		if a[i] != b[i] {
+			return a[i] > b[i]
+		}
+	}
+	return false
 }
 
 // IsNewer reports whether latest is strictly newer than current. Non-release

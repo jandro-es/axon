@@ -27,6 +27,24 @@ All notable changes to this project are documented here. The format is based on
   `docs/GUIDE.md` walks through it. *Documentation only — the enabling code
   shipped in v1.8.0, so this entry adds no binary change.*
 
+### Fixed
+
+- **`axon update` went silent once a Companion release was the newest tag.**
+  The updater asked GitHub for `/releases/latest`, which picks by creation time
+  and not by tag shape, so `companion-v0.3.0` became the answer to "what is the
+  newest axon?". `companion-v0.3.0` parses as no version at all, and the guard
+  that keeps dev builds from being nagged read that as "up to date" — a 1.5.0
+  install was told it was current with 1.6.0, 1.7.0 and 1.8.0 published. Every
+  path was affected: `axon update`, `axon version --check`, and the cached
+  availability check behind `doctor`'s `update-available`. The updater now reads
+  the release list and takes the highest `vX.Y.Z` tag, ignoring GitHub's notion
+  of "latest" (and skipping drafts and prereleases); a feed with no axon release
+  is an error rather than a quiet "up to date". `apps/companion/appcast/README.md`
+  already made restoring the daemon's "Latest" flag a mandatory release step —
+  it was missed at the 0.3.0 cut, which is why this is now enforced in code.
+  *The flag has also been restored on the repo, so installs predating this fix
+  can see updates again without needing it.*
+
 ## [1.8.0] — 2026-08-21
 
 **Say it, and AXON files it.** A minor release: no schema change (stays v7),

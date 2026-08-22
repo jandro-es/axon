@@ -47,10 +47,10 @@ func fakeRelease(t *testing.T, version string, binary []byte) *httptest.Server {
 	sum := sha256.Sum256(binary)
 	checksums := fmt.Sprintf("%s  %s\n", hex.EncodeToString(sum[:]), name)
 
-	mux.HandleFunc("/repos/o/r/releases/latest", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, `{"tag_name":"v%s","assets":[
+	mux.HandleFunc("/repos/o/r/releases", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `[{"tag_name":"v%s","draft":false,"prerelease":false,"assets":[
 			{"name":%q,"browser_download_url":"%s/dl/%s"},
-			{"name":"checksums.txt","browser_download_url":"%s/dl/checksums.txt"}]}`,
+			{"name":"checksums.txt","browser_download_url":"%s/dl/checksums.txt"}]}]`,
 			version, name, srv.URL, name, srv.URL)
 	})
 	mux.HandleFunc("/dl/"+name, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write(binary) })
@@ -125,5 +125,74 @@ func TestSwap(t *testing.T) {
 	st, _ := os.Stat(target)
 	if st.Mode()&0o111 == 0 {
 		t.Error("swapped binary must be executable")
+	}
+}
+
+// TestCheckLatestIgnoresCompanionReleases pins the defect that made a 1.5.0
+// install report itself up to date: the repo publishes the macOS Companion
+// under companion-vX.Y.Z into the same Releases feed, and GitHub's notion of
+// "latest" follows creation time, not tag shape. A companion tag is not an
+// axon version — it must never be offered as one.
+func TestCheckLatestIgnoresCompanionReleases(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/o/r/releases", func(w http.ResponseWriter, r *http.Request) {
+		// Deliberately unsorted, with the companion release newest — mirroring
+		// the live feed, whose ordering matches neither semver nor created_at.
+		fmt.Fprint(w, `[
+			{"tag_name":"v1.8.0","draft":false,"prerelease":false,"assets":[{"name":"checksums.txt","browser_download_url":"http://x/c"}]},
+			{"tag_name":"companion-v0.3.0","draft":false,"prerelease":false,"assets":[]},
+			{"tag_name":"v1.5.0","draft":false,"prerelease":false,"assets":[]}]`)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	rel, err := CheckLatest(context.Background(), srv.URL, "o", "r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rel.Version != "1.8.0" {
+		t.Fatalf("Version = %q, want 1.8.0 (companion tag must be skipped)", rel.Version)
+	}
+	if !IsNewer("1.5.0", rel.Version) {
+		t.Error("a 1.5.0 install must be told 1.8.0 is available")
+	}
+	if _, ok := rel.Assets["checksums.txt"]; !ok {
+		t.Errorf("assets must come from the chosen release, got %v", rel.Assets)
+	}
+}
+
+// TestCheckLatestPicksHighestSemver: feed order is not authority.
+func TestCheckLatestPicksHighestSemver(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/o/r/releases", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `[
+			{"tag_name":"v1.9.0","draft":false,"prerelease":false,"assets":[]},
+			{"tag_name":"v1.10.0","draft":false,"prerelease":false,"assets":[]},
+			{"tag_name":"v2.0.0","draft":true,"prerelease":false,"assets":[]},
+			{"tag_name":"v1.11.0","draft":false,"prerelease":true,"assets":[]}]`)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	rel, err := CheckLatest(context.Background(), srv.URL, "o", "r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rel.Version != "1.10.0" {
+		t.Fatalf("Version = %q, want 1.10.0 (draft and prerelease skipped)", rel.Version)
+	}
+}
+
+// TestCheckLatestNoDaemonRelease: silence is the bug — say so instead.
+func TestCheckLatestNoDaemonRelease(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/o/r/releases", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `[{"tag_name":"companion-v0.3.0","draft":false,"prerelease":false,"assets":[]}]`)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	if _, err := CheckLatest(context.Background(), srv.URL, "o", "r"); err == nil {
+		t.Error("a feed with no axon release must error, not report up to date")
 	}
 }
